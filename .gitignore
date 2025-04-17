@@ -1,0 +1,6 @@
+**/env
+**/.env
+**/venv
+**/__pycache__
+**/app.log
+**/q_values.pkl
