@@ -11,7 +11,7 @@ import os
 import glob
 import asyncio
 import aiofiles
-from shell import run_python_code, init_python_session, close_python_session, get_session_time_remaining
+from shell import run_python_code, init_python_session, close_python_session
 from aiomultiprocess import Pool
 import hashlib
 from functools import lru_cache
@@ -56,7 +56,7 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 global gemini_llm
 gemini_llm = GoogleGenerativeAI(model="gemini-2.5-pro-exp-03-25", temperature=0.6)
 embedding_model = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
-st_embedder = SentenceTransformer('all-MiniLM-L6-v2',  device='mps')
+st_embedder = SentenceTransformer('all-MiniLM-L6-v2', device='cpu')
 cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
 langchain.llm_cache = SQLiteCache(database_path="./langchain_cache.db")
 chat_memories: dict[str, ConversationSummaryMemory] = {}
@@ -358,16 +358,6 @@ async def close_session(request: Request, payload: SessionPayload):
     except Exception as e:
         logger.error(f"Error in close_session: {e}")
         raise HTTPException(status_code=500, detail="Failed to close Python session.")
-
-@app.get("/session/time_remaining/{session_id}")
-@limiter.limit("60/minute")
-async def session_time_remaining(request: Request, session_id: str):
-    try:
-        return await get_session_time_remaining(session_id)
-    except Exception as e:
-        logger.error(f"Error in session_time_remaining: {e}")
-        raise HTTPException(status_code=500, detail="Failed to retrieve session time remaining.")
-
 
 if __name__ == "__main__":
     import uvicorn
