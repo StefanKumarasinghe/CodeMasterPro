@@ -1,0 +1,12 @@
+# Ignore .env files as they may contain sensitive environment variables
+**/env/
+env/
+# Ignore log files generated during runtime
+# Ignore Python bytecode cache directories
+**/__pycache__/
+**/*.db
+# Exclude Python pickle files
+**/*.pkl
+**/*.pkl
+# Ignore index_store directories (e.g., IDE-specific or build-related files)
+**/index_store/

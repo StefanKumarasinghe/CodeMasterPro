@@ -1,0 +1,16 @@
+**/env
+**/.env
+**/venv
+**/__pycache__
+**/app.log
+**/q_values.pkl
+**/out
+env/
+**/*.db
+**/*.pkl
+**/*.pkl
+**/index_store/
+.env
+**/node_modules
+**/.next
+**/.DS_Store
