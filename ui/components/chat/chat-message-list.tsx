@@ -9,69 +9,141 @@ import { Button } from "@/components/ui/button"
 import { ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ChatProgressBar } from "./chat-progress-bar"
+import { useInView } from "react-intersection-observer"
+import { API_ENDPOINT } from "@/config/constants"
+import { marked } from 'marked';
 
-// Loading messages for a more engaging experience
+
+
 const LOADING_MESSAGES = [
   "TARS is thinking...",
   "TARS is analyzing your question...",
-  "TARS is understanding your code...",
-  "TARS is understanding your code...",
-  "TARS is searching for solutions...",
   "TARS is generating code...",
   "TARS is optimizing the response...",
-  "TARS is checking for best practices...",
-  "TARS is reviewing documentation...",
-  "TARS is considering edge cases...",
-  "TARS is crafting a response...",
-  "TARS is formatting code examples...",
   "TARS is validating the solution...",
 ]
 
+export type MessageBoardUpdater = {
+  setMessage: React.Dispatch<React.SetStateAction<string>>
+  setBorder: React.Dispatch<React.SetStateAction<boolean>>
+}
+
+export const updateMessageBoard = (
+  message: string,
+  show: boolean,
+  updater?: MessageBoardUpdater
+) => {
+  if (updater) {
+    const { setMessage, setBorder } = updater
+    setMessage(message)
+    setBorder(show)
+  }
+}
+
 export function ChatMessageList() {
-  const { messages, language, preferences, isLoading, handleCodeAction, memoryState, setMemoryState } = useChat()
+  const { messages, language, preferences, isLoading, handleCodeAction, setMemoryState } = useChat()
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const [showScrollButton, setShowScrollButton] = useState(false)
   const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true)
   const [loadingMessage, setLoadingMessage] = useState(LOADING_MESSAGES[0])
   const loadingIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const [loadedMessages, setLoadedMessages] = useState<ChatMessage[]>([])
+  const [batchSize] = useState(10)
+  const [listInnerRef, isVisible] = useInView()
+  const [updateMessage, setUpdateMessage] = useState("")
+  const streamSourceRef = useRef<EventSource | null>(null)
 
-  // Cycle through loading messages when isLoading is true
+  const streamUpdates = useCallback(() => {
+    if (streamSourceRef.current) {
+      streamSourceRef.current.close()
+      streamSourceRef.current = null
+    }
+
+
+
+    const source = new EventSource(`${API_ENDPOINT}/chat/stream`)
+    streamSourceRef.current = source
+
+    source.onopen = () => {
+
+    }
+
+    source.onmessage = (event) => {
+      const update = event.data
+      if (typeof update === 'string' && update.length > 0) {
+        setUpdateMessage(update)
+      }
+    }
+
+    source.onerror = (event) => {
+      if (source.readyState === EventSource.CLOSED) {
+      }
+      source.close()
+      streamSourceRef.current = null
+    }
+
+    return () => {
+      if (source.readyState !== EventSource.CLOSED) {
+        source.close()
+      }
+    }
+  }, [])
+
   useEffect(() => {
-    if (isLoading) {
-      // Start cycling through loading messages
-      let messageIndex = 0
+    if (messages.length > 0) {
+      setLoadedMessages(messages.slice(0, batchSize))
+    }
+  }, [messages, batchSize])
 
-      // Clear any existing interval
+  useEffect(() => {
+    if (isVisible && loadedMessages.length < messages.length) {
+      const nextBatchSize = Math.min(loadedMessages.length + batchSize, messages.length)
+      setLoadedMessages(messages.slice(0, nextBatchSize))
+    }
+  }, [isVisible, messages, loadedMessages, batchSize])
+
+  useEffect(() => {
+    let cleanupStream: (() => void) | undefined
+
+    if (isLoading) {
+      setUpdateMessage("Peeking into TARS' brain...")
+      cleanupStream = streamUpdates()
+
+      let messageIndex = 0
       if (loadingIntervalRef.current) {
         clearInterval(loadingIntervalRef.current)
       }
 
-      // Set initial message
       setLoadingMessage(LOADING_MESSAGES[messageIndex])
-
-      // Create new interval to cycle through messages
       loadingIntervalRef.current = setInterval(() => {
         messageIndex = (messageIndex + 1) % LOADING_MESSAGES.length
         setLoadingMessage(LOADING_MESSAGES[messageIndex])
-      }, 3000) // Change message every 3 seconds
+      }, 3000)
     } else {
-      // Clear interval when loading stops
       if (loadingIntervalRef.current) {
         clearInterval(loadingIntervalRef.current)
         loadingIntervalRef.current = null
       }
+
+      if (streamSourceRef.current) {
+        streamSourceRef.current.close()
+        streamSourceRef.current = null
+      }
+
+      setUpdateMessage("")
     }
 
-    // Cleanup on unmount
     return () => {
       if (loadingIntervalRef.current) {
         clearInterval(loadingIntervalRef.current)
       }
+      if (cleanupStream) {
+        cleanupStream()
+      }
     }
-  }, [isLoading])
+  }, [isLoading, streamUpdates])
 
-  // Scroll to bottom function
   const scrollToBottom = useCallback(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" })
@@ -79,7 +151,6 @@ export function ChatMessageList() {
     setIsAutoScrollEnabled(true)
   }, [])
 
-  // Handle scroll events to show/hide scroll button
   const handleScroll = useCallback(() => {
     if (!scrollAreaRef.current) return
 
@@ -90,14 +161,6 @@ export function ChatMessageList() {
     setIsAutoScrollEnabled(isNearBottom)
   }, [])
 
-  // Auto-scroll when new messages arrive if auto-scroll is enabled
-  useEffect(() => {
-    if (isAutoScrollEnabled && messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: "smooth" })
-    }
-  }, [messages, isLoading, isAutoScrollEnabled])
-
-  // Add scroll event listener
   useEffect(() => {
     const scrollArea = scrollAreaRef.current
     if (scrollArea) {
@@ -106,11 +169,24 @@ export function ChatMessageList() {
     }
   }, [handleScroll])
 
-  // Handle clearing memory
+  useEffect(() => {
+    if (isAutoScrollEnabled && messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" })
+    }
+  }, [messages, isLoading, isAutoScrollEnabled])
+
   const handleClearMemory = useCallback(() => {
     setMemoryState((prev) => ({ ...prev, forgetMemory: true }))
   }, [setMemoryState])
 
+  const convertMarkdownToText = (markdown) => {
+
+    const html = marked(markdown);
+    const div = document.createElement('div');
+    div.innerHTML = html;
+  
+    return div.textContent || div.innerText || '';
+  };
   return (
     <div className="flex-1 overflow-hidden relative flex flex-col">
       {messages.length > 0 && (
@@ -125,7 +201,7 @@ export function ChatMessageList() {
           {messages.length === 0 ? (
             <ChatWelcome />
           ) : (
-            messages.map((message) => (
+            loadedMessages.map((message) => (
               <ChatMessage
                 key={message.id}
                 message={message}
@@ -137,22 +213,33 @@ export function ChatMessageList() {
             ))
           )}
           {isLoading && (
-            <div className="flex items-center gap-2 text-muted-foreground ml-5 text-sm">
-              <div className="h-3 w-3 rounded-full bg-primary animate-pulse"></div>
-              <span>{loadingMessage}</span>
+            <div className="flex flex-col gap-1 text-muted-foreground ml-5 text-sm">
+              <div className="flex items-center gap-2">
+                <div className="h-3 w-3 rounded-full bg-primary animate-pulse" />
+                <span>{loadingMessage}</span>
+              </div>
+              {updateMessage && (
+                <span className="p-3 my-2 bg-gray-100 dark:bg-gray-700 rounded-md items-center gap-2 text-muted-foreground max-w-[60%] inline-flex">
+                  <span className="italic text-black dark:text-green-300 text-sm">{convertMarkdownToText(updateMessage)}</span>
+                </span>
+              )}
+            </div>
+          )}
+          {loadedMessages.length < messages.length && (
+            <div ref={listInnerRef} className="py-2 text-center text-gray-500">
+              Loading more messages...
             </div>
           )}
           <div ref={messagesEndRef} />
         </div>
       </ScrollArea>
 
-      {/* Scroll to bottom button */}
       <Button
         variant="outline"
         size="icon"
         className={cn(
           "absolute bottom-4 right-4 rounded-full h-10 w-10 bg-background shadow-md transition-opacity duration-200",
-          showScrollButton ? "opacity-100" : "opacity-0 pointer-events-none",
+          showScrollButton ? "opacity-100" : "opacity-0 pointer-events-none"
         )}
         onClick={scrollToBottom}
         aria-label="Scroll to bottom"

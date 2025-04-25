@@ -94,9 +94,41 @@ export const detectLanguage = (fileName: string): string => {
   }
   return map[ext] || "plaintext"
 }
+
+const ALLOWED_LANGUAGES = [
+  "javascript",
+  "typescript",
+  "python",
+  "java",
+  "c",
+  "cpp",
+  "go",
+  "ruby",
+  "php",
+  "swift",
+  "kotlin",
+  "rust",
+  "bash",
+  "json",
+  "html",
+  "css",
+  "yaml",
+  "xml",
+  "sql",
+  "ruby",
+  "csharp",
+  "bash"
+]
+
+
 export const detectCodeLanguage = (code: string): string => {
-  const result = hljs.highlightAuto(code)
-  return result.language || "code"
+
+  const result = hljs.highlightAuto(code, ALLOWED_LANGUAGES)
+  if (result.language && ALLOWED_LANGUAGES.includes(result.language)) {
+    return result.language
+  }
+
+  return "code"
 }
 
 export const formatCode = async (code: string, language: string): Promise<string> => {

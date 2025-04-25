@@ -105,34 +105,13 @@ export function MemoryControls() {
       }
 
       toast.success("Memory erased successfully!")
-      window.location.reload()
     } catch (error) {
       console.error("Failed to clear memory:", error)
       toast.error("Failed to clear memory")
     }
   }
 
-  const reIndex = async () => {
-    try {
-      const response = await fetch(`${API_ENDPOINT}/reindex/`, {
-        method: "POST",
-      })
 
-      if (!response.ok) {
-        throw new Error("Failed to reindex memory")
-      }
-
-      // Show temporary message when reindexing is successful
-      setShowMessage(true)
-      toast.success("Memory reindexed successfully!")
-
-      // Hide the message after 3 seconds
-      setTimeout(() => setShowMessage(false), 3000)
-    } catch (error) {
-      console.error("Failed to reindex memory:", error)
-      toast.error("Failed to reindex memory")
-    }
-  }
 
   const changeModel = async (type: string) => {
     try {
@@ -193,9 +172,9 @@ export function MemoryControls() {
             </TooltipContent>
           </Tooltip>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => changeModel("advanced")}>Gemini Think (Mid)</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => changeModel("fast")}>Gemini Flash (Fast)</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => changeModel("pro")}>Gemini Pro (Slow)</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => changeModel("fast")}> <BrainCogIcon className="mr-2 h-4 w-4"/> Gemini Flash (Fast)</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => changeModel("advanced")}><BrainCircuit className="mr-2 h-4 w-4"/> Gemini Think (Mid)</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => changeModel("pro")}><BrainIcon className="mr-2 h-4 w-4"/> Gemini Pro (Slow)</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
 
@@ -203,7 +182,6 @@ export function MemoryControls() {
         <IconButton onClick={forgetMemory} icon={BrainIcon} tooltip="Forget Short-Term Memory " />
         {/* Reload button */}
         <IconButton onClick={() => setMessages([])} icon={Trash2} tooltip="Clear page (Does not remove memory)" />
-        <IconButton onClick={reIndex} icon={Indent} tooltip="Reindex Resources (When new resources are added)" />
       </TooltipProvider>
     </div>
   )

@@ -675,11 +675,11 @@ export function ChatInput() {
           <div className="flex items-center gap-2">
             {charCount > 0 && (
               <Badge
-                variant={charCount > 15000 ? "destructive" : "outline"}
+                variant={charCount > 25000 ? "destructive" : "outline"}
                 className={cn(
                   "h-6 text-xs transition-colors",
-                  charCount > 5000 &&
-                    charCount <= 8000 &&
+                  charCount > 15000 &&
+                    charCount <= 5000 &&
                     "bg-amber-500/20 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20",
                 )}
               >

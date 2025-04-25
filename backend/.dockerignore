@@ -1,12 +1,62 @@
-# Ignore .env files as they may contain sensitive environment variables
+# Environment variables
+.env
+.env.*
+**/.env
 **/env/
 env/
-# Ignore log files generated during runtime
-# Ignore Python bytecode cache directories
+
+# Log files
+*.log
+**/*.log
+
+# Python cache and compiled files
+__pycache__/
 **/__pycache__/
-**/*.db
-# Exclude Python pickle files
-**/*.pkl
-**/*.pkl
-# Ignore index_store directories (e.g., IDE-specific or build-related files)
-**/index_store/
+*.pyc
+*.pyo
+*.pyd
+*.pkl
+*.db
+*.sqlite
+*.sqlite3
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# IDE/editor configs
+.idea/
+.vscode/
+*.swp
+
+# macOS metadata
+.DS_Store
+
+# Git & other VCS
+.git/
+.gitignore
+.gitattributes
+
+# Dockerfiles and dockerignore themselves (optional)
+Dockerfile
+.dockerignore
+
+# Build/test artifacts
+build/
+dist/
+*.egg-info/
+coverage.*
+htmlcov/
+*.spec
+
+# Caches
+.cache/
+__pypackages__/
+.mypy_cache/
+pytest_cache/
+pip-wheel-metadata/
+
+# Misc
+*.bak
+*.tmp
+*.old
+*.orig

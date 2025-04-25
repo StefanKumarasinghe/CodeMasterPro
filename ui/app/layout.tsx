@@ -1,17 +1,19 @@
 
 import type { ReactNode } from "react";
-import { BookOpen, Terminal, Github } from "lucide-react";
+import { BookOpen, Terminal, Github, SmileIcon } from "lucide-react";
 import { ThemeProvider, ThemeToggle } from "@/components/theme-provider";
-import { Quicksand } from "next/font/google";
+import { Roboto_Mono } from "next/font/google";
 import { SidebarProvider, Sidebar, SidebarContent } from "@/components/ui/sidebar";
 import { ChatHistory } from "@/components/sidebar/chat-history";
 import { DocumentationModal } from "@/components/documentation/documentation-modal";
 import { ChatProvider } from "@/context/chat-context";
 import "./globals.css";
 
-const quicksand = Quicksand({
+const quicksand = Roboto_Mono({
   subsets: ["latin"],
   variable: "--font-quicksand",
+  display: "swap",
+  weight: ["400", "500", "600", "700"],
 });
 
 export const metadata = {
@@ -34,12 +36,8 @@ export default function Layout({ children }: { children: ReactNode }) {
                 <Sidebar>
                   <div className="p-4 border-b">
                     <div className="flex items-center gap-2">
-                      <div className="h-8 w-8 rounded-full flex items-center justify-center">
-                        <img
-                          src="https://t4.ftcdn.net/jpg/04/22/92/29/360_F_422922955_XaGCE7Nqe8DyLiY7mGe5SACyp8N4oHTB.jpg"
-                          alt="Badge"
-                          className="h-6 w-6 rounded-full"
-                        />
+                      <div className="h-8 w-8 bg-black rounded-full flex items-center justify-center">
+                        <SmileIcon className="h-6 w-6 text-accent" />
                       </div>
                       <span className="font-bold text-lg">CodeMasterPro</span>
                     </div>

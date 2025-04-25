@@ -1,5 +1,5 @@
 export const API_ENDPOINT = "http://127.0.0.1:8000"
-export const APP_NAME = "TARS"
+export const APP_NAME = "Tars"
 export const APP_VERSION = "v1.1.1"
 export const LANGUAGE_OPTIONS = [
   { value: "general", label: "General" },

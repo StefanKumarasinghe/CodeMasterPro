@@ -4,13 +4,12 @@ from pathlib import Path
 from typing import List, Optional
 from fastapi import File, Form, UploadFile, HTTPException, status
 from fastapi.responses import JSONResponse
-import langchain
 from utils.faiss import build_index
 from utils.local_save import save_resource
 from utils.search import extract_article_data
 import config.tars as gemini
+import langchain
 from ai.memory import reset_chat_memory
-from Model.DeleteResponse import DeletionResponse
 from Model.ExistingDocument import ExistingDocument
 
 RESOURCES_DIR = Path("resources")
@@ -32,8 +31,6 @@ async def add_documentation(
                         shutil.rmtree(entry)
                     else:
                         entry.unlink()
-
-            gemini.rl_agent.q_values.clear()
             langchain.llm_cache.clear()
             if gemini.resource_vectorstore:
                 gemini.resource_vectorstore = None
@@ -48,7 +45,7 @@ async def add_documentation(
             await save_resource(content=documentation_text, folder_name="resources")
         if documentation_links:
             try:
-                links = json.loads(documentation_links)
+                links = json.loads(json.dumps(json.loads(documentation_links)))
                 if not isinstance(links, list):
                     raise ValueError("documentation_links must be a list of URLs.")
                 for link in links:
@@ -59,8 +56,10 @@ async def add_documentation(
                         gemini.logger.warning(f"Failed to extract/save from link {link}: {inner_e}")
 
             except json.JSONDecodeError:
+                gemini.logger.error("Invalid JSON format for documentation_links.")
                 raise HTTPException(status_code=400, detail="Invalid JSON format for documentation_links")
             except Exception as e:
+                gemini.logger.error(f"Error processing documentation_links: {e}")
                 raise HTTPException(status_code=400, detail=str(e))
             
         if description:
@@ -101,29 +100,34 @@ async def get_documentation():
 
     return documents
 
+
+
 async def delete_document(document_id: str):
+    """
+    Deletes a single document.
+    """
     if not document_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Document ID cannot be empty.")
+
     if "/" in document_id or "\\" in document_id or ".." in document_id:
-         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid document ID format.")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid document ID format.")
     file_path = RESOURCES_DIR / document_id
     if not RESOURCES_DIR.is_dir():
-         gemini.logger.error(f"Resources directory '{RESOURCES_DIR}' not found or is not a directory.")
-         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Server configuration error: Resource directory not found.")
+        gemini.logger.error(f"Resources directory '{RESOURCES_DIR}' not found or is not a directory.")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Server configuration error: Resource directory not found.")
 
     if not file_path.exists():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Document '{document_id}' not found.")
 
     if not file_path.is_file():
-         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"'{document_id}' is not a file.")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"'{document_id}' is not a file.")
     try:
         file_path.unlink()
         await build_index()
         gemini.logger.info(f"Document '{document_id}' deleted successfully.")
-        return DeletionResponse(message="Document deleted successfully", deleted_id=document_id)
     except OSError as e:
         gemini.logger.error(f"Error deleting file '{file_path}': {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Could not delete document '{document_id}'.")
     except Exception as e:
-        gemini.logger.error(f"Unexpected error: {e}")   
+        gemini.logger.error(f"Unexpected error: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An unexpected error occurred.")

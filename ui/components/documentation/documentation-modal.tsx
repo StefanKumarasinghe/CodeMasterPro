@@ -164,42 +164,41 @@ export function DocumentationModal() {
       setIsUploading(false)
     }
   }
-
   const handleRemoveSelectedDocuments = async () => {
-      if (documentsToRemove.size === 0) {
-          toast.info("No documents selected for removal.");
-          return;
-      }
-      if (isUploading || isFetching) return;
+    if (documentsToRemove.size === 0) {
+        toast.info("No documents selected for removal.");
+        return;
+    }
+    if (isUploading || isFetching) return;
 
-      setIsRemoving(true);
-      const idsToRemove = Array.from(documentsToRemove);
+    setIsRemoving(true);
+    const idsToRemove = Array.from(documentsToRemove);
 
-      try {
-          const response = await fetch(`${API_ENDPOINT}/remove_documentation/${idsToRemove}`, {
-              method: 'DELETE',
-              headers: {
-                  'Content-Type': 'application/json',
-              }
-          });
+    try {
+        const response = await fetch(`${API_ENDPOINT}/remove_documentation`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ ids: idsToRemove }), 
+        });
 
-          if (!response.ok) {
-              const errorData = await response.text();
-              throw new Error(`Removal failed: ${response.status} - ${errorData}`);
-          }
+        if (!response.ok) {
+            const errorData = await response.text();
+            throw new Error(`Removal failed: ${response.status} - ${errorData}`);
+        }
 
-          toast.success(`${idsToRemove.length} document(s) removed successfully!`);
-          setDocumentsToRemove(new Set());
-          await fetchExistingDocuments();
+        toast.success(`${idsToRemove.length} document(s) removed successfully!`);
+        setDocumentsToRemove(new Set());
+        await fetchExistingDocuments();
 
-      } catch (error) {
-          console.error("Failed to remove documents:", error);
-          toast.error(`Removal failed: ${error instanceof Error ? error.message : "Please try again."}`);
-      } finally {
-          setIsRemoving(false);
-      }
-  };
-
+    } catch (error) {
+        console.error("Failed to remove documents:", error);
+        toast.error(`Removal failed: ${error instanceof Error ? error.message : "Please try again."}`);
+    } finally {
+        setIsRemoving(false);
+    }
+};
 
   const eraseLongTermMemoryConfirm = async () => {
     if (isUploading || isRemoving || isFetching) return;
@@ -249,7 +248,7 @@ export function DocumentationModal() {
   return (
     <>
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle>Manage Documentation</DialogTitle>
             <DialogDescription>

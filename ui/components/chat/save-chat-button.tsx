@@ -103,7 +103,6 @@ export function SaveChatButton({ messages }: SaveChatButtonProps) {
 
             <div className="text-xs text-muted-foreground">
               <p>This chat will be saved locally on your device and will be available in the sidebar.</p>
-              <p className="mt-1">Saved chats are read-only and can be viewed for reference.</p>
             </div>
           </div>
 

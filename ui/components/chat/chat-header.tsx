@@ -5,7 +5,7 @@ import type React from "react"
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
-import { Info, HelpCircle, Keyboard, PanelLeft, FileText } from "lucide-react"
+import { Info, HelpCircle, Keyboard, PanelLeft, FileText, Timer } from "lucide-react"
 import { Github } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { ThemeToggle } from "../ui/theme-toggle"
@@ -15,7 +15,8 @@ import SettingsSheet from "../settings/settings-sheet"
 import { ChatHistoryDownload } from "./chat-history-download"
 import { motion, AnimatePresence } from "framer-motion"
 import { useSidebar } from "@/components/ui/sidebar"
-// Add SaveChatButton import
+import { API_ENDPOINT } from "@/config/constants"
+import { toast } from "@/utils/toast-util"
 import { SaveChatButton } from "./save-chat-button"
 
 export function ChatHeader() {
@@ -34,6 +35,22 @@ export function ChatHeader() {
     setPersonalInfo,
     messages,
   } = useChat()
+
+  const reIndex = async () => {
+      try {
+        const response = await fetch(`${API_ENDPOINT}/reindex/`, {
+          method: "POST",
+        })
+  
+        if (!response.ok) {
+          throw new Error("Failed to reindex memory")
+        }
+        toast.success("Memory reindexed successfully!")
+      } catch (error) {
+        console.error("Failed to reindex memory:", error)
+        toast.error("Failed to reindex memory")
+      }
+    }
 
 
 
@@ -75,7 +92,18 @@ export function ChatHeader() {
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
-
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => reIndex()}>
+                  < Timer className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Reindex Resources (When new resources are added)</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -106,6 +134,7 @@ export function ChatHeader() {
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
+
 
           {messages.length > 0 && <ChatHistoryDownload messages={messages} />}
         </div>

@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState, useRef, useEffect } from "react"
-import { Maximize2, Minimize2, Play, Square, ChevronRight, Terminal, Package, Clock, MessageSquare } from "lucide-react"
+import { Maximize2, Minimize2, Play, Square, ChevronRight, Terminal, Package, Clock, MessageSquare, Copy } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { API_ENDPOINT } from "@/config/constants"
 import { toast } from "@/utils/toast-util"
@@ -23,6 +23,8 @@ interface PythonOutput {
   stdout: string
   stderr: string
   dependencies: string[]
+  corrected_code?: string
+  installed_packages?: string[]
 }
 
 export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
@@ -35,8 +37,10 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
   const [command, setCommand] = useState("")
   const [sessionId, setSessionId] = useState<string>("")
   const [dependencies, setDependencies] = useState<string[]>([])
+  const [installedPackages, setInstalledPackages] = useState<string[]>([])
   const [multilineMode, setMultilineMode] = useState(false)
   const [timeRemaining, setTimeRemaining] = useState(300)
+  const [showCorrectedCode, setShowCorrectedCode] = useState(false)
   const outputRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement | HTMLInputElement>(null)
   const { handleSubmit } = useChat()
@@ -47,7 +51,6 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
   useEffect(() => {
     if (!hasInitializedRef.current && isOpen) {
       hasInitializedRef.current = true
-      console.log("Initializing session")
       initSession()
       startSessionTimer()
     }
@@ -57,7 +60,6 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
     }
 
     return () => {
-      console.log("Cleaning up session")
       if (sessionId) {
         terminateSession()
       }
@@ -69,7 +71,6 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
   }, [isOpen])
 
   const startSessionTimer = () => {
-    console.log("Starting session timer")
     setTimeRemaining(300)
 
     if (timerRef.current) {
@@ -185,10 +186,13 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
         stdout: data.stdout || "",
         stderr: data.stderr || "",
         dependencies: data.dependencies || [],
+        corrected_code: data.corrected_code || "",
+        installed_packages: data.installed_packages || []
       }
 
       setOutput(result)
       setDependencies(result.dependencies)
+      setInstalledPackages(result.installed_packages)
 
       setOutputHistory((prev) => [...prev, { type: "result", content: result }])
     } catch (error) {
@@ -197,6 +201,7 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
       toast.error("Failed to run code")
     } finally {
       setIsRunning(false)
+      setShowCorrectedCode(false)
     }
   }
 
@@ -232,12 +237,15 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
         stdout: data.stdout || "",
         stderr: data.stderr || "",
         dependencies: data.dependencies || [],
+        corrected_code: data.corrected_code || "",
+        installed_packages: data.installed_packages || []
       }
 
       setOutput(result)
       if (result.dependencies.length > 0) {
         setDependencies(result.dependencies)
       }
+      setInstalledPackages(result.installed_packages)
 
       setOutputHistory((prev) => [...prev, { type: "result", content: result }])
     } catch (error) {
@@ -249,6 +257,7 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
       if (inputRef.current) {
         inputRef.current.focus()
       }
+      setShowCorrectedCode(false)
     }
   }
 
@@ -317,13 +326,21 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
         </div>
       )
     } else {
-      // It's a PythonOutput object
       return (
         <div>
           {item.content.stdout && <div className="text-green-300 whitespace-pre-wrap">{item.content.stdout}</div>}
           {item.content.stderr && <div className="text-red-400 whitespace-pre-wrap">{item.content.stderr}</div>}
         </div>
       )
+    }
+  }
+
+  const copyCorrectedCode = () => {
+    if (output?.corrected_code) {
+      navigator.clipboard.writeText(output.corrected_code)
+      toast.success("Corrected code copied to clipboard!")
+    } else {
+      toast.error("No corrected code available.")
     }
   }
 
@@ -367,9 +384,8 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
         </div>
       </div>
 
-      {/* Toolbar */}
-      <div className="flex items-center justify-between p-2 border-b border-zinc-700 bg-zinc-800">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center p-2 border-b border-zinc-700 bg-zinc-800">
+        <div className="flex items-center gap-1">
           <Button
             variant="outline"
             size="sm"
@@ -391,17 +407,19 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
             <MessageSquare className="h-3.5 w-3.5 mr-1" />
             Ask TARS
           </Button>
+          {output?.corrected_code && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1 bg-green-600 hover:bg-green-700 border-green-500 text-white"
+              onClick={() => setShowCorrectedCode(!showCorrectedCode)}
+            >
+              Corrected Code
+            </Button>
+          )}
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="flex items-center space-x-2">
-            <Switch id="multiline-mode" checked={multilineMode} onCheckedChange={setMultilineMode} />
-            <Label htmlFor="multiline-mode" className="text-xs text-zinc-400">
-              Multiline
-            </Label>
-          </div>
-          <div className="text-xs text-zinc-400">{isRunning ? "Running..." : "Press Ctrl+Enter to run"}</div>
-        </div>
+
       </div>
 
       {dependencies.length > 0 && (
@@ -417,12 +435,35 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
           ))}
         </div>
       )}
+      {installedPackages.length > 0 && (
+        <div className="flex flex-wrap gap-1 p-2 border-b border-zinc-700 bg-zinc-800/50">
+          <div className="flex items-center gap-1 text-xs text-zinc-400">
+            <Package className="h-3 w-3" />
+            <span>Installed Packages:</span>
+          </div>
+          {installedPackages.map((dep, index) => (
+            <Badge key={index} variant="outline" className="text-xs bg-zinc-800 text-zinc-300">
+              {dep}
+            </Badge>
+          ))}
+        </div>
+      )}
 
       <div
         ref={outputRef}
         className="flex-1 p-3 overflow-auto font-mono text-sm text-zinc-300 whitespace-pre-wrap bg-zinc-900"
       >
-        {outputHistory.length === 0 ? (
+        {showCorrectedCode && output?.corrected_code ? (
+          <div>
+            <div className="flex justify-between items-center mb-2">
+              <p className="text-zinc-500 italic">Corrected Code:</p>
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-400 hover:text-zinc-100" onClick={copyCorrectedCode}>
+                <Copy className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="text-green-300 whitespace-pre-wrap">{output.corrected_code}</div>
+          </div>
+        ) : outputHistory.length === 0 ? (
           <div className="text-zinc-500 italic">Output will appear here. Run your code to see the results.</div>
         ) : (
           outputHistory.map((item, i) => (
@@ -432,7 +473,15 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
           ))
         )}
       </div>
-
+      <Button
+          variant="outline"
+          size="sm"
+          className={cn("h-8 rounded-none", multilineMode ? "bg-blue-600 text-white " : "text-zinc-400")}
+          onClick={() => setMultilineMode(!multilineMode)}
+        >
+          {multilineMode ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+          {multilineMode ? "Single Line" : "Multiline"}
+      </Button>
       <form onSubmit={executeCommand} className="flex items-start p-2 border-t border-zinc-700 bg-zinc-800">
         <ChevronRight className="h-4 w-4 text-blue-500 mr-2 mt-2" />
         {multilineMode ? (

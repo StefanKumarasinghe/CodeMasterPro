@@ -8,19 +8,15 @@ import langchain
 import shutil
 from utils.faiss import build_index
 
-import config.tars as gemini  # Your custom Gemini config
+import config.tars as gemini
 
-# Global state
 gemini_llm = gemini.gemini_llm
 chat_memories = gemini.chat_memories
 chat_memory_metadata = gemini.chat_memory_metadata
 
-
-# Get or create memory for a chat
 def get_chat_memory(chat_id: str) -> ConversationSummaryMemory:
     now = datetime.now()
     meta = chat_memory_metadata.get(chat_id)
-
     if chat_id not in chat_memories or not meta or now - meta["created_at"] > timedelta(minutes=60):
         chat_memories[chat_id] = ConversationSummaryMemory(
             llm=gemini_llm,
@@ -65,13 +61,12 @@ async def erase_long_term_memory():
                     entry.unlink()
                 elif entry.is_dir():
                     shutil.rmtree(entry)
-        gemini.rl_agent.q_values.clear()
         langchain.llm_cache.clear()
         if gemini.resource_vectorstore:
             gemini.resource_vectorstore = None
         await build_index()
-
         return {"result": "Cleared all long‑term memories and removed all resource files."}
+    
     except Exception as e:
         gemini.logger.error(f"Error in erase_long_term_memory: {e}")
         raise HTTPException(status_code=500, detail="Failed to clear long‑term memories.")

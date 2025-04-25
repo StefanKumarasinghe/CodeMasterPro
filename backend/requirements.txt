@@ -25,3 +25,4 @@ python-docx
 python-pptx
 pytesseract
 hf_xet
+sse-starlette

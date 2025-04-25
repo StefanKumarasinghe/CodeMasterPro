@@ -15,6 +15,7 @@ import { HtmlPreview } from "./html-preview"
 import { PythonShell } from "./python-shell"
 import { CodeSast } from "./code-sast"
 
+
 export interface SavedSnippet {
   id: string
   name: string
@@ -38,6 +39,7 @@ interface PreformattedCodeProps {
 
 const PreformattedCode = ({ code, language = "text", darkMode = true }: PreformattedCodeProps) => {
   const style = darkMode ? oneDark : oneLight
+  const [pythonShellInstance, setPythonShellInstance] = useState<React.ReactNode | null>(null)
 
   return (
     <SyntaxHighlighter
@@ -110,8 +112,8 @@ const TextBlock = memo(({ content }: { content: string }) => (
         h3: ({ node, ...props }) => <h3 {...props} className="text-lg font-bold mt-4 mb-2" />,
         h4: ({ node, ...props }) => <h4 {...props} className="text-base font-semibold mt-3 mb-2" />,
         p: ({ node, ...props }) => <p {...props} className="my-3 leading-relaxed" />,
-        ul: ({ node, ...props }) => <ul {...props} className="list-disc pl-6 my-3" />,
-        ol: ({ node, ...props }) => <ol {...props} className="list-decimal pl-6 my-3" />,
+        ul: ({ node, ...props }) => <ul {...props} className="list-disc pl-6 ml-4 my-3" />,
+        ol: ({ node, ...props }) => <ol {...props} className="list-decimal pl-6 ml-4 my-3" />,
         li: ({ node, ...props }) => <li {...props} className="my-1" />,
         blockquote: ({ node, ...props }) => (
           <blockquote {...props} className="border-l-4 border-primary/30 pl-4 italic my-3" />
@@ -268,12 +270,12 @@ const CodeBlock = memo(
             <Button
               variant="ghost"
               size="sm"
-              className="h-6 w-6 text-zinc-400 hover:text-white"
+              className="h-6 w-6 text-zinc-400 "
               onClick={() => onCopy(code, blockIndex)}
               aria-label="Copy code"
             >
               {copiedBlockIndex === blockIndex ? (
-                <Check className="h-3.5 w-3.5 text-green-500" />
+                <Check className="h-3.5 w-3.5 text-green-800" />
               ) : (
                 <Copy className="h-3.5 w-3.5" />
               )}
@@ -281,7 +283,7 @@ const CodeBlock = memo(
             <Button
               variant="ghost"
               size="sm"
-              className="h-6 w-6 text-zinc-400 hover:text-white"
+              className="h-6 w-6 text-zinc-400 "
               onClick={downloadCode}
               aria-label="Download code"
             >
@@ -291,7 +293,7 @@ const CodeBlock = memo(
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-6 px-2 text-emerald-400 hover:text-emerald-300 text-xs"
+                className="h-6 px-2 text-emerald-400 hover:text-emerald-600 text-xs"
                 onClick={() => setShowHtmlPreview(true)}
               >
                 <Play className="h-3.5 w-3.5 mr-1" />
@@ -303,7 +305,7 @@ const CodeBlock = memo(
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-6 px-2 text-blue-400 hover:text-blue-300 text-xs"
+                className="h-6 px-2 text-blue-400 hover:text-blue-500 text-xs"
                 onClick={() => setShowPythonShell(true)}
               >
                 <Play className="h-3.5 w-3.5 mr-1" />
@@ -315,7 +317,7 @@ const CodeBlock = memo(
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-6 px-2 text-purple-400 hover:text-purple-300 text-xs"
+                className="h-6 px-2 text-purple-400 hover:text-purple-500 text-xs"
                 onClick={runSastAnalysis}
               >
                 <Shield className="h-3.5 w-3.5 mr-1" />
@@ -326,7 +328,7 @@ const CodeBlock = memo(
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-6 px-2 text-zinc-400 hover:text-white text-xs"
+                className="h-6 px-2 text-zinc-400 text-xs"
                 onClick={() =>
                   window.dispatchEvent(
                     new CustomEvent("use-code", {

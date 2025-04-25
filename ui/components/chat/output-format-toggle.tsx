@@ -1,40 +1,41 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import { Button } from "@/components/ui/button"
-import { FaStackOverflow } from "react-icons/fa"
-import { Code, FileText, CodepenIcon, Globe } from "lucide-react"
-import { API_ENDPOINT } from "@/config/constants"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { FaStackOverflow } from "react-icons/fa";
+import { Code, FileText, CodepenIcon, Globe } from "lucide-react";
+import { API_ENDPOINT } from "@/config/constants";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Badge } from "@/components/ui/badge";
 
 export function OutputFormatToggle({ value, onChange }) {
-  const [webEnabled, setWebEnabled] = useState(false)
-  const [stackEnabled, setStackEnabled] = useState(false)
-  const [internalEnabled, setInternalEnabled] = useState(false)
-
-  const fetchInternalFlag = async (endpoint, setter, errorMsg) => {
-    try {
-      const response = await fetch(`${API_ENDPOINT}/${endpoint}`)
-      if (!response.ok) {
-        throw new Error("Network response was not ok")
-      }
-      const data = await response.json()
-      setter(data.enabled)
-    } catch (err) {
-      console.error(`${errorMsg}:`, err)
-    }
-  }
-
+  const [webEnabled, setWebEnabled] = useState(false);
+  const [stackEnabled, setStackEnabled] = useState(false);
+  const [internalEnabled, setInternalEnabled] = useState(false);
+  const [selectedToolCount, setSelectedToolCount] = useState(0);
 
   const fetchFlag = async (endpoint, setter, errorMsg) => {
     try {
-      const response = await fetch(`${API_ENDPOINT}/${endpoint}`)
-      const data = await response.json()
-      setter(data.enabled)
+      const response = await fetch(`${API_ENDPOINT}/${endpoint}`);
+      const data = await response.json();
+      setter(data.enabled);
     } catch (err) {
-      console.error(`${errorMsg}:`, err)
+      console.error(`${errorMsg}:`, err);
     }
-  }
+  };
 
   const updateFlag = async (endpoint, newValue, errorMsg) => {
     try {
@@ -44,43 +45,82 @@ export function OutputFormatToggle({ value, onChange }) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ enabled: newValue }),
-      })
+      });
 
       if (!response.ok) {
-        console.error(`${errorMsg}:`, response.statusText)
+        console.error(`${errorMsg}:`, response.statusText);
       }
     } catch (err) {
-      console.error(`Error calling ${endpoint}:`, err)
+      console.error(`Error calling ${endpoint}:`, err);
     }
-  }
+  };
 
   useEffect(() => {
-    fetchFlag("check_web", setWebEnabled, "Failed to fetch web flag")
-  }, [])
+    fetchFlag("check_web", setWebEnabled, "Failed to fetch web flag");
+    fetchFlag("check_stack_flow", setStackEnabled, "Failed to fetch Stack Overflow flag");
+    fetchFlag("check_internal", setInternalEnabled, "Failed to fetch internal flag");
+  }, []);
 
   useEffect(() => {
-    fetchFlag("check_stack_flow", setStackEnabled, "Failed to fetch Stack Overflow flag")
-  }, [])
-  useEffect(() => {
-    fetchInternalFlag("check_internal", setInternalEnabled, "Failed to fetch internal flag")
-  }, [])
+    let count = 0;
+    if (webEnabled) count++;
+    if (stackEnabled) count++;
+    if (internalEnabled) count++;
+    setSelectedToolCount(count);
+  }, [webEnabled, stackEnabled, internalEnabled]);
 
-  const handleWebToggle = async () => {
-    const newValue = !webEnabled
-    setWebEnabled(newValue)
-    await updateFlag("change_web", newValue, "Failed to update web toggle status")
-  }
+  const handleToggle = async (current, setter, endpoint, errorMsg) => {
+    const newValue = !current;
+    setter(newValue);
+    await updateFlag(endpoint, newValue, errorMsg);
+  };
 
-  const handleStackToggle = async () => {
-    const newValue = !stackEnabled
-    setStackEnabled(newValue)
-    await updateFlag("change_stack_flow", newValue, "Failed to update Stack Overflow toggle status")
-  }
-  const handleInternalToggle = async () => {
-    const newValue = !internalEnabled
-    setInternalEnabled(newValue)
-    await updateFlag("change_internal", newValue, "Failed to update internal toggle status")
-  }
+  const DropdownToggleButton = () => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" className="relative h-8 gap-1 px-2">
+          <Globe className="h-4 w-4" />
+          <span className="sr-only md:not-sr-only md:inline-block">Tools</span>
+          {selectedToolCount > 0 && (
+            <Badge
+              variant="secondary"
+              className="absolute bg-red-500 text-white -top-2 right-0.5 rounded-full px-1.5 py-0 text-xs"
+            >
+              {selectedToolCount}
+            </Badge>
+          )}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="w-56">
+        <DropdownMenuLabel>Available tools</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuCheckboxItem
+          checked={webEnabled}
+          onCheckedChange={() =>
+            handleToggle(webEnabled, setWebEnabled, "change_web", "Failed to update web toggle status")
+          }
+        >
+          Web (2000/month)
+        </DropdownMenuCheckboxItem>
+        <DropdownMenuCheckboxItem
+          checked={stackEnabled}
+          onCheckedChange={() =>
+            handleToggle(stackEnabled, setStackEnabled, "change_stack_flow", "Failed to update Stack Overflow toggle status")
+          }
+        >
+          StackOverflow
+        </DropdownMenuCheckboxItem>
+        <DropdownMenuCheckboxItem
+          checked={internalEnabled}
+          onCheckedChange={() =>
+            handleToggle(internalEnabled, setInternalEnabled, "change_internal", "Failed to update internal toggle status")
+          }
+        >
+          Internal
+        </DropdownMenuCheckboxItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 
   return (
     <TooltipProvider>
@@ -136,57 +176,8 @@ export function OutputFormatToggle({ value, onChange }) {
           </TooltipContent>
         </Tooltip>
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant={webEnabled ? "destructive" : "ghost"}
-              size="sm"
-              className="h-8 gap-1 px-2"
-              onClick={handleWebToggle}
-            >
-              <Globe className="h-4 w-4" />
-              <span className="sr-only md:not-sr-only md:inline-block">Web</span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Enable/disable web search (requires Brave API)</p>
-          </TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant={stackEnabled ? "destructive" : "ghost"}
-              size="sm"
-              className="h-8 gap-1 px-2"
-              onClick={handleStackToggle}
-            >
-              <FaStackOverflow className="h-4 w-4" />
-              <span className="sr-only md:not-sr-only md:inline-block">StackOverflow</span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Enable/disable Stack Overflow search</p>
-          </TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant={internalEnabled ? "destructive" : "ghost"}
-              size="sm"
-              className="h-8 gap-1 px-2"
-              onClick={handleInternalToggle}
-            >
-              <FileText className="h-4 w-4" />
-              <span className="sr-only md:not-sr-only md:inline-block">Use Internal</span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>This is to use internal documentation, try to enable, only when needed</p>
-          </TooltipContent>
-        </Tooltip>
+        <DropdownToggleButton />
       </div>
     </TooltipProvider>
-  )
+  );
 }

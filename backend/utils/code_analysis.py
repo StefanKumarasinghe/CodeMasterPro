@@ -6,14 +6,13 @@ import config.tars as gemini
 from Prompts.prompts import reword_chain, user_intent_chain, validate_chunk_chain
 from utils.invoke_retry import invoke_with_retry
 
-
-CHUNK_SIZE = 2000
+CHUNK_SIZE = 5000
 CHUNK_OVERLAP = 0
 REFERENCE_WINDOW_SIZE = 10
 
 async def break_code_into_chunks(code_input: str) -> List[str]:
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=max(100, CHUNK_SIZE),
+        chunk_size=max(3000, CHUNK_SIZE),
         chunk_overlap=CHUNK_OVERLAP,
         separators=["\n\n" , "\n", " "],
     )
@@ -27,7 +26,7 @@ async def analyze_chunk(
     request_data: Any,
     code_analysis_chain: Any,
     intent: str,
-    max_retries: int = 4
+    max_retries: int = 5
 ) -> Tuple[Optional[str], Optional[str]]:
     try:
         backoff_delay = 1
@@ -74,12 +73,9 @@ async def analyze_chunk(
 
             past_results = raw_output
 
-            # Shrink reference and prior result context to improve focus
             if len(current_refs) > 1:
                 current_refs = current_refs[:len(current_refs) // 2]
-            if len(current_prior_results) > 1:
-                current_prior_results = current_prior_results[len(current_prior_results) // 2:]
-
+            
             retries += 1
             await asyncio.sleep(backoff_delay)
             backoff_delay *= 2
@@ -116,7 +112,6 @@ async def analyze_user_intent(intent: str) -> None:
     except Exception as e:
         gemini.logger.error(f"User intent analysis failed: {e}")
 
-
 async def code_analysis(
     code_input: str,
     request_data: Any,
@@ -136,7 +131,6 @@ async def code_analysis(
     for i, focus_chunk in enumerate(code_chunks):
         gemini.logger.debug(f"Analyzing chunk {i + 1}/{len(code_chunks)}")
         reference_chunks = reference_chunks[i + 1:i + 1 + REFERENCE_WINDOW_SIZE]
-
         current_lang, cleaned_code = await analyze_chunk(
             i,
             focus_chunk,

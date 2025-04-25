@@ -62,7 +62,7 @@ export function HtmlPreview({ htmlContent, isOpen, onClose }: HtmlPreviewProps) 
   if (!isConfirmed) {
     return (
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Security Warning</DialogTitle>
           </DialogHeader>

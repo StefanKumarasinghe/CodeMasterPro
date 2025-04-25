@@ -271,7 +271,7 @@ export function ChatHistory() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="p-4 border-b">
+      <div className="px-4 border-b">
       {bubbleOpen && (
             <div className="w-100 my-3 items-center gap-2 py-3 p-2 bg-blue-500/10 rounded-md border border-blue-200 dark:border-blue-800">
                 <p className="text-xs ">

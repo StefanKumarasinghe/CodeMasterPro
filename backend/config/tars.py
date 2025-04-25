@@ -7,7 +7,7 @@ from langchain_community.vectorstores import FAISS
 from sentence_transformers import SentenceTransformer, CrossEncoder
 from langchain_community.cache import SQLiteCache
 from langchain.memory import ConversationSummaryMemory
-from langchain_google_genai import GoogleGenerativeAI, GoogleGenerativeAIEmbeddings
+from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
 from dotenv import load_dotenv
 import langchain
 
@@ -19,9 +19,10 @@ BRAVE_URL = "https://api.search.brave.com/res/v1/web/search"
 
 BRAVE_API_KEY = os.getenv("BRAVE_API_KEY")
 
-gemini_llm = GoogleGenerativeAI(model="gemini-2.0-flash", temperature=0.9)
+gemini_llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0.9)
 
 actions = ["accept", "reject"]
+
 
 rl_agent = RLAgent(actions)
 
@@ -32,7 +33,6 @@ logger = logging.getLogger(__name__)
 embedding_model = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
 
 SHELL_TIMEOUT_SECONDS = 300
-
 
 RETRY_CHAIN=1
 

@@ -10,7 +10,6 @@ import { toast } from "@/utils/toast-util"
 import { ErrorBoundary } from "@/components/error-boundary"
 import { v4 as uuidv4 } from "uuid"
 import { autoSaveCurrentChat } from "@/utils/chat-utils"
-
 const ChatContext = createContext<ChatContextType | undefined>(undefined)
 
 export function ChatProvider({ children }: { children: ReactNode }) {
@@ -150,7 +149,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
   }
 
-
+  
   const handleSubmit = async (messageInput: string) => {
     const validation = validateInput(messageInput)
     console.log("Validation result:", validation)
@@ -158,7 +157,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       toast.error(validation.message ?? "Please enter a valid message")
       return
     }
-    if (messageInput.length > 15000) {
+    if (messageInput.length > 25000) {
       toast.error("This message will be processed by CodeMasterProAnalyst. it will take a long time so please let TARS think and come back later")
     }
     if (!language) {
@@ -172,7 +171,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
    
     setIsProcessing(true)
     try {
-      if (messageInput.length > 15000) {
+      if (messageInput.length > 25000) {
         append({
           role: "assistant",
           content: "This message will be processed by CodeMasterProAnalyst. it will take a long time so please let TARS think and come back later",
@@ -218,7 +217,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         role: "assistant",
         content: data.result,
       })
+      
     } catch (error: any) {
+      
       console.error("Failed to process message:", error)
       setError(error.message || "An unknown error occurred")
       toast.error(error.message || "Failed to process your message. Please try again.")

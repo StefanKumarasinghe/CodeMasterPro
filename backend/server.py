@@ -1,7 +1,7 @@
 # Developed by Stefan Ralph Kumarasinghe
 from utils.faiss import build_index
-from ai.process import process_message
-from fastapi import FastAPI, Request, HTTPException, UploadFile, File, Form
+from ai.process import process_message, event_generator
+from fastapi import FastAPI, Request, HTTPException, UploadFile, File, Form, Body
 from typing import List, Optional
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,7 +11,7 @@ from slowapi.util import get_remote_address
 from prometheus_fastapi_instrumentator import Instrumentator
 from fastapi import UploadFile, File, Form, HTTPException
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-from langchain_google_genai import GoogleGenerativeAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from ai.task import TaskManager
 from pathlib import Path
 from Model.SessionPayload import SessionPayload
@@ -28,6 +28,7 @@ import os
 import langchain
 from ai.memory import reset_chat_memory, give_memory, erase_long_term_memory
 from utils.documentation import add_documentation, get_documentation, delete_document
+from sse_starlette.sse import EventSourceResponse
 
 RESOURCES_DIR = Path("resources")
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -55,6 +56,10 @@ async def on_startup():
     except Exception as e:
         gemini.logger.error(f"Error during startup: {e}")
         raise RuntimeError("Failed to initialize application during startup.")
+    
+@app.get("/chat/stream")
+async def stream_endpoint():
+    return EventSourceResponse(event_generator())
 
 @app.post("/process/")
 @limiter.limit("5/minute")
@@ -69,7 +74,9 @@ async def handle_chat(request: Request):
         task_manager.register("current_task", task)
         return await task
     except asyncio.CancelledError:
+        gemini.logger.warning("Request was cancelled.")
         return JSONResponse({"detail": "Request cancelled"}, status_code=499)
+    
     
 @app.post("/add_resource/")
 @limiter.limit("3/minute")
@@ -138,18 +145,19 @@ async def root(request: Request):
 async def change_model(request: Request, req: ModelRequest):
     try:
         if req.model.lower() == "fast":
-            gemini.gemini_llm = GoogleGenerativeAI(model="gemini-2.0-flash", temperature=0.9)
-            gemini.RETRY_CHAIN = 3
+            gemini.gemini_llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0.9)
+            gemini.RETRY_CHAIN = 1
             return {"message": "Switched to fast model (gemini-2.0-flash)"}
         elif req.model.lower() == "advanced":
-            gemini.gemini_llm = GoogleGenerativeAI(model="gemini-2.5-flash-preview-04-17", temperature=0.6)
-            gemini.RETRY_CHAIN = 2
+            gemini.gemini_llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash-preview-04-17", temperature=0.6)
+            gemini.RETRY_CHAIN = 3
             return {"message": "Switched to advanced model (gemini-2.5-flash-preview-04-17)"}
         elif req.model.lower() == "pro":
-            gemini.gemini_llm = GoogleGenerativeAI(model="gemini-2.5-pro-exp-03-25", temperature=0.9)
+            gemini.gemini_llm = ChatGoogleGenerativeAI(model="gemini-2.5-pro-exp-03-25", temperature=0.9)
             gemini.RETRY_CHAIN = 1
             return {"message": "Switched to pro model (gemini-2.5-pro-exp-03-25)"}
         else:
+            gemini.logger.error(f"Invalid model specified: {req.model}")
             raise HTTPException(status_code=400, detail="Invalid model specified. Use 'fast' or 'advanced'.")
     except Exception as e:
         gemini.logger.error(f"Error in change_model: {e}")
@@ -162,6 +170,7 @@ async def get_current_model(request: Request):
         model_name = gemini.gemini_llm.model
         return {"current_model": model_name}
     except Exception as e:
+        gemini.logger.error(f"Error in get_current_model: {e}")
         raise HTTPException(status_code=500, detail=f"Could not retrieve current model: {e}")
 
 @app.post("/run_python_code")
@@ -221,31 +230,47 @@ async def check_stack(request: Request):
 @app.post("/change_stack_flow")
 @limiter.limit("10/minute")
 async def change_web(request: Request, payload: TogglePayload):
-    gemini.web_stack_state["enabled"] = payload.enabled
-    return {"status": "success", "enabled": gemini.web_stack_state["enabled"]}
+    try:
+        gemini.web_stack_state["enabled"] = payload.enabled
+        return {"status": "success", "enabled": gemini.web_stack_state["enabled"]}
+    except Exception as e:
+        gemini.logger.error(f"Error in change_web: {e}")
+        raise HTTPException(status_code=500, detail="Failed to change web stack state.")
 
 @app.post("/change_web")
 @limiter.limit("10/minute")
 async def change_web(request: Request, payload: TogglePayload):
-    gemini.web_flag_state["enabled"] = payload.enabled
-    return {"status": "success", "enabled": gemini.web_flag_state["enabled"]}
+    try:
+        gemini.web_flag_state["enabled"] = payload.enabled
+        return {"status": "success", "enabled": gemini.web_flag_state["enabled"]}
+    except Exception as e:
+        gemini.logger.error(f"Error in change_web: {e}")
+        raise HTTPException(status_code=500, detail="Failed to change web flag state.")
 
 @app.post("/change_internal")
 @limiter.limit("10/minute")
 async def change_internal(request: Request, payload: TogglePayload):
-    gemini.internal_stack_state["enabled"] = payload.enabled
-    return {"status": "success", "enabled": gemini.internal_stack_state["enabled"]}
+    try:
+        gemini.internal_stack_state["enabled"] = payload.enabled
+        return {"status": "success", "enabled": gemini.internal_stack_state["enabled"]}
+    except Exception as e:
+        gemini.logger.error(f"Error in change_internal: {e}")
+        raise HTTPException(status_code=500, detail="Failed to change internal stack state.")
 
 @app.post("/cancel_message")
 @limiter.limit("10/minute")
 async def cancel_all_tasks(request: Request):
-    cancelled = []
-    for chat_id in list(task_manager.tasks.keys()):
-        if task_manager.cancel(chat_id):
-            cancelled.append(chat_id)
-    if cancelled:
-        return {"result": f"Cancelled tasks for chatIds: {', '.join(cancelled)}"}
-    return {"result": "No running tasks found to cancel."}
+    try:
+        cancelled = []
+        for chat_id in list(task_manager.tasks.keys()):
+            if task_manager.cancel(chat_id):
+                cancelled.append(chat_id)
+        if cancelled:
+            return {"result": f"Cancelled tasks for chatIds: {', '.join(cancelled)}"}
+        return {"result": "No running tasks found to cancel."}
+    except Exception as e:
+        gemini.logger.error(f"Error in cancel_all_tasks: {e}")
+        raise HTTPException(status_code=500, detail="Failed to cancel tasks.")
 
 @app.post("/erase_long_term_memory")
 @limiter.limit("10/minute")
@@ -281,16 +306,20 @@ async def get_documentation_endpoint(request: Request):
         gemini.logger.error(f"Error in get_documentation: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve documentation.")
 
-@app.delete("/remove_documentation/{document_id}", response_model=DeletionResponse)
+@app.delete("/remove_documentation", response_model=DeletionResponse)
 @limiter.limit("10/minute")
-async def delete_document_endpoint(request: Request, document_id: str):
+async def delete_documents_endpoint(
+    request: Request,
+    ids: List[str] = Body(..., embed=True) 
+):
     try:
-        await delete_document(document_id)
-        return DeletionResponse(message="Document deleted successfully.", deleted_id=document_id)
+        for document_id in ids:
+            await delete_document(document_id)
+        return DeletionResponse(message="Documents deleted successfully.", deleted_ids=ids)
     except Exception as e:
         gemini.logger.error(f"Error in delete_document: {e}")
-        raise HTTPException(status_code=500, detail="Failed to delete document.")
-
+        raise HTTPException(status_code=500, detail=f"Failed to delete documents: {str(e)}")
+    
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("server:app", host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
