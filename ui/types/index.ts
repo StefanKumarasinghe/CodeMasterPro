@@ -6,6 +6,7 @@ export interface Preferences {
   syntaxHighlighting: boolean
   showLineNumbers: boolean
   autoComplete: boolean
+  inputPreference: "Autotag" | "NoTag"
   codeQuality: {
     linting: boolean
     formatting: boolean

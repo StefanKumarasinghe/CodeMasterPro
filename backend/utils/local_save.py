@@ -64,10 +64,18 @@ async def save_resource(content: str, folder_name: str, filename: str = "raw.txt
             if get_content_hash(existing_file.read_text(encoding="utf-8")) == content_hash:
                 return {"message": "Similar content already exists, not adding it again."}
         markdown_output = await invoke_with_retry(convert_to_markdown_chain, {"documentation": indented_content})
-        raw_md = markdown_output.get("text", "")
+        raw_md = markdown_output.content
         json_str = raw_md.replace("```json", "").replace("```", "").strip()
-        json_output = json.loads(json.dumps(json.loads(json_str)))
-
+        try:
+            json_output = json.loads(json.dumps(json.loads(json_str)))
+        except json.JSONDecodeError:
+            gemini.logger.error("Failed to parse JSON from markdown output. Using alternative method.")
+            json_output = {
+                "title": generate_random_filename(),
+                "content": indented_content,
+                "hash": content_hash,
+            }
+    
         name = json_output.get("title", generate_random_filename())
         name = re.sub(r"[^a-zA-Z0-9_\-\.]", "_", name) 
         file_path = resource_folder / f"{name}.md"

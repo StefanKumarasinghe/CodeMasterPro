@@ -336,9 +336,10 @@ export function ChatInput() {
           }
 
           try {
+            if (preferences.inputPreference=="Autotag") {
             const formattedCode = await formatCode(newContent, detectedLanguage)
             const codeBlock = "\n" + "```" + detectedLanguage + "\n" + formattedCode + "\n```"
-
+            
             setMessageInput((prev) => prev + codeBlock)
 
             toast({
@@ -346,6 +347,10 @@ export function ChatInput() {
               description: `Formatted as ${detectedLanguage}`,
               duration: 3000,
             })
+            } else {
+              const codeBlock = "\n" + newContent + "\n```"
+              setMessageInput((prev) => prev +codeBlock)
+            }
           } catch (err) {
             // Fallback to unformatted code if formatting fails
             console.warn("Formatting failed, inserting raw code:", err)
@@ -402,18 +407,17 @@ export function ChatInput() {
 
         // 2) Format with graceful fallback
         try {
+          if (preferences.inputPreference=="Autotag") {
           const formattedCode = await formatCode(processedText, detectedLanguage)
           const codeBlock = "\n" + "```" + detectedLanguage + "\n" + formattedCode + "\n```"
           const cursor = textareaRef.current?.selectionStart ?? 0
           const before = messageInput.slice(0, cursor)
           const after = messageInput.slice(cursor)
           setMessageInput(before + codeBlock + after)
-
-          toast({
-            title: "Code Formatted",
-            description: `Detected ${detectedLanguage} and formatted it`,
-            duration: 3000,
-          })
+        }else {
+          const codeBlock = "\n" + processedText + "\n```"
+          setMessageInput((prev) => prev +codeBlock)
+        }
         } catch (err) {
           // Fallback to unformatted code if formatting fails
           console.warn("Formatting failed on paste, inserting raw code:", err)
@@ -423,13 +427,6 @@ export function ChatInput() {
           const before = messageInput.slice(0, cursor)
           const after = messageInput.slice(cursor)
           setMessageInput(before + codeBlock + after)
-
-          toast({
-            title: "Code Detected",
-            description: "Inserted code without formatting",
-            variant: "warning",
-            duration: 3000,
-          })
         }
       }
     },
@@ -900,18 +897,20 @@ export function ChatInput() {
         </div>
 
         <div className="text-xs text-muted-foreground mt-1 flex items-center justify-between flex-wrap gap-2">
-          <span className="flex items-center gap-1">
+          <div className="flex items-center gap-2 flex-1">
             <FileUp className="h-3 w-3" />
-            Drag & drop files or paste code for automatic formatting
-          </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 px-2 text-xs"
-            onClick={() => setShowPromptButtons(!showPromptButtons)}
-          >
-            {showPromptButtons ? "Hide Prompts" : "Show Prompts"}
-          </Button>
+            <span>Drag & drop files or paste code for automatic formatting</span>
+          </div>
+          <div className="flex justify-end flex-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-xs"
+              onClick={() => setShowPromptButtons(!showPromptButtons)}
+            >
+              {showPromptButtons ? "Hide Prompts" : "Show Prompts"}
+            </Button>
+          </div>
         </div>
 
         <AnimatePresence>

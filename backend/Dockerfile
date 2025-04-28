@@ -1,16 +1,31 @@
-# Use an official Python runtime as a parent image
-FROM python:3.11-slim-buster
-# Set the working directory to /app
+# Stage 1: Builder
+FROM python:3.11-slim-bookworm AS builder
+
 WORKDIR /app
 
-# Copy the current directory contents into the container at /app
+# Install only essential build tools (optional)
+RUN apt-get update && apt-get install -y --no-install-recommends gcc
+
+# Only copy requirements first (better cache use)
+COPY requirements.txt .
+
+# Install only production dependencies
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+# Stage 2: Runtime
+FROM python:3.11-slim-bookworm
+
+WORKDIR /app
+
+
+COPY --from=builder /install /usr/local
+
+
 COPY . /app
 
-# Install any dependencies specified in requirements.txt
-RUN pip install --no-cache-dir --upgrade -r requirements.txt
 
-# Make port 80 available to the world outside this container
+
 EXPOSE 80
 
-# Run app.py when the container launches
+# Command to run
 CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -44,7 +44,7 @@ export function ChatMessageList() {
   const { messages, language, preferences, isLoading, handleCodeAction, setMemoryState } = useChat()
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
-  const [showScrollButton, setShowScrollButton] = useState(false)
+  const [showScrollButton, setShowScrollButton] = useState(true)
   const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true)
   const [loadingMessage, setLoadingMessage] = useState(LOADING_MESSAGES[0])
   const loadingIntervalRef = useRef<NodeJS.Timeout | null>(null)
@@ -143,38 +143,39 @@ export function ChatMessageList() {
       }
     }
   }, [isLoading, streamUpdates])
-
   const scrollToBottom = useCallback(() => {
     if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: "smooth" })
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
-    setIsAutoScrollEnabled(true)
-  }, [])
-
+    setIsAutoScrollEnabled(true);
+  }, []);
+  
   const handleScroll = useCallback(() => {
-    if (!scrollAreaRef.current) return
-
-    const { scrollTop, scrollHeight, clientHeight } = scrollAreaRef.current
-    const isNearBottom = scrollHeight - scrollTop - clientHeight < 100
-
-    setShowScrollButton(!isNearBottom)
-    setIsAutoScrollEnabled(isNearBottom)
-  }, [])
-
+    if (!messagesEndRef.current) return;
+    const parent = messagesEndRef.current.parentElement;
+    if (!parent) return;
+  
+    const { scrollTop, scrollHeight, clientHeight } = parent;
+    const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+  
+    setShowScrollButton(!isNearBottom);
+    setIsAutoScrollEnabled(isNearBottom);
+  }, []);
+  
   useEffect(() => {
-    const scrollArea = scrollAreaRef.current
-    if (scrollArea) {
-      scrollArea.addEventListener("scroll", handleScroll)
-      return () => scrollArea.removeEventListener("scroll", handleScroll)
+    const parent = messagesEndRef.current?.parentElement;
+    if (parent) {
+      parent.addEventListener("scroll", handleScroll);
+      return () => parent.removeEventListener("scroll", handleScroll);
     }
-  }, [handleScroll])
-
+  }, [handleScroll]);
+  
   useEffect(() => {
     if (isAutoScrollEnabled && messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: "smooth" })
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages, isLoading, isAutoScrollEnabled])
-
+  }, [messages, isLoading, isAutoScrollEnabled]);
+  
   const handleClearMemory = useCallback(() => {
     setMemoryState((prev) => ({ ...prev, forgetMemory: true }))
   }, [setMemoryState])
@@ -196,7 +197,7 @@ export function ChatMessageList() {
         />
       )}
 
-      <ScrollArea className="flex-1 px-2 sm:px-4 py-4" scrollAreaRef={scrollAreaRef}>
+      <ScrollArea className="flex-1 px-2 sm:px-4 py-4" ref={scrollAreaRef}>
         <div className="space-y-6 pb-6 max-w-full mx-auto px-3">
           {messages.length === 0 ? (
             <ChatWelcome />
@@ -212,15 +213,28 @@ export function ChatMessageList() {
               />
             ))
           )}
+
+      <Button
+        variant="outline"
+        size="icon"
+        className={cn(
+          "absolute bottom-4 right-4 rounded-full h-9 w-9  bg-background shadow-md transition-opacity duration-200 z-50",
+          showScrollButton ? "opacity-100" : "opacity-0 pointer-events-none"
+        )}
+        onClick={scrollToBottom}
+        aria-label="Scroll to bottom"
+      >
+        <ChevronDown className="h-5 w-5" />
+      </Button>
           {isLoading && (
-            <div className="flex flex-col gap-1 text-muted-foreground ml-5 text-sm">
+            <div className=" gap-1 text-muted-foreground ml-5 text-sm">
               <div className="flex items-center gap-2">
                 <div className="h-3 w-3 rounded-full bg-primary animate-pulse" />
                 <span>{loadingMessage}</span>
               </div>
               {updateMessage && (
-                <span className="p-3 my-2 bg-gray-100 dark:bg-gray-700 rounded-md items-center gap-2 text-muted-foreground max-w-[60%] inline-flex">
-                  <span className="italic text-black dark:text-green-300 text-sm">{convertMarkdownToText(updateMessage)}</span>
+                <span className="p-3 ml-5 my-2 bg-gray-100 dark:bg-gray-700 rounded-md items-center gap-2 text-muted-foreground max-w-[60%] inline-flex">
+                  <span className="text-black dark:text-green-200 text-sm">{convertMarkdownToText(updateMessage)}</span>
                 </span>
               )}
             </div>
@@ -233,19 +247,6 @@ export function ChatMessageList() {
           <div ref={messagesEndRef} />
         </div>
       </ScrollArea>
-
-      <Button
-        variant="outline"
-        size="icon"
-        className={cn(
-          "absolute bottom-4 right-4 rounded-full h-10 w-10 bg-background shadow-md transition-opacity duration-200",
-          showScrollButton ? "opacity-100" : "opacity-0 pointer-events-none"
-        )}
-        onClick={scrollToBottom}
-        aria-label="Scroll to bottom"
-      >
-        <ChevronDown className="h-5 w-5" />
-      </Button>
     </div>
   )
 }

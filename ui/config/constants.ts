@@ -36,6 +36,7 @@ export const DEFAULT_PREFERENCES = {
   syntaxHighlighting: true,
   showLineNumbers: true,
   autoComplete: true,
+  inputPreference: "Autotag",
   codeQuality: {
     linting: true,
     formatting: true,

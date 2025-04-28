@@ -17,6 +17,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain.docstore.document import Document
 from utils.cache import cached_search
+from utils.updates import set_update
 from Prompts.prompts import refine_search_local_chain, cleaned_search_result_chain
 
 INDEX_STORE_PATH = "index_store/"
@@ -144,11 +145,12 @@ async def web_search(query: str, msg: MessageRequest) -> List[Dict[str, Any]]:
         raise ValueError(f"Query too long (max {MAX_QUERY_LENGTH} characters)") 
     gemini.logger.info(f"Searching Brave for: {query[:50]}{'...' if len(query) > 50 else ''}")
     links = await brave_search(query, count=5)
+    await set_update("Searching Brave for relevant information... " + str(links))
     if not links:
         raise ValueError("No results from Brave Search")
     chain_inputs = {"query": query, "links": str(links), **msg.dict(exclude={"chatId"})}
     json_result = await invoke_with_retry(link_chain, chain_inputs)
-    parsed_result = await parse_json_response(json_result["text"])
+    parsed_result = await parse_json_response(json_result.content)
     web_results = extract_all_articles(parsed_result)
     web_results = await invoke_with_retry(cleaned_search_result_chain, {"query": query, "answer": str(web_results)})
     if not web_results:
@@ -165,7 +167,7 @@ async def local_search(query: str, k: int = 2, min_relevance_threshold: float = 
             raise ValueError("Vector store not available. Please reindex resources first.")
     try:
         query_analysis = await invoke_with_retry(refine_search_local_chain,{"query": query})
-        query_data = json.loads(json.dumps(json.loads(query_analysis["text"])))
+        query_data = json.loads(json.dumps(json.loads(query_analysis.content)))
         expanded_query = query_data.get("expanded_query", query)
         keywords = query_data.get("keywords", [])
         domain = query_data.get("domain", "").lower()
@@ -369,3 +371,6 @@ async def search_resources(query: str, msg: MessageRequest, k: int = 3) -> str:
     except Exception as e:
         gemini.logger.error(f"Search error: {str(e)}", exc_info=True)
         return f"An error occurred during search: {str(e)}"
+    
+
+  

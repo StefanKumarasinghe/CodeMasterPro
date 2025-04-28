@@ -3,8 +3,9 @@ from typing import List, Any, Tuple, Optional
 import asyncio
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 import config.tars as gemini
-from Prompts.prompts import reword_chain, user_intent_chain, validate_chunk_chain
+from Prompts.prompts import reword_chain, user_intent_chain, validate_chunk_chain, final_code_prompt_chain
 from utils.invoke_retry import invoke_with_retry
+from utils.updates import set_update
 
 CHUNK_SIZE = 5000
 CHUNK_OVERLAP = 0
@@ -51,7 +52,8 @@ async def analyze_chunk(
             }
 
             result = await invoke_with_retry(code_analysis_chain, prompt_input)
-            raw_output = result.get("text", "")
+            raw_output = result.content
+            await set_update("Analyzing chunk " + str(index) + "..." + raw_output[:500])
 
             validate = await invoke_with_retry(validate_chunk_chain, {
                 "actual_code": focus_chunk,
@@ -60,7 +62,7 @@ async def analyze_chunk(
             })
 
             try:
-                score = int(validate["text"].strip())
+                score = int(validate.content.strip())
             except ValueError:
                 gemini.logger.warning(f"Invalid validation score format: {validate['text']}")
                 score = 0
@@ -70,7 +72,7 @@ async def analyze_chunk(
 
             if score > 90:
                 break
-
+            await set_update("Retrying chunk " + str(index) + "..." + raw_output[:500])
             past_results = raw_output
 
             if len(current_refs) > 1:
@@ -106,7 +108,8 @@ async def analyze_user_intent(intent: str) -> None:
             "query": intent,
         }
         result = await invoke_with_retry(user_intent_chain, prompt_input)
-        result = result["text"].strip()
+        
+        result = result.content.strip()
         return result
 
     except Exception as e:
@@ -117,17 +120,22 @@ async def code_analysis(
     request_data: Any,
     code_analysis_chain: Any
 ) -> str:
+    
     code_input_temp = code_input[:100] + code_input[-100:]
     intent = await analyze_user_intent(code_input_temp)
+    await set_update(" Understanding your intent..." + intent[:500])
     print(f"User intent: {intent}")
+    
     code_chunks = await break_code_into_chunks(code_input)
+    
     gemini.logger.info(f"Split input into {len(code_chunks)} chunks.")
+    await set_update("Broken into " + str(len(code_chunks)) + " chunks. Provide an estimated time for completion.")
 
     results = []
     prior_results = []
     detected_lang = "output"
     reference_chunks = code_chunks[:]
-
+    
     for i, focus_chunk in enumerate(code_chunks):
         gemini.logger.debug(f"Analyzing chunk {i + 1}/{len(code_chunks)}")
         reference_chunks = reference_chunks[i + 1:i + 1 + REFERENCE_WINDOW_SIZE]
@@ -142,20 +150,27 @@ async def code_analysis(
         )
 
         if cleaned_code:
+
             if cleaned_code not in results:
                 results.append(cleaned_code)
-
             prior_results.append(cleaned_code)
 
             if current_lang and detected_lang == "output" and current_lang != "output":
                 detected_lang = current_lang
         else:
             gemini.logger.warning(f"Chunk {i + 1} analysis failed or returned empty result.")
-
+    await set_update("Recommending code..." + str(len(results)) + " chunks. Provide an estimated time for completion.")
     final_combined_output = "\n".join(results)
     output_format = request_data.outputFormat.strip()
 
     if output_format == "codeOnly":
+        final_combined_output = await invoke_with_retry(final_code_prompt_chain, {
+            "code": final_combined_output,
+            "intent": intent,
+            "customPrompt": request_data.customPrompt
+        })
+        final_combined_output = final_combined_output.content.strip()
+        final_combined_output = re.sub(r"```.*?\n", "", final_combined_output, flags=re.DOTALL)
         return f"```{detected_lang}\n{final_combined_output}\n```"
 
     elif output_format in ("explanationOnly", "codeAndExplanation"):
@@ -166,7 +181,7 @@ async def code_analysis(
 
         gemini.logger.info("Generating final explanation/combined output...")
         explanation_result = await invoke_with_retry(reword_chain, explanation_input)
-        return str(explanation_result["text"]).strip()
+        return str(explanation_result.content).strip()
 
     else:
         gemini.logger.warning(f"Unknown output format: {output_format}. Defaulting to codeOnly.")

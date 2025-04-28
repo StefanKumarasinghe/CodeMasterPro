@@ -1,17 +1,16 @@
 "use client"
 
 import type React from "react"
-
 import { Button } from "@/components/ui/button"
-import { Trash2, RefreshCw, File, ChevronDown, BrainCircuit, Trash2Icon, BrainCogIcon, BrainIcon, Indent } from "lucide-react"
+import { ChevronDown, BrainCircuit, BrainCogIcon, BrainIcon } from "lucide-react"
 import { API_ENDPOINT, STORAGE_KEYS } from "@/config/constants"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { useState, useEffect, use } from "react"
+import { useState, useEffect } from "react"
 import { toast } from "@/utils/toast-util"
 import { useChat } from "@/context/chat-context"
 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { YAxis } from "recharts"
+
 
 const IconButton = ({
   onClick,
@@ -43,7 +42,18 @@ export function MemoryControls() {
   const [currentModelName, setCurrentModelName] = useState<string>("")
   const [isLoading, setIsLoading] = useState(false)
 
-  // Fetch current model on component mount
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ""
+      forgetMemory() 
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload)
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload)
+    }
+  }, [])
+
   useEffect(() => {
     fetchCurrentModel()
   }, [])
@@ -66,12 +76,16 @@ export function MemoryControls() {
         setCurrentModelName(modelName)
 
         // Set model type based on model name
-        if (modelName.includes("flash")) {
+        if (modelName.includes("2.0-flash")) {
           setModelType("fast")
           localStorage.setItem(STORAGE_KEYS.MODEL_TYPE, "fast")
-        } else {
+        }
+        else if (modelName.includes("pro")) {
           setModelType("advanced")
           localStorage.setItem(STORAGE_KEYS.MODEL_TYPE, "advanced")
+        }else {
+          setModelType("think")
+          localStorage.setItem(STORAGE_KEYS.MODEL_TYPE, "think")
         }
       }
     } catch (error) {
@@ -144,11 +158,12 @@ export function MemoryControls() {
   // Get display name for the model
   const getModelDisplayName = () => {
     if (isLoading) return "Loading..."
-
     if (modelType === "advanced") {
       return currentModelName ? `Advanced: ${currentModelName}` : "Advanced (Slow)"
+    } else if (modelType === "fast") {
+      return currentModelName ? `Fast: ${currentModelName}` : "Fast (Fast)"
     } else {
-      return currentModelName ? `Fast: ${currentModelName || "gemini-2.0-flash"}` : "Less Accurate (Fast)"
+      return currentModelName ? `Thinker: ${currentModelName}` : "Think (Mid)"
     }
   }
 
@@ -179,9 +194,8 @@ export function MemoryControls() {
         </DropdownMenu>
 
         {/* Forget memory button with temporary message */}
-        <IconButton onClick={forgetMemory} icon={BrainIcon} tooltip="Forget Short-Term Memory " />
-        {/* Reload button */}
-        <IconButton onClick={() => setMessages([])} icon={Trash2} tooltip="Clear page (Does not remove memory)" />
+        <IconButton onClick={() => { forgetMemory(); setMessages([]); }} icon={BrainIcon} tooltip="Forget Short-Term Memory" />
+  
       </TooltipProvider>
     </div>
   )

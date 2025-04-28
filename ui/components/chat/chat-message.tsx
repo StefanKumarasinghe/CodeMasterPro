@@ -4,11 +4,12 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { API_ENDPOINT } from "@/config/constants"
-import { Copy, Download, ThumbsUp, ThumbsDown, SmileIcon } from "lucide-react"
+import { Copy, Download, ThumbsUp, ThumbsDown, SmileIcon, RefreshCcw } from "lucide-react"
 import { extractCodeBlocks } from "@/utils/chat-utils"
 import { toast } from "@/utils/toast-util"
 import { useState, useCallback, memo, Suspense, useRef, useEffect } from "react"
-import type { Message } from "ai"
+import { RetryError, type Message } from "ai"
+import { useChat } from "@/context/chat-context"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import MessageContent from "./message-content"
 
@@ -30,6 +31,7 @@ const ChatMessage = memo(function ChatMessage({
   const [isCopied, setIsCopied] = useState(false)
   const [feedback, setFeedback] = useState<"like" | "dislike" | null>(null)
   const contentRef = useRef<string>("");
+  const { handleSubmit } = useChat()
 
 
   // Update contentRef whenever message.content changes
@@ -53,6 +55,13 @@ const ChatMessage = memo(function ChatMessage({
         toast.error("Could not copy to clipboard");
       });
   }, []);
+
+  const retrySubmission = useCallback(() => {
+    const content = contentRef.current;
+    if (!content) return;
+    handleSubmit(content);
+    toast.success("Retrying submission...");
+  }, [handleSubmit]);
 
   const downloadCodeBlocks = useCallback(() => {
     const content = contentRef.current;
@@ -176,6 +185,8 @@ const ChatMessage = memo(function ChatMessage({
             </Tooltip>
           </TooltipProvider>
 
+
+
           {hasCodeBlocks && (
             <TooltipProvider>
               <Tooltip>
@@ -192,6 +203,27 @@ const ChatMessage = memo(function ChatMessage({
                 </TooltipTrigger>
                 <TooltipContent>
                   <p>Download code</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+
+          {isUser && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={retrySubmission}
+                    aria-label="Retry submission"
+                  >
+                    <RefreshCcw className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Retry submission</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>

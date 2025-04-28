@@ -36,7 +36,7 @@ async def rank_with_gemini(questions, user_query):
     }
     try:
         result = await invoke_with_retry(rank_chain, prompt_input)  
-        response = result["text"].strip()
+        response = result.content.strip()
         response = response.replace("```json", "").replace("```", "")
         clean_json = response
         parsed = json.loads(json.dumps(json.loads(clean_json)))
@@ -86,7 +86,7 @@ async def search_stackoverflow_and_rank(user_query):
                         "answer": plain_text,
                         "query": user_query
                     })
-                    answer_text = result.get("text", "").strip()
+                    answer_text = result.content.strip()
                 except Exception:
                     gemini.logger.error(f"[ERROR] Cleaning answer failed: {e}")
                     answer_text = plain_text

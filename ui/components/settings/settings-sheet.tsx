@@ -101,6 +101,31 @@ export default function SettingsSheet({
                 <div className="text-sm text-muted-foreground">
                   This information helps the AI provide more relevant responses. It will not be shared with anyone.
                 </div>
+                <Separator />
+                <div className="space-y-2">
+                  <Label>Input Preference</Label>
+                  <RadioGroup
+                    value={preferences.inputPreference}
+                    onValueChange={(value) =>
+                      setPreferences({
+                        ...preferences,
+                        inputPreference: value as "Autotag" | "NoTag",
+                      })
+                    }
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="Autotag" id="input-text" />
+                      <Label htmlFor="input-text">Auto format</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="NoTag" id="input-code" />
+                      <Label htmlFor="input-code">No formatting</Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+                <div className="text-sm text-muted-foreground">
+                  Auto format will automatically format your code snippets by enclosing them in code blocks. No formatting will not apply any formatting to your code snippets.
+                </div>
               </TabsContent>
               <TabsContent value="settings" className="space-y-6 mt-4">
                 <div className="space-y-3">
@@ -132,6 +157,7 @@ export default function SettingsSheet({
                   <p>While CodeMasterPro may not always stick to the output format, it will try its best to follow it. It is designed to also understand context and provide relevant responses.</p>
                   </div>
                 <Separator />
+          
                 <div className="space-y-3">
                   <Label>Code Quality Preferences</Label>
                   <div className="space-y-2">

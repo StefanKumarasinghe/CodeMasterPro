@@ -4,18 +4,20 @@ import pickle
 import config.tars as gemini
 
 class RLAgent:
-    def __init__(self, actions, learning_rate=0.1, discount_factor=0.9, epsilon=0.9, backup_file="q_values.pkl"):
+    def __init__(self, actions, learning_rate=0.6, discount_factor=0.9, epsilon=0.9, backup_file="q_values.pkl"):
         self.actions = actions
         self.epsilon = epsilon
         self.learning_rate = learning_rate
         self.discount_factor = discount_factor
-        self.epsilon = epsilon
         self.backup_file = backup_file
         self.q_values = {action: 0.0 for action in actions}
         self._load_q_values()
 
-    def _decay_epsilon(self):
-        self.epsilon = max(self.epsilon * 0.995, 0.1)
+    def _decay_epsilon(self, avg_score):
+        if avg_score > 8:
+            self.epsilon = max(self.epsilon * 0.995, 0.1)
+        else:
+            self.epsilon = max(self.epsilon * 0.98, 0.1)
 
     def select_action(self):
         if random.random() < self.epsilon:
@@ -25,10 +27,12 @@ class RLAgent:
     def update_q_value(self, action_index, reward):
         action = self.actions[action_index]
         current_q_value = self.q_values.get(action, 0.0)
+        # Applying momentum in Q-value update for faster learning
         new_q_value = current_q_value + self.learning_rate * (reward - current_q_value)
         self.q_values[action] = new_q_value
         self.save_q_values()
-        self._decay_epsilon()
+        self._decay_epsilon(reward)
+        gemini.logger.info(f"Updated Q-values: {self.q_values}")
 
     def save_q_values(self):
         try:
@@ -66,4 +70,3 @@ class RLAgent:
         reward = max(min(reward, 20), -10)
         agent.update_q_value(action_index, reward)
         return reward
-

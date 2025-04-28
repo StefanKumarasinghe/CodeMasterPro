@@ -88,7 +88,7 @@ async def run_python_code(payload: CodePayload):
     async def install_requirements(code: str):
         try:
             result = await invoke_with_retry(pip_install_chain, {"code": code})
-            install_command = result.get("text", "").strip()
+            install_command = result.content.strip()
         except Exception:
             return []
 
@@ -111,7 +111,7 @@ async def run_python_code(payload: CodePayload):
 
     try:
         result = await invoke_with_retry(runnable_code_chain, {"code": payload.code})
-        runnable_code = result.get("text", "").replace("```python", "").replace("```", "").strip()
+        runnable_code = result.content.replace("```python", "").replace("```", "").strip()
     except Exception:
         runnable_code = payload.code
 
@@ -127,7 +127,7 @@ async def run_python_code(payload: CodePayload):
                 feedback_chain_python,
                 {"code": runnable_code, "error": stderr}
             )
-            fixed_code = feedback_result.get("text", "").replace("```python", "").replace("```", "").strip()
+            fixed_code = feedback_result.content.replace("```python", "").replace("```", "").strip()
             if not fixed_code or fixed_code == runnable_code:
                 break
             runnable_code = fixed_code

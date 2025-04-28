@@ -16,7 +16,7 @@ async def brave_search(query: str, count: int = 5) -> List[dict]:
     headers = {"Accept": "application/json","X-Subscription-Token": API_KEY}
     result = await invoke_with_retry(refine_search_chain, {"query": query})
     if result:
-        query = result["text"].strip()
+        query = result.content.strip()
     params = {"q": query, "count": count}
     async with aiohttp.ClientSession() as session:
         try:

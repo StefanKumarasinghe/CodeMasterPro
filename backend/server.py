@@ -1,6 +1,7 @@
 # Developed by Stefan Ralph Kumarasinghe
 from utils.faiss import build_index
-from ai.process import process_message, event_generator
+from ai.process import process_message
+from utils.updates import event_generator
 from fastapi import FastAPI, Request, HTTPException, UploadFile, File, Form, Body
 from typing import List, Optional
 from fastapi.responses import JSONResponse
@@ -8,9 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
-from prometheus_fastapi_instrumentator import Instrumentator
 from fastapi import UploadFile, File, Form, HTTPException
-from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from langchain_google_genai import ChatGoogleGenerativeAI
 from ai.task import TaskManager
 from pathlib import Path
@@ -29,6 +28,7 @@ import langchain
 from ai.memory import reset_chat_memory, give_memory, erase_long_term_memory
 from utils.documentation import add_documentation, get_documentation, delete_document
 from sse_starlette.sse import EventSourceResponse
+from contextlib import asynccontextmanager
 
 RESOURCES_DIR = Path("resources")
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -37,26 +37,29 @@ cross_encoder = gemini.cross_encoder
 langchain.llm_cache = gemini.langchain.llm_cache
 executor = gemini.executor
 task_manager = TaskManager()
-app = FastAPI(title="Developed by Stefan Ralph Kumarasinghe")
-FastAPIInstrumentor.instrument_app(app)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        asyncio.create_task(build_index())
+        yield
+    except Exception as e:
+        gemini.logger.error(f"Error during startup: {e}")
+        raise RuntimeError("Failed to initialize application during startup.")
+    finally:
+        pass
+    
+app = FastAPI(title="Developed by Stefan Ralph Kumarasinghe", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"],)
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
-Instrumentator().instrument(app).expose(app)
 
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
     gemini.logger.warning(f"Rate limit exceeded for {request.client.host}")
     return JSONResponse({"detail": "Rate limit exceeded"}, status_code=429)
 
-@app.on_event("startup")
-async def on_startup():
-    try:
-        asyncio.create_task(build_index())
-    except Exception as e:
-        gemini.logger.error(f"Error during startup: {e}")
-        raise RuntimeError("Failed to initialize application during startup.")
-    
+
 @app.get("/chat/stream")
 async def stream_endpoint():
     return EventSourceResponse(event_generator())
@@ -319,7 +322,7 @@ async def delete_documents_endpoint(
     except Exception as e:
         gemini.logger.error(f"Error in delete_document: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to delete documents: {str(e)}")
-    
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("server:app", host="0.0.0.0", port=int(os.getenv("PORT", 8000)))

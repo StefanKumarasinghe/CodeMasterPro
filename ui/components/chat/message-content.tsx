@@ -101,60 +101,84 @@ const isHtmlCode = (code: string, lang: string): boolean => {
   return false
 }
 
-// Text block component for markdown content
-const TextBlock = memo(({ content }: { content: string }) => (
-  <div className="w-full overflow-x-auto break-words bg-card rounded-md my-4 prose prose-zinc dark:prose-invert max-w-none">
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      components={{
-        h1: ({ node, ...props }) => <h1 {...props} className="text-2xl font-bold mt-6 mb-4" />,
-        h2: ({ node, ...props }) => <h2 {...props} className="text-xl font-bold mt-5 mb-3" />,
-        h3: ({ node, ...props }) => <h3 {...props} className="text-lg font-bold mt-4 mb-2" />,
-        h4: ({ node, ...props }) => <h4 {...props} className="text-base font-semibold mt-3 mb-2" />,
-        p: ({ node, ...props }) => <p {...props} className="my-3 leading-relaxed" />,
-        ul: ({ node, ...props }) => <ul {...props} className="list-disc pl-6 ml-4 my-3" />,
-        ol: ({ node, ...props }) => <ol {...props} className="list-decimal pl-6 ml-4 my-3" />,
-        li: ({ node, ...props }) => <li {...props} className="my-1" />,
-        blockquote: ({ node, ...props }) => (
-          <blockquote {...props} className="border-l-4 border-primary/30 pl-4 italic my-3" />
-        ),
-        code: ({ node, inline, className, children, ...props }) => {
-          if (inline) {
-            return (
-              <code className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono" {...props}>
-                {children}
-              </code>
-            )
-          }
-          return null // Block code is handled separately
-        },
-        a: ({ node, ...props }) => (
-          <a
-            {...props}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-primary hover:underline inline-flex items-center gap-1"
-          >
-            {props.children}
-            <ExternalLink className="h-3 w-3 inline" />
-          </a>
-        ),
-        table: ({ node, ...props }) => (
-          <div className="overflow-x-auto my-4">
-            <table {...props} className="border-collapse table-auto w-full text-sm" />
-          </div>
-        ),
-        thead: ({ node, ...props }) => <thead {...props} className="bg-muted" />,
-        tbody: ({ node, ...props }) => <tbody {...props} />,
-        tr: ({ node, ...props }) => <tr {...props} className="border-b border-border" />,
-        th: ({ node, ...props }) => <th {...props} className="border px-4 py-2 text-left font-bold" />,
-        td: ({ node, ...props }) => <td {...props} className="border px-4 py-2" />,
-      }}
-    >
-      {content}
-    </ReactMarkdown>
-  </div>
-))
+
+
+const TextBlock = memo(({ content }: { content: string }) => {
+  const [hasError, setHasError] = useState(false)
+
+  if (hasError) {
+    return (
+      <div className="w-full p-4 bg-red-100 border border-red-400 text-red-700 rounded-md my-4">
+        <p>
+          Oops! Something went wrong while rendering the content. We're displaying this message to
+          prevent the app from breaking.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="w-full overflow-x-auto break-words bg-card rounded-md my-4 prose prose-zinc dark:prose-invert max-w-none">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          h1: ({ node, ...props }) => <h1 {...props} className="text-2xl font-bold mt-6 mb-4" />,
+          h2: ({ node, ...props }) => <h2 {...props} className="text-xl font-bold mt-5 mb-3" />,
+          h3: ({ node, ...props }) => <h3 {...props} className="text-lg font-bold mt-4 mb-2" />,
+          h4: ({ node, ...props }) => (
+            <h4 {...props} className="text-base font-semibold mt-3 mb-2" />
+          ),
+          p: ({ node, ...props }) => <p {...props} className="my-3 leading-relaxed" />,
+          ul: ({ node, ...props }) => <ul {...props} className="list-disc pl-6 ml-4 my-3" />,
+          ol: ({ node, ...props }) => <ol {...props} className="list-decimal pl-6 ml-4 my-3" />,
+          li: ({ node, ...props }) => <li {...props} className="my-1" />,
+          blockquote: ({ node, ...props }) => (
+            <blockquote {...props} className="border-l-4 border-primary/30 pl-4 italic my-3" />
+          ),
+          code: ({ node, inline, className, children, ...props }) => {
+            if (inline) {
+              return (
+                <code className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono" {...props}>
+                  {children}
+                </code>
+              )
+            }
+            return null
+          },
+          a: ({ node, ...props }) => (
+            <a
+              {...props}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline inline-flex items-center gap-1"
+            >
+              {props.children}
+              <ExternalLink className="h-3 w-3 inline" />
+            </a>
+          ),
+          table: ({ node, ...props }) => (
+            <div className="overflow-x-auto my-4">
+              <table {...props} className="border-collapse table-auto w-full text-sm" />
+            </div>
+          ),
+          thead: ({ node, ...props }) => <thead {...props} className="bg-muted" />,
+          tbody: ({ node, ...props }) => <tbody {...props} />,
+          tr: ({ node, ...props }) => <tr {...props} className="border-b border-border" />,
+          th: ({ node, ...props }) => (
+            <th {...props} className="border px-4 py-2 text-left font-bold" />
+          ),
+          td: ({ node, ...props }) => <td {...props} className="border px-4 py-2" />,
+        }}
+        onError={() => {
+          setHasError(true)
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
+  )
+})
+
 
 const CodeBlock = memo(
   ({
@@ -660,7 +684,6 @@ function MessageContent({
     blockIndex++
   }
 
-  // --- Handle remaining content with inline code blocks ---
   let trailing = safeContent.slice(lastIndex).trim()
 
   while ((match = inlineSameLineRegex.exec(trailing)) !== null) {

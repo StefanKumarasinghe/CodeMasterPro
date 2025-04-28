@@ -5,8 +5,6 @@ aiofiles
 aiomultiprocess
 tenacity
 slowapi
-prometheus-fastapi-instrumentator
-opentelemetry-instrumentation-fastapi
 python-dotenv
 langchain
 langchain-community
@@ -15,6 +13,7 @@ faiss-cpu
 openai
 google-genai
 pydantic
+hf_xet
 langchain-google-genai
 html2text
 aiohttp
@@ -24,5 +23,4 @@ python-multipart
 python-docx
 python-pptx
 pytesseract
-hf_xet
 sse-starlette

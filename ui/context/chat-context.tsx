@@ -149,16 +149,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  
   const handleSubmit = async (messageInput: string) => {
     const validation = validateInput(messageInput)
     console.log("Validation result:", validation)
     if (!validation.isValid) {
       toast.error(validation.message ?? "Please enter a valid message")
       return
-    }
-    if (messageInput.length > 25000) {
-      toast.error("This message will be processed by CodeMasterProAnalyst. it will take a long time so please let TARS think and come back later")
     }
     if (!language) {
       toast.error("Please select a programming language before submitting.")
@@ -173,8 +169,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     try {
       if (messageInput.length > 25000) {
         append({
-          role: "assistant",
-          content: "This message will be processed by CodeMasterProAnalyst. it will take a long time so please let TARS think and come back later",
+          role: "user",
+          content: "Large message detected. Using CodeMasterProAnalyst for processing.",
         })
       }else {
         append({
@@ -194,10 +190,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       })
 
       if (!response.ok) {
-        if (response.status === 499) {
-          toast.error("Well, I guess you changed your mind. No worries!")
-          return
-        }
         if (response.status === 429) {
           toast.error("Rate limit exceeded. Please try again later.")
           return
@@ -208,6 +200,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         }
         if (response.status === 503) {
           toast.error("Service unavailable. Please try again later.")
+          return
+        }
+        if (response.status === 499) {
           return
         }
       }
