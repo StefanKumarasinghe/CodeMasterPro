@@ -18,6 +18,9 @@ from langchain_community.vectorstores import FAISS
 from langchain.docstore.document import Document
 from utils.cache import cached_search
 from utils.updates import set_update
+import numpy as np
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 from Prompts.prompts import refine_search_local_chain, cleaned_search_result_chain
 
 INDEX_STORE_PATH = "index_store/"
@@ -35,6 +38,17 @@ CHUNK_SIZES = {
     10000: (4000, 500),  
     0: (2500, 400)        
 }
+
+async def compute_semantic_scores(pairs):
+    queries = [q for q, d in pairs]
+    docs = [d for q, d in pairs]
+    all_texts = queries + docs
+    vectorizer = TfidfVectorizer()
+    vectors = vectorizer.fit_transform(all_texts)
+    query_vectors = vectors[:len(queries)]
+    doc_vectors = vectors[len(queries):]
+    semantic_scores_matrix = cosine_similarity(query_vectors, doc_vectors)
+    return np.diag(semantic_scores_matrix)
 
 async def load_documents_from_folder(folder_path: str, file_types: tuple = DOCUMENT_PATTERNS) -> list[Document]:
     docs: list[Document] = []
@@ -101,8 +115,7 @@ async def build_index() -> str:
         ("FAISS HNSW", lambda: FAISS.from_documents(chunks, gemini.embedding_model), 
          lambda idx: setattr(idx.index.hnsw, "efSearch", 512)),
         ("FAISS Flat", lambda: FAISS.from_documents(chunks, gemini.embedding_model), 
-         lambda _: None)
-    ]
+         lambda _: None)]
     for name, create_fn, optimize_fn in index_strategies:
         try:
             gemini.logger.info(f"Attempting to create {name} index...")
@@ -138,19 +151,15 @@ async def parse_json_response(response: str) -> dict:
         gemini.logger.error(f"JSON parsing error: {e}, Response: {text[:100]}...")
         raise ValueError(f"Invalid JSON response: {e}")
 
-
 async def web_search(query: str, msg: MessageRequest) -> List[Dict[str, Any]]:
-    if len(query.strip()) > MAX_QUERY_LENGTH:
-        gemini.logger.warning(f"Query exceeds maximum length of {MAX_QUERY_LENGTH} characters")
-        raise ValueError(f"Query too long (max {MAX_QUERY_LENGTH} characters)") 
-    gemini.logger.info(f"Searching Brave for: {query[:50]}{'...' if len(query) > 50 else ''}")
     links = await brave_search(query, count=5)
     await set_update("Searching Brave for relevant information... " + str(links))
     if not links:
         raise ValueError("No results from Brave Search")
     chain_inputs = {"query": query, "links": str(links), **msg.dict(exclude={"chatId"})}
     json_result = await invoke_with_retry(link_chain, chain_inputs)
-    parsed_result = await parse_json_response(json_result.content)
+    json_result = json_result.content.strip().lstrip("```json").rstrip("```").strip()
+    parsed_result = await parse_json_response(json_result)
     web_results = extract_all_articles(parsed_result)
     web_results = await invoke_with_retry(cleaned_search_result_chain, {"query": query, "answer": str(web_results)})
     if not web_results:
@@ -167,7 +176,8 @@ async def local_search(query: str, k: int = 2, min_relevance_threshold: float = 
             raise ValueError("Vector store not available. Please reindex resources first.")
     try:
         query_analysis = await invoke_with_retry(refine_search_local_chain,{"query": query})
-        query_data = json.loads(json.dumps(json.loads(query_analysis.content)))
+        query_analysis = query_analysis.content.strip().lstrip("```json").rstrip("```").strip()
+        query_data = json.loads(query_analysis.strip())
         expanded_query = query_data.get("expanded_query", query)
         keywords = query_data.get("keywords", [])
         domain = query_data.get("domain", "").lower()
@@ -235,7 +245,7 @@ async def local_search(query: str, k: int = 2, min_relevance_threshold: float = 
                 metadata={**doc.metadata, "domain_match": domain_match}
             ))
     pairs = [(query, doc.page_content) for doc in refined_docs]
-    semantic_scores = await asyncio.to_thread(gemini.cross_encoder.predict, pairs)
+    semantic_scores = await compute_semantic_scores(pairs)
     keyword_scores = []
     for doc in refined_docs:
         content = doc.page_content.lower()

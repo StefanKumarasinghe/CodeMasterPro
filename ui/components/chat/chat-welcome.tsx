@@ -115,7 +115,6 @@ export function ChatWelcome() {
       }
       setDockerRunCommand(command)
     }
-
     checkServerStatus()
     setAppropriateDockerCommand()
   }, [])
@@ -213,22 +212,22 @@ export function ChatWelcome() {
               <FeatureCard
                 icon={<Code className="h-5 w-5 text-primary" />}
                 title="Code Generation"
-                description="Request code examples, boilerplates, or complete solutions for your projects"
+                description="Code generation is run through at least 3 stages, including a validation stage"
               />
               <FeatureCard
                 icon={<Zap className="h-5 w-5 text-primary" />}
-                title="Code Optimization"
-                description="Improve your existing code for better performance and readability"
+                title="Reinforcement Agent (Thinker)"
+                description="We use a reinforcement agent to improve the code generation process using rewards and punishments"
               />
               <FeatureCard
                 icon={<Sliders className="h-5 w-5 text-primary" />}
-                title="Custom Preferences"
-                description="Enhance results with preferences and other custom prompts"
+                title="FAISS & Internet Search"
+                description="Search for code snippets, libraries, and documentation from the web and save them to your local FAISS database"
               />
               <FeatureCard
                 icon={<MousePointerClick className="h-5 w-5 text-primary" />}
                 title="Interactive Code"
-                description="Click 'Use' on any code block to instantly add it to your message input"
+                description="Click 'Use' on any code block to instantly add it to your message input, with quick actions for easy access"
               />
               <FeatureCard
                 icon={<LayoutTemplate className="h-5 w-5 text-primary" />}
@@ -238,12 +237,12 @@ export function ChatWelcome() {
               <FeatureCard
                 icon={<PlayCircle className="h-5 w-5 text-primary" />}
                 title="Run Python codes"
-                description="We run Python codes using a venv and return the result"
+                description="We run Python codes using a venv and return the result, the python uses a retry mechanism that self-corrects"
               />
               <FeatureCard
                 icon={<ShieldCheck className="h-5 w-5 text-primary" />}
-                title="SAST Analysis"
-                description="We run SAST analysis on your code and return the result"
+                title="Memory Management"
+                description="We use a memory management system to keep track of your code and its dependencies and we analyze user intent"
               />
             </motion.div>
           ) : (

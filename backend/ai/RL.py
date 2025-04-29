@@ -2,6 +2,10 @@ import random
 import os
 import pickle
 import config.tars as gemini
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+
+tfidf_vectorizer = TfidfVectorizer()
 
 class RLAgent:
     def __init__(self, actions, learning_rate=0.6, discount_factor=0.9, epsilon=0.9, backup_file="q_values.pkl"):
@@ -27,7 +31,6 @@ class RLAgent:
     def update_q_value(self, action_index, reward):
         action = self.actions[action_index]
         current_q_value = self.q_values.get(action, 0.0)
-        # Applying momentum in Q-value update for faster learning
         new_q_value = current_q_value + self.learning_rate * (reward - current_q_value)
         self.q_values[action] = new_q_value
         self.save_q_values()
@@ -52,21 +55,25 @@ class RLAgent:
     def __del__(self):
         self.save_q_values()
 
+
     def _compute_reward(self, agent, action_index, response: str, query: str, val_score: int) -> float:
         try:
-            q_emb = gemini.st_embedder.encode(query, convert_to_tensor=True)
-            a_emb = gemini.st_embedder.encode(response, convert_to_tensor=True)
-            sim = float((q_emb @ a_emb).cpu()) 
-            sim_scaled = sim ** 2 * 10  
+
+            vectors = tfidf_vectorizer.fit_transform([query, response])
+            sim = cosine_similarity(vectors[0], vectors[1])[0, 0]
+            sim_scaled = sim ** 2 * 10
         except Exception as e:
-            gemini.logger.error(f"Embedding error: {e}")
+            gemini.logger.error(f"Embedding error (fallback): {e}")
             sim_scaled = 0.0
+
         noise = random.gauss(0, 0.5)
         reward = sim_scaled + noise
+
         if len(response) > 5000 and response.strip():
             reward -= 1
         if val_score < 8:
-            reward -= (8 - val_score) * 0.5  
+            reward -= (8 - val_score) * 0.5
+
         reward = max(min(reward, 20), -10)
         agent.update_q_value(action_index, reward)
         return reward

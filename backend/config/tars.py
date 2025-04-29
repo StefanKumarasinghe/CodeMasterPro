@@ -4,7 +4,6 @@ import logging
 from ai.RL import RLAgent 
 from concurrent.futures import ThreadPoolExecutor
 from langchain_community.vectorstores import FAISS
-from sentence_transformers import SentenceTransformer, CrossEncoder
 from langchain_community.cache import SQLiteCache
 from langchain.memory import ConversationSummaryMemory
 from langchain_google_genai import ChatGoogleGenerativeAI, GoogleGenerativeAIEmbeddings
@@ -22,7 +21,6 @@ BRAVE_API_KEY = os.getenv("BRAVE_API_KEY")
 gemini_llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0.9)
 
 actions = ["accept", "reject"]
-
 
 rl_agent = RLAgent(actions)
 
@@ -42,9 +40,6 @@ web_stack_state = {"enabled": False}
 
 internal_stack_state = {"enabled": False}
 
-st_embedder = SentenceTransformer('all-MiniLM-L6-v2', device='cpu')
-
-cross_encoder = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
 
 langchain.llm_cache = SQLiteCache(database_path="cache/langchain_cache.db")
 

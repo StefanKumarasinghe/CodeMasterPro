@@ -40,14 +40,12 @@ import {
   readFileAsText,
   detectLanguage,
 } from "@/utils/file-utils"
-import { processSensitiveCode } from "@/utils/security-utils"
 import { cn } from "@/lib/utils"
 import { motion, AnimatePresence } from "framer-motion"
 import { FileAttachment } from "./file-attachment"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 export function ChatInput() {
   const [showTemplates, setShowTemplates] = useState(false)
-
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const dropZoneRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -143,21 +141,14 @@ export function ChatInput() {
               setLanguage(fileLanguage)
             }
 
-            // Check for sensitive information
-            const { code: processedContent, containedSensitiveInfo } = processSensitiveCode(content)
-
-            if (containedSensitiveInfo) {
-              setSecurityWarning("You may have pasted sensitive information. Be careful!")
-            }
-
-            const codeBlock = `File: ${file.name}\n\n\`\`\`${fileLanguage}\n${processedContent}\n\`\`\``
+            const codeBlock = `File: ${file.name}\n\n\`\`\`${fileLanguage}\n${content}\n\`\`\``
 
             // Add to attachments
             newAttachments.push({
               fileName: file.name,
               fileSize: file.size,
               content: codeBlock,
-              contentLength: processedContent.length,
+              contentLength: content.length,
               language: fileLanguage,
             })
           } catch (error) {
@@ -222,8 +213,7 @@ export function ChatInput() {
     return () => window.removeEventListener("keydown", handleKeyboardShortcut)
   }, [])
 
-  // Listen for code usage events
-  // Then, update the useEffect for the "use-code" event
+
   useEffect(() => {
     const handleUseCode = (e: CustomEvent) => {
       if (e.detail && e.detail.code) {
@@ -236,19 +226,13 @@ export function ChatInput() {
           setLanguage(lang)
         }
 
-        // Check for sensitive information
-        const { code: processedCode, containedSensitiveInfo } = processSensitiveCode(code)
-
-        if (containedSensitiveInfo) {
-          setSecurityWarning("Did you paste sensitive information? Be careful!")
-        }
 
         // Instead of adding to the input, add to codeAttachments
         setCodeAttachments((prev) => [
           ...prev,
           {
             fileName,
-            content: processedCode,
+            content: code,
             language: lang,
           },
         ])
@@ -314,16 +298,7 @@ export function ChatInput() {
     async (e: React.ChangeEvent<HTMLTextAreaElement>) => {
       const value = e.target.value
 
-      // Check for sensitive information
-      const { code: processedValue, containedSensitiveInfo } = processSensitiveCode(value)
 
-      if (containedSensitiveInfo) {
-        setSecurityWarning("Seems like you pasted sensitive information. Be careful!")
-        setMessageInput(processedValue)
-        return
-      }
-
-      // only try to format if user has just pasted/typed a chunk of code
       if (value.length > messageInput.length + 30) {
         const newContent = value.substring(messageInput.length)
 
@@ -386,20 +361,12 @@ export function ChatInput() {
     async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
       const pastedText = e.clipboardData.getData("text")
 
-      // Check for sensitive information
-      const { code: processedText, containedSensitiveInfo } = processSensitiveCode(pastedText)
-
-      if (containedSensitiveInfo) {
-        setSecurityWarning("Probably pasted sensitive information. Be careful! Could be a false positive.")
-      }
-
-      if (isLikelyCode(processedText)) {
+      if (isLikelyCode(pastedText)) {
         e.preventDefault()
 
-        // 1) Detect language with better error handling
         let detectedLanguage = "plaintext"
         try {
-          detectedLanguage = detectCodeLanguage(processedText) || "plaintext"
+          detectedLanguage = detectCodeLanguage(pastedText) || "plaintext"
         } catch (err) {
           console.warn("Language detection failed on paste, defaulting to plaintext", err)
           // Continue with plaintext as fallback
@@ -408,20 +375,20 @@ export function ChatInput() {
         // 2) Format with graceful fallback
         try {
           if (preferences.inputPreference=="Autotag") {
-          const formattedCode = await formatCode(processedText, detectedLanguage)
+          const formattedCode = await formatCode(pastedText, detectedLanguage)
           const codeBlock = "\n" + "```" + detectedLanguage + "\n" + formattedCode + "\n```"
           const cursor = textareaRef.current?.selectionStart ?? 0
           const before = messageInput.slice(0, cursor)
           const after = messageInput.slice(cursor)
           setMessageInput(before + codeBlock + after)
         }else {
-          const codeBlock = "\n" + processedText + "\n```"
+          const codeBlock = "\n" + pastedText + "\n```"
           setMessageInput((prev) => prev +codeBlock)
         }
         } catch (err) {
           // Fallback to unformatted code if formatting fails
           console.warn("Formatting failed on paste, inserting raw code:", err)
-          const codeBlock = ["```" + detectedLanguage, processedText, "```"].join("\n")
+          const codeBlock = ["```" + detectedLanguage, pastedText, "```"].join("\n")
 
           const cursor = textareaRef.current?.selectionStart ?? 0
           const before = messageInput.slice(0, cursor)

@@ -192,12 +192,15 @@ You are a helpful coding assistant that responds strictly in JSON format. Your p
 link_chain_prompt = PromptTemplate(input_variables=["query", "links"],
 template="""
 
-You are a helpful coding assistant tasked with filtering and categorizing links based on a user query. Focus primarily on links that are:
+You are a helpful coding assistant tasked with filtering and categorizing links based on a user query. Focus primarily on 5 links that are (if available):
 
 - Documentation pages (official docs, developer guides, API references)
 - Example usage (GitHub repos, StackOverflow answers, blog tutorials)
 
-Avoid links that point to irrelevant tools, services, homepages, or non-technical content.
+Avoid links that point to irrelevant tools, services, or non-technical content.
+Focus on documentation and code examples that are most likely to be useful for the user.
+
+Make sure to return all the links but ordered by relevance and importance to the user query.
 
 ## Links
 
@@ -208,13 +211,16 @@ Avoid links that point to irrelevant tools, services, homepages, or non-technica
 
 ## Output Instructions
 - Select the most relevant links from the list based on the user query.
-- Rank them in order of relevance, with the most relevant link first.
-- Return the output strictly in JSON format with a single key:
-    - `links`: a list of links ranked by relevance.
-    - each must have the `title` and `url` key please
+- Divide them into two categories: `documentation` and `example`.
+- so each category have a list of links, the links must be just urls and not the title or description, just urls in a list
+
+I only need the key `documentation` and `example` in the JSON output
+and for each category, return a list of links  that are relevant to the user query.
+with the json enclosed
+
+- Return the output strictly in JSON format with two keys:
 
 """ + BASE_PROMPT_JSON
-
 )
 
 pip_install_prompt = PromptTemplate(input_variables=["code"],
@@ -319,9 +325,7 @@ refine_search = PromptTemplate(input_variables=["query"],
 template="""
 
 ### BRAVE SEARCH QUERY OPTIMIZATION ENGINE (for Programming Resources)
-
 ## INPUT
-
 ## Original Query:
 {query}
 
@@ -329,7 +333,7 @@ Search Goal: Maximize relevance of programming documentation and code solutions 
 
 ## TASK
 Analyze and rewrite the query to target:
-- Authoritative sources (e.g., official docs, Stack Overflow, MDN)
+- Authoritative sources like documentation, official guides, and trusted forums
 - Language/framework-specific info
 - Minimal, high-signal keywords with strong intent
 
@@ -339,7 +343,7 @@ Analyze and rewrite the query to target:
    - Code/Command Input → Focus on function, library, usage context
    - Natural language question → Identify language, purpose, and target output
    - Error message → Retain error exactly in quotes; isolate probable root cause
-   - Docs request → Target "official docs", "API reference", or similar terms
+   - Docs request → Target "official docs", "API reference", or similar terms or documentation and examples
 
 2. REWRITE STRATEGY
    - Prioritize terms like `site:`, `filetype:`, or `"in quotes"` to boost accuracy
@@ -347,17 +351,10 @@ Analyze and rewrite the query to target:
    - If it's a code snippet, distill into primary keywords + "how to"
    - Remove filler (e.g., "please help", "how can I fix", etc.)
 
-3. SOURCE FOCUS
-   Favor results from:
-   - `site:stackoverflow.com`
-   - `site:developer.mozilla.org`
-   - `site:readthedocs.io`
-   - `site:docs.python.org`, etc.
-   -  Other documentation sites that is focused on the query
-   
+
 ## OUTPUT FORMAT
-Return only the optimized query string below
-MAX LENGTH: 100 characters
+Return only the optimized query string below and just the query string to be entered to brave api
+MAX LENGTH: Less than 50 characters
 
 """
 )
@@ -383,6 +380,9 @@ Given the input query:
 3. Determine the probable **domain** (e.g., programming language, framework, DevOps tool, etc.).
 4. Rewrite the query as an **expanded and enriched query** with improved clarity and specificity.
 5. This will be search against the local FAISS index. so related keywords are important.
+The expanded query should be in key `expanded_query` and the original query in key `expanded_query` and the keywords in the key `keywords` and the domain in the key `domain` and the query in the key and must be in JSON format with the keys `expanded_query`, `keywords`, `domain`, and make sure to use the proper json format
+###output:
+'
 
 """ + BASE_PROMPT_JSON)
 
@@ -395,11 +395,11 @@ Please ensure to format the code snippets properly and use appropriate Markdown 
 Here is the documentation:
 
 {documentation}
-
+Include as much information as possible and make sure to include all the important information and make it clean and readable
 Please convert it into Markdown format, ensuring that the code snippets are properly formatted and the overall structure is clear and easy to read.
 Make it clean and understandable, and ensure that the Markdown is valid and well-structured.
 Make it easier for Gemini to understand and use the documentation in the future.
-Remove any unnecessary text or comments, and focus on the content that is relevant to the user.
+Remove any unnecessary things, and focus on the content that is relevant to the user.
 Only include the relevant sections and information, and ensure that the Markdown is clean and easy to read.
 Make sure to use proper Markdown syntax for headings, lists, and code blocks.
 Also give me the title of the documentation in a single line  in the key `title` and the content in the key `content`
@@ -519,11 +519,11 @@ template="""
 
 You scraped web page or internal and now this is the html document or internal documentation and parse information, I want you to convert the essentials and important information into a clean and readable format like markdown and pass it on"
 - Remove all the html tags and make it clean and readable
-- Remove all the unnecessary information and make it clean and readable
 - Use proper markdown syntax for headings, lists, and code blocks
-- Get only important information and make it clean and readable
+- Get me the documentation title and the content in detailed format
 - Sometimes, there might be relevance factors, so make sure the return markdown is relevant and is only what is needed
-
+- Ensure to get content and the code blocks and examples as well
+- Ignore stuff like ads, popups, and other irrelevant information
 ## QUERY
 
 {query}

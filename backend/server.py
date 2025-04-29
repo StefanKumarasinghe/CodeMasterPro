@@ -32,16 +32,13 @@ from contextlib import asynccontextmanager
 
 RESOURCES_DIR = Path("resources")
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-st_embedder = gemini.st_embedder
-cross_encoder = gemini.cross_encoder
 langchain.llm_cache = gemini.langchain.llm_cache
-executor = gemini.executor
 task_manager = TaskManager()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
-        asyncio.create_task(build_index())
+        await build_index()
         yield
     except Exception as e:
         gemini.logger.error(f"Error during startup: {e}")

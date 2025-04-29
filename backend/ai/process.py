@@ -12,6 +12,7 @@ import asyncio
 from utils.updates import set_update
 
 process = False
+
 async def process_message(request: Request):
     try:
         global process
@@ -39,12 +40,7 @@ async def process_message(request: Request):
             except asyncio.CancelledError:
                 gemini.logger.warning("process_message was cancelled during validation_chain.")
                 raise HTTPException(status_code=499, detail="Processing cancelled by user.")
-
-        stack_result = None
-        if gemini.web_stack_state["enabled"]:
-            stack_result = await search_stackoverflow_and_rank(msg.message)
-            await set_update("Searching StackOverflow for relevant information... " + str(stack_result[:200]))
-
+                  
         mem = get_chat_memory(msg.chatId)
         history = mem.load_memory_variables({})["history"]
         recent_messages = decay_memory(mem, 4)
@@ -52,6 +48,28 @@ async def process_message(request: Request):
             "query": msg.message,
             "response": recent_messages[-1].content if recent_messages else ""
         })
+
+        stack_result = None
+        internal_resources = None
+        tasks = []
+
+        if gemini.web_stack_state["enabled"]:
+            tasks.append(search_stackoverflow_and_rank(msg.message))
+
+        if gemini.internal_stack_state["enabled"] or gemini.web_flag_state["enabled"]:
+            query = "User Query: " + str(msg.message) + " ---- This is the history of the chat ->" + str(history)
+            tasks.append(search_resources(query, msg))
+
+        results = await asyncio.gather(*tasks)
+
+        idx = 0
+        if gemini.web_stack_state["enabled"]:
+            stack_result = results[idx]
+            await set_update("Searching StackOverflow for relevant information... " + str(stack_result[:200]))
+            idx += 1
+
+        if gemini.internal_stack_state["enabled"] or gemini.web_flag_state["enabled"]:
+            internal_resources = results[idx]
 
         user_behavior_result = user_behavior_result.content.strip()
 
@@ -62,10 +80,6 @@ async def process_message(request: Request):
         elif user_behavior_result=="neutral":
             gemini.rl_agent.update_q_value(gemini.actions.index("accept"), -1)
         
-        internal_resources = None
-        if gemini.internal_stack_state["enabled"] or gemini.web_flag_state["enabled"]:
-            internal_resources = await search_resources(" User Query : " + str(msg.message) + " ---- This is the history of the chat ->" + str(history), msg)
-
         resources = {"stackoverflow": stack_result, "internal": internal_resources}
         best_avg_score = -float("inf")
         best_answer = None

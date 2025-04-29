@@ -103,9 +103,6 @@ async def get_documentation():
 
 
 async def delete_document(document_id: str):
-    """
-    Deletes a single document.
-    """
     if not document_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Document ID cannot be empty.")
 

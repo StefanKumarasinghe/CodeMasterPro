@@ -1,17 +1,12 @@
 fastapi
 uvicorn
-asyncio
 aiofiles
 aiomultiprocess
 tenacity
 slowapi
 python-dotenv
-langchain
+langchain[core]
 langchain-community
-sentence-transformers
-faiss-cpu
-openai
-google-genai
 pydantic
 hf_xet
 langchain-google-genai
@@ -24,3 +19,4 @@ python-docx
 python-pptx
 pytesseract
 sse-starlette
+scikit-learn

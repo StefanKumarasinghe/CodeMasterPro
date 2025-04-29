@@ -1,31 +1,24 @@
-# Stage 1: Builder
 FROM python:3.11-slim-bookworm AS builder
-
 WORKDIR /app
-
-# Install only essential build tools (optional)
-RUN apt-get update && apt-get install -y --no-install-recommends gcc
-
-# Only copy requirements first (better cache use)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc g++ libffi-dev libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt .
-
-# Install only production dependencies
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
-
-# Stage 2: Runtime
 FROM python:3.11-slim-bookworm
-
 WORKDIR /app
-
-
 COPY --from=builder /install /usr/local
-
-
-COPY . /app
-
-
-
-EXPOSE 80
-
-# Command to run
+COPY server.py /app/
+COPY requirements.txt /app/
+COPY utils/ /app/utils/
+COPY ai/ /app/ai/
+COPY Prompts/ /app/Prompts/
+COPY Model/ /app/Model/
+COPY config/ /app/config/
+COPY index_store/ /app/index_store/
+COPY cache/ /app/cache/
+COPY logs/ /app/logs/
+COPY resources/ /app/resources/
+EXPOSE 8000
 CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]
+    

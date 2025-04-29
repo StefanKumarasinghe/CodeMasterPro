@@ -12,11 +12,13 @@ import config.tars as gemini
 BASE_URL = gemini.BRAVE_URL
 API_KEY = gemini.BRAVE_API_KEY
 
-async def brave_search(query: str, count: int = 5) -> List[dict]:
+async def brave_search(query: str, count: int = 6) -> List[dict]:
     headers = {"Accept": "application/json","X-Subscription-Token": API_KEY}
-    result = await invoke_with_retry(refine_search_chain, {"query": query})
-    if result:
-        query = result.content.strip()
+    if len(query) > 200:
+        result = await invoke_with_retry(refine_search_chain, {"query": query})
+        if result:
+            query = result.content.strip()
+
     params = {"q": query, "count": count}
     async with aiohttp.ClientSession() as session:
         try:
