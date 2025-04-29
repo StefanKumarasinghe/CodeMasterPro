@@ -83,9 +83,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Support
 
-For questions, bug reports, or feature requests, please contact us at [support@codemasterpro.ai](mailto:support@codemasterpro.ai).
-
+For questions, bug reports, or feature requests, please raise an issue or PR
 ## Acknowledgements
 
 - Powered by Google Gemini and Brave Search API.
-- Thanks to the open-source community for their valuable contributions.
