@@ -1,31 +1,25 @@
-"use client"
+"use client";
 
-import type React from "react"
-import { Button } from "@/components/ui/button"
-import { ChevronDown, BrainCircuit, BrainCogIcon, BrainIcon } from "lucide-react"
-import { API_ENDPOINT, STORAGE_KEYS } from "@/config/constants"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { useState, useEffect } from "react"
-import { toast } from "@/utils/toast-util"
-import { useChat } from "@/context/chat-context"
+import type React from "react";
+import { Button } from "@/components/ui/button";
+import {ChevronDown,BrainCircuit,BrainCogIcon,BrainIcon} from "lucide-react";
+import { API_ENDPOINT, STORAGE_KEYS } from "@/config/constants";
+import {Tooltip,TooltipContent,TooltipProvider,TooltipTrigger} from "@/components/ui/tooltip";
+import { useState, useEffect } from "react";
+import { toast } from "@/utils/toast-util";
+import { useChat } from "@/context/chat-context";
 
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import {DropdownMenu,DropdownMenuContent,DropdownMenuItem,DropdownMenuTrigger} from "@/components/ui/dropdown-menu";
 
-
-const IconButton = ({
-  onClick,
-  icon: Icon,
-  tooltip,
-  variant = "outline",
-}: {
-  onClick: () => void
-  icon: React.ElementType
-  tooltip: string
-  variant?: "outline" | "secondary"
-}) => (
+const IconButton = ({ onClick,icon: Icon,tooltip,variant = "outline"}: {onClick: () => void; icon: React.ElementType; tooltip: string; variant?: "outline" | "secondary";}) => (
   <Tooltip>
     <TooltipTrigger asChild>
-      <Button variant={variant} size="icon" className="rounded-full h-9 w-9" onClick={onClick}>
+      <Button
+        variant={variant}
+        size="icon"
+        className="rounded-full h-9 w-9"
+        onClick={onClick}
+      >
         <Icon className="h-4 w-4" />
       </Button>
     </TooltipTrigger>
@@ -33,99 +27,88 @@ const IconButton = ({
       <p>{tooltip}</p>
     </TooltipContent>
   </Tooltip>
-)
+);
 
 export function MemoryControls() {
-  const { setMessages } = useChat()
-  const [showMessage, setShowMessage] = useState(false)
-  const [modelType, setModelType] = useState<string>("fast") // Default to fast model
-  const [currentModelName, setCurrentModelName] = useState<string>("")
-  const [isLoading, setIsLoading] = useState(false)
+  const { setMessages } = useChat();
+  const [modelType, setModelType] = useState<string>("fast");
+  const [currentModelName, setCurrentModelName] = useState<string>("");
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault()
-      event.returnValue = ""
-      forgetMemory() 
-    }
-    window.addEventListener("beforeunload", handleBeforeUnload)
+      event.preventDefault();
+      event.returnValue = "";
+      forgetMemory();
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
     return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload)
-    }
-  }, [])
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, []);
 
   useEffect(() => {
-    fetchCurrentModel()
-  }, [])
+    fetchCurrentModel();
+  }, []);
 
-  // Fetch the current model from the API
   const fetchCurrentModel = async () => {
     try {
-      setIsLoading(true)
-      const response = await fetch(`${API_ENDPOINT}/current_model`)
+      setIsLoading(true);
+      const response = await fetch(`${API_ENDPOINT}/current_model`);
 
       if (!response.ok) {
-        throw new Error("Failed to fetch current model")
+        throw new Error("Failed to fetch current model");
       }
 
-      const data = await response.json()
-
-      // Determine model type based on the model name
+      const data = await response.json();
       if (data.current_model) {
-        const modelName = data.current_model
-        setCurrentModelName(modelName)
-
-        // Set model type based on model name
+        const modelName = data.current_model;
+        setCurrentModelName(modelName);
         if (modelName.includes("2.0-flash")) {
-          setModelType("fast")
-          localStorage.setItem(STORAGE_KEYS.MODEL_TYPE, "fast")
-        }
-        else if (modelName.includes("pro")) {
-          setModelType("advanced")
-          localStorage.setItem(STORAGE_KEYS.MODEL_TYPE, "advanced")
-        }else {
-          setModelType("think")
-          localStorage.setItem(STORAGE_KEYS.MODEL_TYPE, "think")
+          setModelType("fast");
+          localStorage.setItem(STORAGE_KEYS.MODEL_TYPE, "fast");
+        } else if (modelName.includes("pro")) {
+          setModelType("advanced");
+          localStorage.setItem(STORAGE_KEYS.MODEL_TYPE, "advanced");
+        } else {
+          setModelType("think");
+          localStorage.setItem(STORAGE_KEYS.MODEL_TYPE, "think");
         }
       }
     } catch (error) {
-      console.error("Failed to fetch current model:", error)
-      // Load from localStorage as fallback
-      const savedModelType = localStorage.getItem(STORAGE_KEYS.MODEL_TYPE)
+      console.error("Failed to fetch current model:", error);
+      const savedModelType = localStorage.getItem(STORAGE_KEYS.MODEL_TYPE);
       if (savedModelType) {
-        setModelType(savedModelType)
+        setModelType(savedModelType);
       }
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
-  // Load saved model type from localStorage on component mount
   useEffect(() => {
-    const savedModelType = localStorage.getItem(STORAGE_KEYS.MODEL_TYPE)
+    const savedModelType = localStorage.getItem(STORAGE_KEYS.MODEL_TYPE);
     if (savedModelType) {
-      setModelType(savedModelType)
+      setModelType(savedModelType);
     }
-  }, [])
+  }, []);
 
   const forgetMemory = async () => {
     try {
       const response = await fetch(`${API_ENDPOINT}/memory/clear`, {
         method: "DELETE",
-      })
+      });
 
       if (!response.ok) {
-        throw new Error("Failed to clear memory")
+        throw new Error("Failed to clear memory");
       }
 
-      toast.success("Memory erased successfully!")
+      toast.success("Memory erased successfully!");
     } catch (error) {
-      console.error("Failed to clear memory:", error)
-      toast.error("Failed to clear memory")
+      console.error("Failed to clear memory:", error);
+      toast.error("Failed to clear memory");
     }
-  }
-
-
+  };
 
   const changeModel = async (type: string) => {
     try {
@@ -135,48 +118,49 @@ export function MemoryControls() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ model: type }),
-      })
+      });
 
       if (!response.ok) {
-        throw new Error("Failed to change model")
+        throw new Error("Failed to change model");
       }
-
-      setModelType(type)
-      // Save model type to localStorage
-      localStorage.setItem(STORAGE_KEYS.MODEL_TYPE, type)
-
-      // Fetch the updated model name
-      await fetchCurrentModel()
-
-      toast.success(`Model changed to ${type}`)
+      setModelType(type);
+      localStorage.setItem(STORAGE_KEYS.MODEL_TYPE, type);
+      await fetchCurrentModel();
+      toast.success(`Model changed to ${type}`);
     } catch (error) {
-      console.error("Failed to change model:", error)
-      toast.error("Failed to change model")
+      console.error("Failed to change model:", error);
+      toast.error("Failed to change model");
     }
-  }
+  };
 
-  // Get display name for the model
   const getModelDisplayName = () => {
-    if (isLoading) return "Loading..."
+    if (isLoading) return "Loading...";
     if (modelType === "advanced") {
-      return currentModelName ? `Advanced: ${currentModelName}` : "Advanced (Slow)"
+      return currentModelName
+        ? `Advanced: ${currentModelName}`
+        : "Advanced (Slow)";
     } else if (modelType === "fast") {
-      return currentModelName ? `Fast: ${currentModelName}` : "Fast (Fast)"
+      return currentModelName ? `Fast: ${currentModelName}` : "Fast (Fast)";
     } else {
-      return currentModelName ? `Thinker: ${currentModelName}` : "Think (Mid)"
+      return currentModelName ? `Thinker: ${currentModelName}` : "Think (Mid)";
     }
-  }
+  };
 
   return (
     <div className="flex items-center gap-2 relative">
       <TooltipProvider>
-        {/* Model selection dropdown */}
         <DropdownMenu>
           <Tooltip>
             <TooltipTrigger asChild>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-9 gap-1 rounded-full">
-                  <span className="hidden sm:inline">{getModelDisplayName()}</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 gap-1 rounded-full"
+                >
+                  <span className="hidden sm:inline">
+                    {getModelDisplayName()}
+                  </span>
                   <span className="sm:hidden">Model</span>
                   <ChevronDown className="h-3.5 w-3.5" />
                 </Button>
@@ -187,16 +171,27 @@ export function MemoryControls() {
             </TooltipContent>
           </Tooltip>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => changeModel("fast")}> <BrainCogIcon className="mr-2 h-4 w-4"/> Gemini Flash (Fast)</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => changeModel("advanced")}><BrainCircuit className="mr-2 h-4 w-4"/> Gemini Think (Mid)</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => changeModel("pro")}><BrainIcon className="mr-2 h-4 w-4"/> Gemini Pro (Slow)</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => changeModel("fast")}>
+              {" "}
+              <BrainCogIcon className="mr-2 h-4 w-4" /> Gemini Flash (Fast)
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => changeModel("advanced")}>
+              <BrainCircuit className="mr-2 h-4 w-4" /> Gemini Think (Mid)
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => changeModel("pro")}>
+              <BrainIcon className="mr-2 h-4 w-4" /> Gemini Pro (Slow)
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-
-        {/* Forget memory button with temporary message */}
-        <IconButton onClick={() => { forgetMemory(); setMessages([]); }} icon={BrainIcon} tooltip="Forget Short-Term Memory" />
-  
+        <IconButton
+          onClick={() => {
+            forgetMemory();
+            setMessages([]);
+          }}
+          icon={BrainIcon}
+          tooltip="Forget Short-Term Memory"
+        />
       </TooltipProvider>
     </div>
-  )
+  );
 }

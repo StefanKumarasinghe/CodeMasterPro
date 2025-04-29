@@ -1,6 +1,6 @@
 
 import type { ReactNode } from "react";
-import { BookOpen, Terminal, Github, SmileIcon } from "lucide-react";
+import { BookOpen, Terminal, SmileIcon } from "lucide-react";
 import { ThemeProvider, ThemeToggle } from "@/components/theme-provider";
 import { Roboto_Mono } from "next/font/google";
 import { SidebarProvider, Sidebar, SidebarContent } from "@/components/ui/sidebar";
@@ -17,10 +17,10 @@ const quicksand = Roboto_Mono({
 });
 
 export const metadata = {
-  title: "TARS AI",
-  description: "TARS is an AI-powered coding assistant that helps you with your coding tasks.",
+  title: "CodeMasterPro",
+  description: "CodeMasterPro is an AI-powered coding assistant that helps you with your coding tasks powered by TARS AI.",
   icons: {
-    icon: "https://t4.ftcdn.net/jpg/04/22/92/29/360_F_422922955_XaGCE7Nqe8DyLiY7mGe5SACyp8N4oHTB.jpg",
+    icon: "https://cdn-icons-png.freepik.com/256/6132/6132222.png",
   },
 };
 
@@ -32,13 +32,9 @@ export default function Layout({ children }: { children: ReactNode }) {
           <ChatProvider>
             <SidebarProvider defaultOpen={false}>
               <div className="flex h-screen bg-background overflow-hidden">
-                {/* Sidebar */}
                 <Sidebar>
                   <div className="p-4 border-b">
                     <div className="flex items-center gap-2">
-                      <div className="h-8 w-8 bg-black rounded-full flex items-center justify-center">
-                        <SmileIcon className="h-6 w-6 text-accent" />
-                      </div>
                       <span className="font-bold text-lg">CodeMasterPro</span>
                     </div>
                   </div>
@@ -49,7 +45,7 @@ export default function Layout({ children }: { children: ReactNode }) {
                           <Terminal className="mr-2 h-4 w-4" />
                           Coding Assistant
                         </button>
-                        <a href={"https://github.com/StefanKumarasinghe/CodeMasterPro/wiki/"} className="flex items-center w-full px-3 py-2 text-sm rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">
+                        <a href={"https://github.com/https://github.com/StefanKumarasinghe/CodeMasterPro/blob/main/README.md/CodeMasterPro/wiki/"} className="flex items-center w-full px-3 py-2 text-sm rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">
                           <BookOpen className="mr-2 h-4 w-4" />
                           Documentation
                         </a>
@@ -61,26 +57,19 @@ export default function Layout({ children }: { children: ReactNode }) {
                         </div>
                       </div>
                     </div>
-
-                    {/* Chat History Section */}
                     <div className="flex-1 overflow-hidden">
                       <ChatHistory />
                     </div>
-
                     <div className="p-4 border-t text-xs text-muted-foreground mt-auto">
                       <p>© 2025 TARS AI. All rights reserved.</p>
                     </div>
                   </SidebarContent>
                 </Sidebar>
-
-                {/* Main Content */}
                 <div className="flex-1 flex flex-col overflow-hidden relative">
                   <div className="flex-1 flex flex-col overflow-hidden">{children}</div>
                 </div>
               </div>
             </SidebarProvider>
-
-            {/* Documentation Modal */}
             <DocumentationModal />
           </ChatProvider>
         </ThemeProvider>

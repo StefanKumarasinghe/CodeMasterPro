@@ -8,20 +8,15 @@ export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
   return <NextThemesProvider {...props}>{children}</NextThemesProvider>
 }
 
-// Add a new component for the theme toggle
 export function ThemeToggle() {
   const [mounted, setMounted] = React.useState(false)
   const { theme, setTheme } = useTheme()
-
-  // useEffect only runs on the client, so now we can safely show the UI
   React.useEffect(() => {
     setMounted(true)
   }, [])
-
   if (!mounted) {
     return null
   }
-
   return (
     <div className="flex items-center space-x-1">
       <button

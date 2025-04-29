@@ -8,7 +8,7 @@ import { Copy, Download, ThumbsUp, ThumbsDown, SmileIcon, RefreshCcw } from "luc
 import { extractCodeBlocks } from "@/utils/chat-utils"
 import { toast } from "@/utils/toast-util"
 import { useState, useCallback, memo, Suspense, useRef, useEffect } from "react"
-import { RetryError, type Message } from "ai"
+import { type Message } from "ai"
 import { useChat } from "@/context/chat-context"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import MessageContent from "./message-content"
@@ -33,8 +33,6 @@ const ChatMessage = memo(function ChatMessage({
   const contentRef = useRef<string>("");
   const { handleSubmit } = useChat()
 
-
-  // Update contentRef whenever message.content changes
   useEffect(() => {
     contentRef.current = typeof message.content === "string" ? message.content : "";
   }, [message.content]);
@@ -68,7 +66,6 @@ const ChatMessage = memo(function ChatMessage({
     if (!content) return;
     const blocks = extractCodeBlocks(content);
     if (!blocks.length) return;
-
     const blob = new Blob([blocks.map((b) => b.code).join("\n\n")], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -79,7 +76,6 @@ const ChatMessage = memo(function ChatMessage({
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-
     toast.success("Code downloaded as file");
   }, [language]);
 
@@ -120,14 +116,9 @@ const ChatMessage = memo(function ChatMessage({
       }
     }
   }, []);
-
-
-
-
   const isUser = message.role === "user";
   const messageContent = typeof message.content === "string" ? message.content : "";
   const hasCodeBlocks = extractCodeBlocks(messageContent).length > 0;
-
   return (
     <div className={cn("flex gap-3 w-full", isUser ? "ml-auto justify-end text-right" : "text-left")}>
       {!isUser && (
@@ -135,7 +126,6 @@ const ChatMessage = memo(function ChatMessage({
           <SmileIcon className="h-6 w-6 text-white" />
         </div>
       )}
-
       <div className={cn("space-y-2 max-w-full", isUser ? "order-1" : "order-2")}>
         <div className={cn("flex items-center gap-2 w-full", isUser ? "justify-end" : "justify-start")}>
           <span className="text-sm font-medium truncate">{isUser ? "You" : "TARS"}</span>
@@ -146,7 +136,6 @@ const ChatMessage = memo(function ChatMessage({
             <Badge variant="outline" className="text-xs block truncate">CodeMasterPro</Badge>
           )}
         </div>
-
         <div
           className={cn(
             "p-4 rounded-lg text-sm sm:text-base break-words overflow-auto",
@@ -164,7 +153,6 @@ const ChatMessage = memo(function ChatMessage({
             />
           </Suspense>
         </div>
-
         <div className={cn("flex items-center gap-2", isUser ? "justify-end" : "justify-start")}>
           <TooltipProvider>
             <Tooltip>
@@ -184,9 +172,6 @@ const ChatMessage = memo(function ChatMessage({
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
-
-
-
           {hasCodeBlocks && (
             <TooltipProvider>
               <Tooltip>
@@ -207,7 +192,6 @@ const ChatMessage = memo(function ChatMessage({
               </Tooltip>
             </TooltipProvider>
           )}
-
           {isUser && (
             <TooltipProvider>
               <Tooltip>
@@ -228,7 +212,6 @@ const ChatMessage = memo(function ChatMessage({
               </Tooltip>
             </TooltipProvider>
           )}
-
           {!isUser && (
             <div className="flex items-center gap-1 ml-2">
               <TooltipProvider>

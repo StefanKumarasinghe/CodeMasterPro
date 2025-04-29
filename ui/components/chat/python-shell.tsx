@@ -10,8 +10,6 @@ import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { useChat } from "@/context/chat-context"
 import { Textarea } from "@/components/ui/textarea"
-import { Switch } from "@/components/ui/switch"
-import { Label } from "@/components/ui/label"
 
 interface PythonShellProps {
   code: string
@@ -31,9 +29,7 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
   const [isFullscreen, setIsFullscreen] = useState(true)
   const [isRunning, setIsRunning] = useState(false)
   const [output, setOutput] = useState<PythonOutput | null>(null)
-  const [outputHistory, setOutputHistory] = useState<
-    Array<{ type: "command" | "result" | "system"; content: string | PythonOutput }>
-  >([])
+  const [outputHistory, setOutputHistory] = useState<Array<{ type: "command" | "result" | "system"; content: string | PythonOutput }>>([])
   const [command, setCommand] = useState("")
   const [sessionId, setSessionId] = useState<string>("")
   const [dependencies, setDependencies] = useState<string[]>([])
@@ -44,7 +40,6 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
   const outputRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement | HTMLInputElement>(null)
   const { handleSubmit } = useChat()
-
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const hasInitializedRef = useRef(false)
 
@@ -99,6 +94,7 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
     const seconds = timeRemaining % 60
     return `${minutes}:${seconds.toString().padStart(2, "0")}`
   }
+
   useEffect(() => {
     if (outputRef.current) {
       outputRef.current.scrollTop = outputRef.current.scrollHeight
@@ -159,12 +155,9 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
       setOutputHistory((prev) => [...prev, { type: "system", content: "Error: No active Python session." }])
       return
     }
-
     startSessionTimer()
-
     setIsRunning(true)
     setOutputHistory((prev) => [...prev, { type: "command", content: "Running code..." }])
-
     try {
       const response = await fetch(`${API_ENDPOINT}/run_python_code`, {
         method: "POST",
@@ -353,32 +346,32 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
         isFullscreen
           ? "fixed z-50 top-0 right-0 h-full  w-1/3 min-w-[350px] "
           : "my-2 w-fit w-full rounded-lg bottom-5 right-5 shadow-2xl border border-zinc-800",
+          
       )}
+      style={{ resize: "horizontal" }}
     >
       <div className="flex items-center justify-between p-2 border-b border-zinc-700 bg-zinc-800">
         <div className="flex items-center gap-2">
-          <Terminal className="h-4 w-4 text-blue-400" />
-          <span className="text-sm font-medium text-zinc-300">Python Shell</span>
+        <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+            onClick={toggleFullscreen}
+          >
+            {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+          </Button>
           {sessionId && (
-            <Badge variant="outline" className="text-xs bg-blue-900/30 text-blue-300 border-blue-700">
-              Session: {sessionId.substring(0, 8)}...
+            <Badge variant="outline" className="text-xs bg-blue-900/30 text-blue-300 border-blue-700 truncate max-w-[250px]">
+              Session: {sessionId}
             </Badge>
           )}
-          <Badge variant="outline" className="text-xs bg-amber-900/30 text-amber-300 border-amber-700">
+          <Badge variant="outline" className="position-fixed text-md bg-amber-900/30 text-amber-300 border-amber-700">
             <Clock className="h-3 w-3 mr-1" />
             {formatTimeRemaining()}
           </Badge>
         </div>
         <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 text-zinc-400 hover:text-zinc-100"
-            onClick={toggleFullscreen}
-          >
-            {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-          </Button>
-          <Button variant="destructive" onClick={handleClose}>
+          <Button variant="link" className="text-red-600" onClick={handleClose}>
             Close session
           </Button>
         </div>
@@ -387,9 +380,9 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
       <div className="flex items-center p-2 border-b border-zinc-700 bg-zinc-800">
         <div className="flex items-center gap-1">
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
-            className="h-8 gap-1 bg-blue-600 hover:bg-blue-700 border-blue-500 text-white"
+            className="h-8 gap-1 bg-green-600 border-none text-white"
             onClick={runCode}
             disabled={isRunning || !sessionId}
           >
@@ -398,9 +391,9 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
           </Button>
 
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
-            className="h-8 gap-1 bg-purple-600 hover:bg-purple-700 border-purple-500 text-white"
+            className="h-8 gap-1 bg-blue-300 text-black "
             onClick={askTarsAboutError}
             disabled={outputHistory.length === 0}
           >
@@ -409,17 +402,15 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
           </Button>
           {output?.corrected_code && (
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
-              className="h-8 gap-1 bg-green-600 hover:bg-green-700 border-green-500 text-white"
+              className="h-8 gap-1 bg-yellow-500 text-white"
               onClick={() => setShowCorrectedCode(!showCorrectedCode)}
             >
               Corrected Code
             </Button>
           )}
         </div>
-
-
       </div>
 
       {dependencies.length > 0 && (

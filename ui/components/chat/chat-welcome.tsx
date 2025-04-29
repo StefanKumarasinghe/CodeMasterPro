@@ -1,29 +1,15 @@
-"use client"
+"use client";
 
-import type React from "react"
-import { FaDocker } from "react-icons/fa"
-import { useEffect, useState, useRef, useCallback } from "react"
-import { motion, AnimatePresence } from "framer-motion"
-import {
-  Terminal,
-  Code,
-  Zap,
-  Sliders,
-  MousePointerClick,
-  LayoutTemplate,
-  ShieldCheck,
-  Lightbulb,
-  Sparkles,
-  Keyboard,
-  SmileIcon,
-  PlayCircle,
-} from "lucide-react"
-
-import { APP_NAME } from "@/config/constants"
-import { API_ENDPOINT } from "@/config/constants"
-import { Button } from "@/components/ui/button"
-import { cn } from "@/lib/utils"
-import { useChat } from "@/context/chat-context"
+import type React from "react";
+import { FaDocker } from "react-icons/fa";
+import { useEffect, useState, useRef, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {Terminal,Code,Zap,Sliders,MousePointerClick,LayoutTemplate,ShieldCheck,Lightbulb,Sparkles,Keyboard,BrainIcon,PlayCircle} from "lucide-react";
+import { APP_NAME } from "@/config/constants";
+import { API_ENDPOINT } from "@/config/constants";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { useChat } from "@/context/chat-context";
 
 const EXAMPLE_PROMPTS = [
   "I want a Python code that can generate an OpenSSL key pair, private and public, and print the pair.",
@@ -67,27 +53,29 @@ const EXAMPLE_PROMPTS = [
   "Create a Python script that scrapes titles from a news website.",
   "Give me a template for a GitHub Actions CI/CD workflow for Node.js.",
   "Build a todo app using vanilla JavaScript and local storage.",
-]
+];
 
 export function ChatWelcome() {
-  const [serverStatus, setServerStatus] = useState(false)
+  const [serverStatus, setServerStatus] = useState(false);
   const [dockerRunCommand, setDockerRunCommand] = useState(
-    "docker run -e GOOGLE_API_KEY=TOKEN -e BRAVE_API_KEY=TOKEN -p 8000:8000 stefankumarasinghe/codemasterpro",
-  )
-  const [activeTab, setActiveTab] = useState<"features" | "examples">("features")
-  const [hoveredPrompt, setHoveredPrompt] = useState<number | null>(null)
-  const { handleSubmit } = useChat()
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+    "docker run -e GOOGLE_API_KEY=TOKEN -e BRAVE_API_KEY=TOKEN -p 8000:8000 stefankumarasinghe/codemasterpro"
+  );
+  const [activeTab, setActiveTab] = useState<"features" | "examples">(
+    "features"
+  );
+  const [hoveredPrompt, setHoveredPrompt] = useState<number | null>(null);
+  const { handleSubmit } = useChat();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const usePrompt = useCallback(
     (prompt: string) => {
-      handleSubmit(prompt)
+      handleSubmit(prompt);
       if (textareaRef.current) {
-        textareaRef.current.focus()
+        textareaRef.current.focus();
       }
     },
-    [handleSubmit],
-  )
+    [handleSubmit]
+  );
 
   useEffect(() => {
     const checkServerStatus = async () => {
@@ -97,31 +85,34 @@ export function ChatWelcome() {
           headers: {
             "Content-Type": "application/json",
           },
-        })
-        setServerStatus(response.ok)
+        });
+        setServerStatus(response.ok);
       } catch (error) {
-        console.error("Error checking server status:", error)
-        setServerStatus(false)
+        console.error("Error checking server status:", error);
+        setServerStatus(false);
       }
-    }
+    };
 
     const setAppropriateDockerCommand = () => {
-      const platform = navigator.platform
-      let command = "docker run -e GOOGLE_API_KEY=TOKEN -e BRAVE_API_KEY=TOKEN -p 8000:8000 stefankumarasinghe/codemasterpro"
+      const platform = navigator.platform;
+      let command =
+        "docker run -e GOOGLE_API_KEY=TOKEN -e BRAVE_API_KEY=TOKEN -p 8000:8000 stefankumarasinghe/codemasterpro";
       if (platform.includes("Mac")) {
-        command = "docker run -e GOOGLE_API_KEY=TOKEN -e BRAVE_API_KEY=TOKEN -p 8000:8000 stefankumarasinghe/codemasterpro:latest"
+        command =
+          "docker run -e GOOGLE_API_KEY=TOKEN -e BRAVE_API_KEY=TOKEN -p 8000:8000 stefankumarasinghe/codemasterpro:latest";
       } else if (platform.includes("Win") || platform.includes("Linux")) {
-        command = "docker run -e GOOGLE_API_KEY=TOKEN -e BRAVE_API_KEY=TOKEN -p 8000:8000 stefankumarasinghe/codemasterpro:amd64"
+        command =
+          "docker run -e GOOGLE_API_KEY=TOKEN -e BRAVE_API_KEY=TOKEN -p 8000:8000 stefankumarasinghe/codemasterpro:amd64";
       }
-      setDockerRunCommand(command)
-    }
-    checkServerStatus()
-    setAppropriateDockerCommand()
-  }, [])
+      setDockerRunCommand(command);
+    };
+    checkServerStatus();
+    setAppropriateDockerCommand();
+  }, []);
 
   const handlePromptClick = (prompt: string) => {
-    usePrompt(prompt)
-  }
+    usePrompt(prompt);
+  };
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)] text-center px-4 py-3">
@@ -133,26 +124,26 @@ export function ChatWelcome() {
       >
         <div>
           <p className="text-sm sm:text-base">
-            CodeMasterPro was developed by Stefan Kumarasinghe and is powered by Gemini's 3 models. CodeMasterPro is a
-            product of Stefan Kumarasinghe and is not affiliated with or endorsed by any other company or organization.
-            This is an open-source project and is not intended for commercial use. This application can be used by any
-            software engineer (License: MIT). But please credit me
+            CodeMasterPro was developed by Stefan Kumarasinghe and is powered by
+            Gemini's 4 models (lite is used for intermediate steps). CodeMasterPro is a product of Stefan Kumarasinghe
+            and is not affiliated with or endorsed by any other company or
+            organization. This is an open-source project and is not intended for
+            commercial use. This application can be used by any software
+            engineer (License: MIT). But please credit me
           </p>
           <p className="text-sm font-bold mt-5 text-red-500 sm:text-base">
             Think twice before using any code generated by Tars
           </p>
         </div>
       </motion.div>
-
       <motion.div
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ duration: 0.5 }}
-        className="h-20 w-20 rounded-full bg-black flex items-center justify-center mb-6 shadow-lg"
+        className="rounded-full flex items-center justify-center mb-6"
       >
-        <SmileIcon className="h-10 w-10 text-white" />
+        <BrainIcon className="h-20 w-20 text-black font-light" />
       </motion.div>
-
       <motion.h1
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -161,17 +152,15 @@ export function ChatWelcome() {
       >
         Hey there! I am {APP_NAME}
       </motion.h1>
-
       <motion.p
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.3, duration: 0.5 }}
         className="text-muted-foreground max-w-full mb-8"
       >
-        Your AI-powered coding companion. Ask any programming question or request code examples to boost your
-        productivity.
+        Your AI-powered coding companion. Ask any programming question or
+        request code examples to boost your productivity.
       </motion.p>
-
       <div className="w-full max-w-full mb-6">
         <div className="flex justify-center mb-4">
           <div className="bg-muted/50 rounded-lg p-1 flex">
@@ -245,7 +234,7 @@ export function ChatWelcome() {
                 description="We use a memory management system to keep track of your code and its dependencies and we analyze user intent"
               />
             </motion.div>
-          ) : (
+            ) : (
             <motion.div
               key="examples"
               initial={{ opacity: 0, y: 10 }}
@@ -259,7 +248,7 @@ export function ChatWelcome() {
                   key={index}
                   className={cn(
                     "p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors cursor-pointer text-left flex justify-between items-center",
-                    hoveredPrompt === index && "bg-accent/50",
+                    hoveredPrompt === index && "bg-accent/50"
                   )}
                   onMouseEnter={() => setHoveredPrompt(index)}
                   onMouseLeave={() => setHoveredPrompt(null)}
@@ -274,7 +263,9 @@ export function ChatWelcome() {
                   </Button>
                 </motion.div>
               ))}
-              <p className="text-xs text-muted-foreground mt-4">Click on a prompt to use it in your conversation</p>
+              <p className="text-xs text-muted-foreground mt-4">
+                Click on a prompt to use it in your conversation
+              </p>
             </motion.div>
           )}
         </AnimatePresence>
@@ -287,11 +278,16 @@ export function ChatWelcome() {
           className="text-base  max-w-full"
         >
           <p className="mb-6 text-lg">
-            TARS is running locally. You can now start using it. Please Watch the <a href="" className="text-underline text-purple-400">video</a> to use TARS to the fullest!
+            TARS is running locally. You can now start using it. Please Watch
+            the{" "}
+            <a href="" className="text-underline text-purple-400">
+              video
+            </a>{" "}
+            to use TARS to the fullest!
           </p>
           <p className="text-sm"> All rights reserved to Stefan Kumaraisnghe</p>
         </motion.div>
-      ) : (
+        ) : (
         <motion.div
           initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
@@ -300,9 +296,9 @@ export function ChatWelcome() {
         >
           <FaDocker className="h-16 w-16 text-primary inline-block mr-4" />
           <p className="mb-6 text-lg">
-            You will need to download the Docker image to run the backend server locally.
+            You will need to download the Docker image to run the backend server
+            locally.
           </p>
-
           <a
             href="https://hub.docker.com/repository/docker/stefankumarasinghe/codemasterpro"
             target="_blank"
@@ -317,10 +313,10 @@ export function ChatWelcome() {
         </motion.div>
       )}
     </div>
-  )
+  );
 }
 
-function FeatureCard({ icon, title, description }: { icon: React.ReactNode; title: string; description: string }) {
+function FeatureCard({icon,title,description}: {icon: React.ReactNode;title: string;description: string;}) {
   return (
     <motion.div
       className="bg-card border rounded-lg p-4 hover:shadow-md transition-all hover:border-primary/50"
@@ -332,5 +328,5 @@ function FeatureCard({ icon, title, description }: { icon: React.ReactNode; titl
       <h3 className="font-medium mb-2">{title}</h3>
       <p className="text-sm text-muted-foreground">{description}</p>
     </motion.div>
-  )
+  );
 }

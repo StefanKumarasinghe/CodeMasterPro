@@ -1,33 +1,43 @@
-"use client"
+"use client";
 
-import { X, FileText, FileCode, FileJson, File } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { formatFileSize } from "@/utils/format-utils"
+import { X, FileText, FileCode, FileJson, File } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { formatFileSize } from "@/utils/format-utils";
 
 interface FileAttachmentProps {
-  fileName: string
-  fileSize: number
-  contentLength: number
-  language?: string
-  onRemove: () => void
+  fileName: string;
+  fileSize: number;
+  contentLength: number;
+  language?: string;
+  onRemove: () => void;
 }
 
-export function FileAttachment({ fileName, fileSize, contentLength, language, onRemove }: FileAttachmentProps) {
-  // Determine file icon based on extension
+export function FileAttachment({
+  fileName,
+  fileSize,
+  contentLength,
+  language,
+  onRemove,
+}: FileAttachmentProps) {
   const getFileIcon = () => {
-    const extension = fileName.split(".").pop()?.toLowerCase()
-
-    if (["js", "jsx", "ts", "tsx", "py", "java", "c", "cpp", "cs", "go", "rb", "php", "rs"].includes(extension || "")) {
-      return <FileCode className="h-4 w-4" />
+    const extension = fileName.split(".").pop()?.toLowerCase();
+    if (
+      [
+        "js", "jsx", "ts", "tsx", "py", "java", "c", "cpp", "cs", "go", "rb", 
+        "php", "rs", "swift", "kt", "scala", "sh", "bat", "pl", "lua", "r", 
+        "html", "css", "scss", "less", "json", "xml", "yaml", "yml", "sql",
+        "dockerfile", "md", "txt", "csv", "log", "toml", "ini", "properties",
+        ].includes(extension || "")
+    ) {
+      return <FileCode className="h-4 w-4" />;
     } else if (["json", "xml", "yaml", "yml"].includes(extension || "")) {
-      return <FileJson className="h-4 w-4" />
+      return <FileJson className="h-4 w-4" />;
     } else if (["txt", "md", "csv", "log"].includes(extension || "")) {
-      return <FileText className="h-4 w-4" />
+      return <FileText className="h-4 w-4" />;
     }
-
-    return <File className="h-4 w-4" />
-  }
+    return <File className="h-4 w-4" />;
+  };
 
   return (
     <div className="flex items-center gap-2 bg-muted/50 rounded-md p-2 text-sm">
@@ -57,5 +67,5 @@ export function FileAttachment({ fileName, fileSize, contentLength, language, on
         <span className="sr-only">Remove file</span>
       </Button>
     </div>
-  )
+  );
 }

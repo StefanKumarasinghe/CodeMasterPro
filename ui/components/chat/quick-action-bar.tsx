@@ -1,103 +1,90 @@
-"use client"
+"use client";
 
 import { Button } from "@/components/ui/button"
 import { Code, Bug, Zap, FileCode, Wand2, Copy } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { toast } from "@/utils/toast-util"
 import { useState } from "react"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
+import {AlertDialog,AlertDialogAction,AlertDialogCancel,AlertDialogContent,AlertDialogDescription,AlertDialogFooter,AlertDialogHeader,AlertDialogTitle,AlertDialogTrigger} from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
 interface QuickActionBarProps {
-  onAction: (action: string, code: string, lang: string) => void
-  language: string
-  code?: string
+  onAction: (action: string, code: string, lang: string) => void;
+  language: string;
+  code?: string;
 }
 export interface SavedSnippet {
-  id: string
-  name: string
-  description: string
-  code: string
+  id: string;
+  name: string;
+  description: string;
+  code: string;
 }
 
-
-
-export function QuickActionBar({ onAction, language, code = "" }: QuickActionBarProps) {
-  const [isCopied, setIsCopied] = useState(false)
-  const [open, setOpen] = useState(false)
-  const [snippetName, setSnippetName] = useState("")
-  const [snippetDescription, setSnippetDescription] = useState("")
-
-
-  const getSavedSnippets = (): SavedSnippet[] =>{
+export function QuickActionBar({
+  onAction,
+  language,
+  code = "",
+}: QuickActionBarProps) {
+  const [isCopied, setIsCopied] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [snippetName, setSnippetName] = useState("");
+  const [snippetDescription, setSnippetDescription] = useState("");
+  const getSavedSnippets = (): SavedSnippet[] => {
     try {
-      const raw = localStorage.getItem("code-snippets")
-      return raw ? JSON.parse(raw) : []
+      const raw = localStorage.getItem("code-snippets");
+      return raw ? JSON.parse(raw) : [];
     } catch (error) {
-      console.error("Error reading snippets:", error)
-      return []
+      console.error("Error reading snippets:", error);
+      return [];
     }
-  }
+  };
 
   const saveSnippets = (snippets: SavedSnippet[]) => {
     try {
-      localStorage.setItem("code-snippets", JSON.stringify(snippets))
+      localStorage.setItem("code-snippets", JSON.stringify(snippets));
     } catch (error) {
-      console.error("Error saving snippets:", error)
+      console.error("Error saving snippets:", error);
     }
-  }
+  };
 
-  const addSnippet = (snippet: SavedSnippet)=>{
-    const snippets = getSavedSnippets()
-    snippets.push(snippet)
-    saveSnippets(snippets)
-  }
-
+  const addSnippet = (snippet: SavedSnippet) => {
+    const snippets = getSavedSnippets();
+    snippets.push(snippet);
+    saveSnippets(snippets);
+  };
 
   const addSnippetToLocalStorage = () => {
     addSnippet({
       id: snippetName + "-" + Date.now(),
       name: snippetName,
       description: snippetDescription,
-      code: code
-    })
-    setOpen(false)
-    setSnippetName("")
-    setSnippetDescription("")
-  }
+      code: code,
+    });
+    setOpen(false);
+    setSnippetName("");
+    setSnippetDescription("");
+  };
 
   const handleCopy = () => {
-    if (!code) return
+    if (!code) return;
 
     navigator.clipboard
       .writeText(code)
       .then(() => {
-        toast.success("Code copied to clipboard")
-        setIsCopied(true)
-        setTimeout(() => setIsCopied(false), 2000)
+        toast.success("Code copied to clipboard");
+        setIsCopied(true);
+        setTimeout(() => setIsCopied(false), 2000);
       })
       .catch((err) => {
-        console.error("Failed to copy: ", err)
-        toast.error("Could not copy to clipboard")
-      })
-  }
-
-  
+        console.error("Failed to copy: ", err);
+        toast.error("Could not copy to clipboard");
+      });
+  };
 
   return (
     <TooltipProvider>
-      <div className="flex items-center gap-1 overflow-x-auto pb-2 scrollbar-hide">
+      <div className="flex items-center gap-1 overflow-x-auto pb-2 scrollbar-hide overflow-y-hidden">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -133,7 +120,7 @@ export function QuickActionBar({ onAction, language, code = "" }: QuickActionBar
           </TooltipContent>
         </Tooltip>
         <Tooltip>
-        <TooltipTrigger asChild>
+          <TooltipTrigger asChild>
             <AlertDialog open={open} onOpenChange={setOpen}>
               <AlertDialogTrigger asChild>
                 <Button
@@ -149,7 +136,8 @@ export function QuickActionBar({ onAction, language, code = "" }: QuickActionBar
                 <AlertDialogHeader>
                   <AlertDialogTitle>Save Snippet</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Name and describe this code snippet to save it for later use.
+                    Name and describe this code snippet to save it for later
+                    use.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <div className="grid gap-4 py-4">
@@ -178,7 +166,9 @@ export function QuickActionBar({ onAction, language, code = "" }: QuickActionBar
                 </div>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={addSnippetToLocalStorage}>Save</AlertDialogAction>
+                  <AlertDialogAction onClick={addSnippetToLocalStorage}>
+                    Save
+                  </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
@@ -187,9 +177,6 @@ export function QuickActionBar({ onAction, language, code = "" }: QuickActionBar
             <p>Save code snippet</p>
           </TooltipContent>
         </Tooltip>
-
-
-
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -206,7 +193,6 @@ export function QuickActionBar({ onAction, language, code = "" }: QuickActionBar
             <p>Debug this code without showing it again</p>
           </TooltipContent>
         </Tooltip>
-
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -240,7 +226,6 @@ export function QuickActionBar({ onAction, language, code = "" }: QuickActionBar
             <p>Add comments to this code without showing it again</p>
           </TooltipContent>
         </Tooltip>
-
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -259,5 +244,5 @@ export function QuickActionBar({ onAction, language, code = "" }: QuickActionBar
         </Tooltip>
       </div>
     </TooltipProvider>
-  )
+  );
 }

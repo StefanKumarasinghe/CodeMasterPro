@@ -1,26 +1,26 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Settings, Save } from "lucide-react"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
-import { Label } from "@/components/ui/label"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Separator } from "@/components/ui/separator"
-import { Switch } from "@/components/ui/switch"
-import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
-import { toast } from "@/utils/toast-util"
-import type { Preferences } from "@/types"
-import { STORAGE_KEYS } from "@/config/constants"
+import { useState } from "react";
+import { Settings, Save } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {Sheet,SheetContent,SheetHeader,SheetTitle,SheetTrigger} from "@/components/ui/sheet";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Separator } from "@/components/ui/separator";
+import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "@/utils/toast-util";
+import type { Preferences } from "@/types";
+import { STORAGE_KEYS } from "@/config/constants";
 
 interface SettingsSheetProps {
-  preferences: Preferences
-  setPreferences: (preferences: Preferences) => void
-  customPrompt: string
-  setCustomPrompt: (prompt: string) => void
-  personalInfo: string
-  setPersonalInfo: (info: string) => void
+  preferences: Preferences;
+  setPreferences: (preferences: Preferences) => void;
+  customPrompt: string;
+  setCustomPrompt: (prompt: string) => void;
+  personalInfo: string;
+  setPersonalInfo: (info: string) => void;
 }
 
 export default function SettingsSheet({
@@ -31,27 +31,23 @@ export default function SettingsSheet({
   personalInfo,
   setPersonalInfo,
 }: SettingsSheetProps) {
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const savePreferences = () => {
     try {
-      // Save preferences
-      localStorage.setItem(STORAGE_KEYS.PREFERENCES, JSON.stringify(preferences))
-
-      // Save custom prompt
-      localStorage.setItem(STORAGE_KEYS.CUSTOM_PROMPT, customPrompt || "")
-
-      // Save personal info
-      localStorage.setItem(STORAGE_KEYS.PERSONAL_INFO, personalInfo || "")
-
-      toast.success("Preferences saved successfully")
-
-      setIsSettingsOpen(false)
+      localStorage.setItem(
+        STORAGE_KEYS.PREFERENCES,
+        JSON.stringify(preferences)
+      );
+      localStorage.setItem(STORAGE_KEYS.CUSTOM_PROMPT, customPrompt || "");
+      localStorage.setItem(STORAGE_KEYS.PERSONAL_INFO, personalInfo || "");
+      toast.success("Preferences saved successfully");
+      setIsSettingsOpen(false);
     } catch (error) {
-      console.error("Failed to save preferences:", error)
-      toast.error("Failed to save preferences. Please try again.")
+      console.error("Failed to save preferences:", error);
+      toast.error("Failed to save preferences. Please try again.");
     }
-  }
+  };
 
   return (
     <div className="flex items-center gap-2">
@@ -84,7 +80,9 @@ export default function SettingsSheet({
                   />
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  This information helps the AI understand your preferences. It will not be shared with anyone. I would use it to say don't add comments or give me the full code in one go.
+                  This information helps the AI understand your preferences. It
+                  will not be shared with anyone. I would use it to say don't
+                  add comments or give me the full code in one go.
                 </div>
               </TabsContent>
               <TabsContent value="personal" className="space-y-4 mt-4">
@@ -99,7 +97,8 @@ export default function SettingsSheet({
                   />
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  This information helps the AI provide more relevant responses. It will not be shared with anyone.
+                  This information helps the AI provide more relevant responses.
+                  It will not be shared with anyone.
                 </div>
                 <Separator />
                 <div className="space-y-2">
@@ -124,7 +123,9 @@ export default function SettingsSheet({
                   </RadioGroup>
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  Auto format will automatically format your code snippets by enclosing them in code blocks. No formatting will not apply any formatting to your code snippets.
+                  Auto format will automatically format your code snippets by
+                  enclosing them in code blocks. No formatting will not apply
+                  any formatting to your code snippets.
                 </div>
               </TabsContent>
               <TabsContent value="settings" className="space-y-6 mt-4">
@@ -135,7 +136,10 @@ export default function SettingsSheet({
                     onValueChange={(value) =>
                       setPreferences({
                         ...preferences,
-                        outputFormat: value as "codeAndExplanation" | "codeOnly" | "explanationOnly",
+                        outputFormat: value as
+                          | "codeAndExplanation"
+                          | "codeOnly"
+                          | "explanationOnly",
                       })
                     }
                   >
@@ -154,21 +158,39 @@ export default function SettingsSheet({
                   </RadioGroup>
                 </div>
                 <div className="space-y-3 text-sm text-muted-foreground">
-                  <p>While CodeMasterPro may not always stick to the output format, it will try its best to follow it. It is designed to also understand context and provide relevant responses.</p>
-                  </div>
+                  <p>
+                    While CodeMasterPro may not always stick to the output
+                    format, it will try its best to follow it. It is designed to
+                    also understand context and provide relevant responses.
+                  </p>
+                </div>
                 <Separator />
-          
+
                 <div className="space-y-3">
                   <Label>Code Quality Preferences</Label>
                   <div className="space-y-2">
-                    {["linting", "formatting", "comments", "typeChecking", "bestPractices"].map((field) => (
-                      <div key={field} className="flex items-center justify-between">
+                    {[
+                      "linting",
+                      "formatting",
+                      "comments",
+                      "typeChecking",
+                      "bestPractices",
+                    ].map((field) => (
+                      <div
+                        key={field}
+                        className="flex items-center justify-between"
+                      >
                         <Label htmlFor={field} className="text-sm">
-                          {field.charAt(0).toUpperCase() + field.slice(1).replace(/([A-Z])/g, " $1")}
+                          {field.charAt(0).toUpperCase() +
+                            field.slice(1).replace(/([A-Z])/g, " $1")}
                         </Label>
                         <Switch
                           id={field}
-                          checked={preferences?.codeQuality?.[field as keyof typeof preferences.codeQuality] || false}
+                          checked={
+                            preferences?.codeQuality?.[
+                              field as keyof typeof preferences.codeQuality
+                            ] || false
+                          }
                           onCheckedChange={(checked) =>
                             setPreferences({
                               ...preferences,
@@ -184,7 +206,10 @@ export default function SettingsSheet({
                   </div>
                 </div>
                 <div className="space-y-3 text-sm text-muted-foreground">
-                  <p>This information helps the AI provide more relevant responses. It will not be shared with anyone.</p>
+                  <p>
+                    This information helps the AI provide more relevant
+                    responses. It will not be shared with anyone.
+                  </p>
                 </div>
               </TabsContent>
             </Tabs>
@@ -196,5 +221,5 @@ export default function SettingsSheet({
         </SheetContent>
       </Sheet>
     </div>
-  )
+  );
 }

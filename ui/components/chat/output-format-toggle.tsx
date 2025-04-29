@@ -2,23 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { FaStackOverflow } from "react-icons/fa";
 import { Code, FileText, CodepenIcon, Globe } from "lucide-react";
 import { API_ENDPOINT } from "@/config/constants";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import {Tooltip,TooltipContent,TooltipProvider,TooltipTrigger,} from "@/components/ui/tooltip";
+import {DropdownMenu,DropdownMenuCheckboxItem,DropdownMenuContent,DropdownMenuLabel,DropdownMenuSeparator,DropdownMenuTrigger} from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 
 export function OutputFormatToggle({ value, onChange }) {
@@ -90,8 +77,8 @@ export function OutputFormatToggle({ value, onChange }) {
             </Badge>
           )}
         </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-56">
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="w-56">
         <DropdownMenuLabel>Available tools</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuCheckboxItem
@@ -128,7 +115,7 @@ export function OutputFormatToggle({ value, onChange }) {
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant={value === "codeOnly" ? "destructive" : "ghost"}
+              variant={value === "codeOnly" ? "default" : "ghost"}
               size="sm"
               className="h-8 gap-1 px-2"
               onClick={() => onChange("codeOnly")}
@@ -145,7 +132,7 @@ export function OutputFormatToggle({ value, onChange }) {
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant={value === "explanationOnly" ? "destructive" : "ghost"}
+              variant={value === "explanationOnly" ? "default" : "ghost"}
               size="sm"
               className="h-8 gap-1 px-2"
               onClick={() => onChange("explanationOnly")}
@@ -162,7 +149,7 @@ export function OutputFormatToggle({ value, onChange }) {
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
-              variant={value === "codeAndExplanation" ? "destructive" : "ghost"}
+              variant={value === "codeAndExplanation" ? "default" : "ghost"}
               size="sm"
               className="h-8 gap-1 px-2"
               onClick={() => onChange("codeAndExplanation")}

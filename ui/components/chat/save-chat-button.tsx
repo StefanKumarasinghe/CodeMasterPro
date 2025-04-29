@@ -4,14 +4,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import {Dialog,DialogContent,DialogDescription,DialogFooter,DialogHeader,DialogTitle} from "@/components/ui/dialog"
 import { toast } from "@/utils/toast-util"
 import { BookmarkPlus } from "lucide-react"
 import { formatDate } from "@/utils/format-utils"
@@ -36,9 +29,7 @@ export function SaveChatButton({ messages }: SaveChatButtonProps) {
       toast.warning("There's no chat content to save")
       return
     }
-
     try {
-      // Create a chat history item
       const chatItem = {
         id: uuidv4(),
         title: title.trim(),
@@ -49,16 +40,9 @@ export function SaveChatButton({ messages }: SaveChatButtonProps) {
           content: msg.content,
         })),
       }
-
-      // Get existing history or initialize empty array
       const existingHistory = JSON.parse(localStorage.getItem("tars-chat-history") || "[]")
-
-      // Add new chat to history
       const updatedHistory = [chatItem, ...existingHistory]
-
-      // Save back to localStorage
       localStorage.setItem("tars-chat-history", JSON.stringify(updatedHistory))
-
       toast.success("Chat saved to history")
       setIsOpen(false)
       setTitle("")
@@ -67,7 +51,6 @@ export function SaveChatButton({ messages }: SaveChatButtonProps) {
       toast.error("Failed to save chat. Please try again.")
     }
   }
-
   return (
     <>
       <Button
@@ -89,23 +72,21 @@ export function SaveChatButton({ messages }: SaveChatButtonProps) {
               Save this conversation for future reference. Saved chats are stored locally on your device.
             </DialogDescription>
           </DialogHeader>
-
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="chat-title">Chat Title</Label>
               <Input
                 id="chat-title"
                 placeholder="Enter a title for this chat"
+                autoComplete="off"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
               />
             </div>
-
             <div className="text-xs text-muted-foreground">
               <p>This chat will be saved locally on your device and will be available in the sidebar.</p>
             </div>
           </div>
-
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsOpen(false)}>
               Cancel

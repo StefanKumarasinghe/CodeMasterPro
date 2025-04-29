@@ -1,19 +1,17 @@
-"use client"
+"use client";
 
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { useRef, useEffect, useState, useCallback } from "react"
-import ChatMessage from "./chat-message"
-import { ChatWelcome } from "./chat-welcome"
-import { useChat } from "@/context/chat-context"
-import { Button } from "@/components/ui/button"
-import { ChevronDown } from "lucide-react"
-import { cn } from "@/lib/utils"
-import { ChatProgressBar } from "./chat-progress-bar"
-import { useInView } from "react-intersection-observer"
-import { API_ENDPOINT } from "@/config/constants"
-import { marked } from 'marked';
-
-
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { useRef, useEffect, useState, useCallback } from "react";
+import ChatMessage from "./chat-message";
+import { ChatWelcome } from "./chat-welcome";
+import { useChat } from "@/context/chat-context";
+import { Button } from "@/components/ui/button";
+import { ChevronDown } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { ChatProgressBar } from "./chat-progress-bar";
+import { useInView } from "react-intersection-observer";
+import { API_ENDPOINT } from "@/config/constants";
+import { marked } from "marked";
 
 const LOADING_MESSAGES = [
   "TARS is thinking...",
@@ -21,12 +19,12 @@ const LOADING_MESSAGES = [
   "TARS is generating code...",
   "TARS is optimizing the response...",
   "TARS is validating the solution...",
-]
+];
 
 export type MessageBoardUpdater = {
-  setMessage: React.Dispatch<React.SetStateAction<string>>
-  setBorder: React.Dispatch<React.SetStateAction<boolean>>
-}
+  setMessage: React.Dispatch<React.SetStateAction<string>>;
+  setBorder: React.Dispatch<React.SetStateAction<boolean>>;
+};
 
 export const updateMessageBoard = (
   message: string,
@@ -34,134 +32,132 @@ export const updateMessageBoard = (
   updater?: MessageBoardUpdater
 ) => {
   if (updater) {
-    const { setMessage, setBorder } = updater
-    setMessage(message)
-    setBorder(show)
+    const { setMessage, setBorder } = updater;
+    setMessage(message);
+    setBorder(show);
   }
-}
+};
 
 export function ChatMessageList() {
-  const { messages, language, preferences, isLoading, handleCodeAction, setMemoryState } = useChat()
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-  const scrollAreaRef = useRef<HTMLDivElement>(null)
-  const [showScrollButton, setShowScrollButton] = useState(true)
-  const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true)
-  const [loadingMessage, setLoadingMessage] = useState(LOADING_MESSAGES[0])
-  const loadingIntervalRef = useRef<NodeJS.Timeout | null>(null)
-  const [loadedMessages, setLoadedMessages] = useState<ChatMessage[]>([])
-  const [batchSize] = useState(10)
-  const [listInnerRef, isVisible] = useInView()
-  const [updateMessage, setUpdateMessage] = useState("")
-  const streamSourceRef = useRef<EventSource | null>(null)
+  const {
+    messages,
+    language,
+    preferences,
+    isLoading,
+    handleCodeAction,
+    setMemoryState,
+  } = useChat();
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const [showScrollButton, setShowScrollButton] = useState(true);
+  const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true);
+  const [loadingMessage, setLoadingMessage] = useState(LOADING_MESSAGES[0]);
+  const loadingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [loadedMessages, setLoadedMessages] = useState<ChatMessage[]>([]);
+  const [batchSize] = useState(10);
+  const [listInnerRef, isVisible] = useInView();
+  const [updateMessage, setUpdateMessage] = useState("");
+  const streamSourceRef = useRef<EventSource | null>(null);
 
   const streamUpdates = useCallback(() => {
     if (streamSourceRef.current) {
-      streamSourceRef.current.close()
-      streamSourceRef.current = null
+      streamSourceRef.current.close();
+      streamSourceRef.current = null;
     }
-
-
-
-    const source = new EventSource(`${API_ENDPOINT}/chat/stream`)
-    streamSourceRef.current = source
-
-    source.onopen = () => {
-
-    }
-
+    const source = new EventSource(`${API_ENDPOINT}/chat/stream`);
+    streamSourceRef.current = source;
+    source.onopen = () => {};
     source.onmessage = (event) => {
-      const update = event.data
-      if (typeof update === 'string' && update.length > 0) {
-        setUpdateMessage(update)
+      const update = event.data;
+      if (typeof update === "string" && update.length > 0) {
+        setUpdateMessage(update);
       }
-    }
+    };
 
     source.onerror = (event) => {
       if (source.readyState === EventSource.CLOSED) {
       }
-      source.close()
-      streamSourceRef.current = null
-    }
+      source.close();
+      streamSourceRef.current = null;
+    };
 
     return () => {
       if (source.readyState !== EventSource.CLOSED) {
-        source.close()
+        source.close();
       }
-    }
-  }, [])
+    };
+  }, []);
 
   useEffect(() => {
     if (messages.length > 0) {
-      setLoadedMessages(messages.slice(0, batchSize))
+      setLoadedMessages(messages.slice(0, batchSize));
     }
-  }, [messages, batchSize])
+  }, [messages, batchSize]);
 
   useEffect(() => {
     if (isVisible && loadedMessages.length < messages.length) {
-      const nextBatchSize = Math.min(loadedMessages.length + batchSize, messages.length)
-      setLoadedMessages(messages.slice(0, nextBatchSize))
+      const nextBatchSize = Math.min(
+        loadedMessages.length + batchSize,
+        messages.length
+      );
+      setLoadedMessages(messages.slice(0, nextBatchSize));
     }
-  }, [isVisible, messages, loadedMessages, batchSize])
+  }, [isVisible, messages, loadedMessages, batchSize]);
 
   useEffect(() => {
-    let cleanupStream: (() => void) | undefined
-
+    let cleanupStream: (() => void) | undefined;
     if (isLoading) {
-      setUpdateMessage("Peeking into TARS' brain...")
-      cleanupStream = streamUpdates()
-
-      let messageIndex = 0
+      setUpdateMessage("Peeking into TARS' brain...");
+      cleanupStream = streamUpdates();
+      let messageIndex = 0;
       if (loadingIntervalRef.current) {
-        clearInterval(loadingIntervalRef.current)
+        clearInterval(loadingIntervalRef.current);
       }
-
-      setLoadingMessage(LOADING_MESSAGES[messageIndex])
+      setLoadingMessage(LOADING_MESSAGES[messageIndex]);
       loadingIntervalRef.current = setInterval(() => {
-        messageIndex = (messageIndex + 1) % LOADING_MESSAGES.length
-        setLoadingMessage(LOADING_MESSAGES[messageIndex])
-      }, 3000)
+        messageIndex = (messageIndex + 1) % LOADING_MESSAGES.length;
+        setLoadingMessage(LOADING_MESSAGES[messageIndex]);
+      }, 3000);
     } else {
       if (loadingIntervalRef.current) {
-        clearInterval(loadingIntervalRef.current)
-        loadingIntervalRef.current = null
+        clearInterval(loadingIntervalRef.current);
+        loadingIntervalRef.current = null;
       }
-
       if (streamSourceRef.current) {
-        streamSourceRef.current.close()
-        streamSourceRef.current = null
+        streamSourceRef.current.close();
+        streamSourceRef.current = null;
       }
-
-      setUpdateMessage("")
+      setUpdateMessage("");
     }
-
     return () => {
       if (loadingIntervalRef.current) {
-        clearInterval(loadingIntervalRef.current)
+        clearInterval(loadingIntervalRef.current);
       }
       if (cleanupStream) {
-        cleanupStream()
+        cleanupStream();
       }
-    }
-  }, [isLoading, streamUpdates])
+    };
+
+  }, [isLoading, streamUpdates]);
   const scrollToBottom = useCallback(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
     setIsAutoScrollEnabled(true);
   }, []);
-  
+
   const handleScroll = useCallback(() => {
     if (!messagesEndRef.current) return;
     const parent = messagesEndRef.current.parentElement;
     if (!parent) return;
-  
+
     const { scrollTop, scrollHeight, clientHeight } = parent;
     const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
-  
+
     setShowScrollButton(!isNearBottom);
     setIsAutoScrollEnabled(isNearBottom);
   }, []);
-  
+
   useEffect(() => {
     const parent = messagesEndRef.current?.parentElement;
     if (parent) {
@@ -169,34 +165,34 @@ export function ChatMessageList() {
       return () => parent.removeEventListener("scroll", handleScroll);
     }
   }, [handleScroll]);
-  
+
   useEffect(() => {
     if (isAutoScrollEnabled && messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages, isLoading, isAutoScrollEnabled]);
-  
+
   const handleClearMemory = useCallback(() => {
-    setMemoryState((prev) => ({ ...prev, forgetMemory: true }))
-  }, [setMemoryState])
+    setMemoryState((prev) => ({ ...prev, forgetMemory: true }));
+  }, [setMemoryState]);
 
   const convertMarkdownToText = (markdown) => {
-
     const html = marked(markdown);
-    const div = document.createElement('div');
+    const div = document.createElement("div");
     div.innerHTML = html;
-  
-    return div.textContent || div.innerText || '';
+    return div.textContent || div.innerText || "";
   };
   return (
     <div className="flex-1 overflow-hidden relative flex flex-col">
       {messages.length > 0 && (
         <ChatProgressBar
-          messageCount={messages.reduce((count, message) => count + message.content.length, 0)}
+          messageCount={messages.reduce(
+            (count, message) => count + message.content.length,
+            0
+          )}
           onClearMemory={handleClearMemory}
         />
       )}
-
       <ScrollArea className="flex-1 px-2 sm:px-4 py-4" ref={scrollAreaRef}>
         <div className="space-y-6 pb-6 max-w-full mx-auto px-3">
           {messages.length === 0 ? (
@@ -213,19 +209,18 @@ export function ChatMessageList() {
               />
             ))
           )}
-
-      <Button
-        variant="outline"
-        size="icon"
-        className={cn(
-          "absolute bottom-4 right-4 rounded-full h-9 w-9  bg-background shadow-md transition-opacity duration-200 z-50",
-          showScrollButton ? "opacity-100" : "opacity-0 pointer-events-none"
-        )}
-        onClick={scrollToBottom}
-        aria-label="Scroll to bottom"
-      >
-        <ChevronDown className="h-5 w-5" />
-      </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            className={cn(
+              "absolute bottom-4 right-4 rounded-full h-9 w-9  bg-background shadow-md transition-opacity duration-200 z-50",
+              showScrollButton ? "opacity-100" : "opacity-0 pointer-events-none"
+            )}
+            onClick={scrollToBottom}
+            aria-label="Scroll to bottom"
+          >
+            <ChevronDown className="h-5 w-5" />
+          </Button>
           {isLoading && (
             <div className=" gap-1 text-muted-foreground ml-5 text-sm">
               <div className="flex items-center gap-2">
@@ -234,7 +229,9 @@ export function ChatMessageList() {
               </div>
               {updateMessage && (
                 <span className="p-3 ml-5 my-2 bg-gray-100 dark:bg-gray-700 rounded-md items-center gap-2 text-muted-foreground max-w-[60%] inline-flex">
-                  <span className="text-black dark:text-green-200 text-sm">{convertMarkdownToText(updateMessage)}</span>
+                  <span className="text-black dark:text-green-200 text-sm">
+                    {convertMarkdownToText(updateMessage)}
+                  </span>
                 </span>
               )}
             </div>
@@ -248,5 +245,5 @@ export function ChatMessageList() {
         </div>
       </ScrollArea>
     </div>
-  )
+  );
 }

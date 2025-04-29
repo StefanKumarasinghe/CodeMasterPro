@@ -14,15 +14,12 @@ interface ChatProgressBarProps {
 
 export function ChatProgressBar({ messageCount, onClearMemory }: ChatProgressBarProps) {
   const [showWarning, setShowWarning] = useState(false)
-
   const percentage = Math.min(Math.round((messageCount / 100000) * 100), 100)
-
   const getProgressColor = () => {
     if (percentage < 50) return "bg-green-500"
     if (percentage < 80) return "bg-amber-500"
     return "bg-red-500"
   }
-
   useEffect(() => {
     if (messageCount > 30000) {
       setShowWarning(true)
@@ -40,9 +37,7 @@ export function ChatProgressBar({ messageCount, onClearMemory }: ChatProgressBar
         </div>
         <div className="text-xs text-muted-foreground">{percentage}%</div>
       </div>
-
       <Progress value={percentage} className="h-1.5" indicatorClassName={cn("transition-colors", getProgressColor())} />
-
       <AnimatePresence>
         {showWarning && (
           <motion.div

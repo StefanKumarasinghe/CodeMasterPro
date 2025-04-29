@@ -4,42 +4,17 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { API_ENDPOINT } from "@/config/constants"
-import {
-  Lightbulb,
-  Send,
-  Sparkles,
-  FileUp,
-  Upload,
-  Code,
-  Zap,
-  Bug,
-  RefreshCw,
-  Braces,
-  FileCode,
-  Wand2,
-  Mic,
-  Square,
-  X,
-  AlertTriangle,
-  Shield,
-} from "lucide-react"
+import {Lightbulb,Send,FileUp,Upload,Code,Zap,Bug,RefreshCw,Braces,FileCode,Wand2,Mic,Square,X,AlertTriangle,Shield} from "lucide-react"
 import { OutputFormatToggle } from "./output-format-toggle"
 import { useState, useRef, useEffect, useCallback } from "react"
 import { useChat } from "@/context/chat-context"
-import { LANGUAGE_OPTIONS, QUICK_START_TEMPLATES } from "@/config/constants"
+import { LANGUAGE_OPTIONS } from "@/config/constants"
 import type React from "react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast-message"
 import { CodeTemplates } from "./code-templates"
-import {
-  SUPPORTED_FILE_TYPES,
-  isLikelyCode,
-  detectCodeLanguage,
-  formatCode,
-  readFileAsText,
-  detectLanguage,
-} from "@/utils/file-utils"
+import {SUPPORTED_FILE_TYPES,isLikelyCode,detectCodeLanguage,formatCode,readFileAsText,detectLanguage} from "@/utils/file-utils"
 import { cn } from "@/lib/utils"
 import { motion, AnimatePresence } from "framer-motion"
 import { FileAttachment } from "./file-attachment"
@@ -68,8 +43,6 @@ export function ChatInput() {
     }>
   >([])
 
-  // Update the file to handle code attachments as file indicators
-  // First, add a new state for code attachments
   const [codeAttachments, setCodeAttachments] = useState<
     Array<{
       fileName: string
@@ -90,7 +63,6 @@ export function ChatInput() {
   } = useChat()
 
   const cancelMessage = useCallback(() => {
-    //I need to make an api call  post to /cancel_message
     fetch(`${API_ENDPOINT}/cancel_message`, {
       method: "POST",
       headers: {
@@ -130,20 +102,15 @@ export function ChatInput() {
       setProcessingFile(true)
       try {
         const newAttachments = []
-
         for (const file of supportedFiles) {
           try {
-            // Read the file content
             const content = await readFileAsText(file)
             const fileLanguage = detectLanguage(file.name)
 
             if (fileLanguage && fileLanguage !== "plaintext") {
               setLanguage(fileLanguage)
             }
-
             const codeBlock = `File: ${file.name}\n\n\`\`\`${fileLanguage}\n${content}\n\`\`\``
-
-            // Add to attachments
             newAttachments.push({
               fileName: file.name,
               fileSize: file.size,
@@ -163,7 +130,6 @@ export function ChatInput() {
 
         if (newAttachments.length > 0) {
           setFileAttachments((prev) => [...prev, ...newAttachments])
-
           toast({
             title: "Files Processed",
             description: `${newAttachments.length} file(s) attached to your message`,
@@ -183,15 +149,11 @@ export function ChatInput() {
     [toast, setLanguage],
   )
 
-  // Update character count when input changes
   useEffect(() => {
     const fileContentLength = fileAttachments.reduce((total, file) => total + file.contentLength, 0)
     setCharCount(messageInput.length + fileContentLength)
   }, [messageInput, fileAttachments])
 
-  
-
-  // Auto-resize textarea
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto"
@@ -199,10 +161,8 @@ export function ChatInput() {
     }
   }, [messageInput])
 
-  // Handle keyboard shortcuts
   useEffect(() => {
     const handleKeyboardShortcut = (e: KeyboardEvent) => {
-      // Cmd/Ctrl + K to focus the textarea
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault()
         textareaRef.current?.focus()
@@ -213,21 +173,15 @@ export function ChatInput() {
     return () => window.removeEventListener("keydown", handleKeyboardShortcut)
   }, [])
 
-
   useEffect(() => {
     const handleUseCode = (e: CustomEvent) => {
       if (e.detail && e.detail.code) {
         const code = e.detail.code
         const lang = e.detail.language || detectCodeLanguage(code) || "plaintext"
         const fileName = e.detail.fileName || `snippet.${lang}`
-
-        // Auto-select the language in the dropdown
         if (lang && lang !== "plaintext") {
           setLanguage(lang)
         }
-
-
-        // Instead of adding to the input, add to codeAttachments
         setCodeAttachments((prev) => [
           ...prev,
           {
@@ -236,14 +190,11 @@ export function ChatInput() {
             language: lang,
           },
         ])
-
-        // Focus the textarea
         if (textareaRef.current) {
           setTimeout(() => {
             textareaRef.current?.focus()
           }, 100)
         }
-
         toast({
           title: "Code Added",
           description: `File "${fileName}" attached to your message`,
@@ -251,7 +202,6 @@ export function ChatInput() {
         })
       }
     }
-
     window.addEventListener("use-code", handleUseCode as EventListener)
     return () => window.removeEventListener("use-code", handleUseCode as EventListener)
   }, [toast, setLanguage])
@@ -268,17 +218,13 @@ export function ChatInput() {
     [messageInput, fileAttachments],
   )
 
-  // Update the submitMessage function to include code attachments
   const submitMessage = useCallback(() => {
     if (messageInput.trim() || fileAttachments.length > 0 || codeAttachments.length > 0) {
-      // Combine message input with file attachments and code attachments
       const fileContent = fileAttachments.map((file) => file.content).join("\n\n")
       const codeContent = codeAttachments
         .map((code) => `File: ${code.fileName}\n\n\`\`\`${code.language}\n${code.content}\n\`\`\``)
         .join("\n\n")
-
       const fullMessage = [messageInput, fileContent, codeContent].filter(Boolean).join("\n\n")
-      
       handleSubmit(fullMessage)
       setMessageInput("")
       setFileAttachments([])
@@ -297,11 +243,8 @@ export function ChatInput() {
   const handleInputChange = useCallback(
     async (e: React.ChangeEvent<HTMLTextAreaElement>) => {
       const value = e.target.value
-
-
       if (value.length > messageInput.length + 30) {
         const newContent = value.substring(messageInput.length)
-
         if (isLikelyCode(newContent)) {
           let detectedLanguage = "plaintext"
           try {
@@ -309,14 +252,11 @@ export function ChatInput() {
           } catch (err) {
             console.warn("Language detection failed, defaulting to plaintext", err)
           }
-
           try {
             if (preferences.inputPreference=="Autotag") {
             const formattedCode = await formatCode(newContent, detectedLanguage)
             const codeBlock = "\n" + "```" + detectedLanguage + "\n" + formattedCode + "\n```"
-            
             setMessageInput((prev) => prev + codeBlock)
-
             toast({
               title: "Code Detected",
               description: `Formatted as ${detectedLanguage}`,
@@ -327,7 +267,6 @@ export function ChatInput() {
               setMessageInput((prev) => prev +codeBlock)
             }
           } catch (err) {
-            // Fallback to unformatted code if formatting fails
             console.warn("Formatting failed, inserting raw code:", err)
             const codeBlock = ["```" + detectedLanguage, newContent, "```"].join("\n")
             setMessageInput((prev) => prev + codeBlock)
@@ -338,7 +277,6 @@ export function ChatInput() {
               duration: 3000,
             })
           }
-
           return
         }
       }
@@ -360,19 +298,14 @@ export function ChatInput() {
   const handlePaste = useCallback(
     async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
       const pastedText = e.clipboardData.getData("text")
-
       if (isLikelyCode(pastedText)) {
         e.preventDefault()
-
         let detectedLanguage = "plaintext"
         try {
           detectedLanguage = detectCodeLanguage(pastedText) || "plaintext"
         } catch (err) {
           console.warn("Language detection failed on paste, defaulting to plaintext", err)
-          // Continue with plaintext as fallback
         }
-
-        // 2) Format with graceful fallback
         try {
           if (preferences.inputPreference=="Autotag") {
           const formattedCode = await formatCode(pastedText, detectedLanguage)
@@ -386,10 +319,8 @@ export function ChatInput() {
           setMessageInput((prev) => prev +codeBlock)
         }
         } catch (err) {
-          // Fallback to unformatted code if formatting fails
           console.warn("Formatting failed on paste, inserting raw code:", err)
           const codeBlock = ["```" + detectedLanguage, pastedText, "```"].join("\n")
-
           const cursor = textareaRef.current?.selectionStart ?? 0
           const before = messageInput.slice(0, cursor)
           const after = messageInput.slice(cursor)
@@ -414,7 +345,6 @@ export function ChatInput() {
     async (e: React.DragEvent<HTMLDivElement>) => {
       e.preventDefault()
       setIsDragging(false)
-
       if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
         await processFiles(Array.from(e.dataTransfer.files))
       }
@@ -436,16 +366,6 @@ export function ChatInput() {
     [processFiles],
   )
 
-  const applyQuickStartTemplate = useCallback((templateId: string) => {
-    const template = QUICK_START_TEMPLATES.find((t) => t.id === templateId)
-    if (template) {
-      setMessageInput(template.prompt)
-      if (textareaRef.current) {
-        textareaRef.current.focus()
-      }
-    }
-  }, [])
-
   const handleTemplateSelect = useCallback((templatePrompt: string) => {
     setMessageInput(templatePrompt)
     setShowTemplates(false)
@@ -454,11 +374,8 @@ export function ChatInput() {
     }
   }, [])
 
-  // Speech recognition with better browser compatibility
   const startRecording = useCallback(() => {
-    // Check if browser supports the Web Speech API
     if (!("webkitSpeechRecognition" in window) && !("SpeechRecognition" in window)) {
-      // Fallback to a simple message if speech recognition is not supported
       setRecordingError("Speech recognition is not supported in your browser")
       toast({
         title: "Not Supported",
@@ -467,23 +384,16 @@ export function ChatInput() {
       })
       return
     }
-
     setIsRecording(true)
     setRecordingError(null)
-
-    // Create speech recognition instance with browser compatibility
-    // @ts-ignore - SpeechRecognition is not in the TypeScript types
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
     const recognition = new SpeechRecognition()
-
     recognition.continuous = true
     recognition.interimResults = true
     recognition.lang = "en-US"
-
     recognition.onresult = (event: any) => {
       let finalTranscript = ""
       let interimTranscript = ""
-
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         if (event.results[i].isFinal) {
           finalTranscript += event.results[i][0].transcript
@@ -491,8 +401,6 @@ export function ChatInput() {
           interimTranscript += event.results[i][0].transcript
         }
       }
-
-      // Update the input with the final transcript
       if (finalTranscript) {
         setMessageInput((prev) => {
           const newValue = prev ? `${prev} ${finalTranscript}` : finalTranscript
@@ -500,40 +408,30 @@ export function ChatInput() {
         })
       }
     }
-
     recognition.onerror = (event: any) => {
-      //console.error("Speech recognition error", event)
       setRecordingError(`Error: ${event.error}`)
       setIsRecording(false)
-
       toast({
         title: "Recording Error",
         description: `Error: ${event.error}. Please try again or type your message.`,
         variant: "destructive",
       })
     }
-
     recognition.onend = () => {
       setIsRecording(false)
     }
 
     try {
       recognition.start()
-
-      // Store recognition instance to stop it later
-      // @ts-ignore
       window.speechRecognition = recognition
-
       toast({
         title: "Recording Started",
         description: "Speak now. Your speech will be converted to text.",
         duration: 3000,
       })
     } catch (error) {
-      //console.error("Speech recognition start error:", error)
       setRecordingError("Failed to start recording")
       setIsRecording(false)
-
       toast({
         title: "Recording Failed",
         description: "Failed to start recording. Please try again or type your message.",
@@ -543,10 +441,8 @@ export function ChatInput() {
   }, [toast])
 
   const stopRecording = useCallback(() => {
-    // @ts-ignore
     if (window.speechRecognition) {
       try {
-        // @ts-ignore
         window.speechRecognition.stop()
         toast({
           title: "Recording Stopped",
@@ -554,7 +450,7 @@ export function ChatInput() {
           duration: 2000,
         })
       } catch (error) {
-        //console.error("Error stopping speech recognition:", error)
+        console.warn("Failed to stop recording:", error)
       }
     }
     setIsRecording(false)
@@ -588,7 +484,6 @@ export function ChatInput() {
   )
 
   const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0
-
   const removeFileAttachment = useCallback((index: number) => {
     setFileAttachments((prev) => prev.filter((_, i) => i !== index))
   }, [])
@@ -614,7 +509,6 @@ export function ChatInput() {
                 ))}
               </SelectContent>
             </Select>
-
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -633,9 +527,7 @@ export function ChatInput() {
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
-
           </div>
-
           <div className="flex items-center gap-2">
             {charCount > 0 && (
               <Badge
@@ -658,7 +550,6 @@ export function ChatInput() {
           </div>
         </div>
 
-
         {securityWarning && (
           <Alert variant="destructive" className="mb-2">
             <AlertTriangle className="h-4 w-4" />
@@ -677,7 +568,6 @@ export function ChatInput() {
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
         >
-          {/* Drag and drop overlay */}
           <AnimatePresence>
             {isDragging && (
               <motion.div
@@ -696,8 +586,6 @@ export function ChatInput() {
               </motion.div>
             )}
           </AnimatePresence>
-
-          {/* Processing overlay */}
           <AnimatePresence>
             {processingFile && (
               <motion.div
@@ -713,8 +601,6 @@ export function ChatInput() {
               </motion.div>
             )}
           </AnimatePresence>
-
-          {/* Recording indicator */}
           <AnimatePresence>
             {isRecording && (
               <motion.div
@@ -744,8 +630,6 @@ export function ChatInput() {
             multiple
             accept={SUPPORTED_FILE_TYPES.join(",")}
           />
-
-          {/* File attachments section */}
           {(fileAttachments.length > 0 || codeAttachments.length > 0) && (
             <div className="flex flex-wrap gap-2 p-2 bg-muted/30 rounded-md">
               {fileAttachments.map((file, index) => (
@@ -771,9 +655,7 @@ export function ChatInput() {
               ))}
             </div>
           )}
-
           <div className="flex gap-2">
-            {/* Upload button */}
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -798,7 +680,6 @@ export function ChatInput() {
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
-
             <Textarea
               ref={textareaRef}
               placeholder={`Ask a coding question or paste code here... Press ${isMac ? "⌘" : "Ctrl"}+Enter to send`}
@@ -811,7 +692,6 @@ export function ChatInput() {
               aria-label="Message input"
               disabled={isRecording}
             />
-
             <div className="flex gap-1">
               <TooltipProvider>
                 <Tooltip>
@@ -835,7 +715,6 @@ export function ChatInput() {
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
-
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -862,7 +741,6 @@ export function ChatInput() {
             </div>
           </div>
         </div>
-
         <div className="text-xs text-muted-foreground mt-1 flex items-center justify-between flex-wrap gap-2">
           <div className="flex items-center gap-2 flex-1">
             <FileUp className="h-3 w-3" />
@@ -879,7 +757,6 @@ export function ChatInput() {
             </Button>
           </div>
         </div>
-
         <AnimatePresence>
           {showPromptButtons && (
             <motion.div
@@ -906,7 +783,6 @@ export function ChatInput() {
             </motion.div>
           )}
         </AnimatePresence>
-
         <AnimatePresence>
           {showTemplates && (
             <motion.div
