@@ -7,7 +7,7 @@ CodeMasterPro is an advanced AI-powered coding assistant designed to elevate the
 
 ## Features
 
-- **Understanding User
+- **Understanding User** Understands user intentions - could be further enhanced
 - **AI-Powered Debugging:** Identifies potential errors and suggests fixes, streamlining the debugging process.
 - **Comprehensive Documentation:** Provides instant access to relevant documentation and examples, enhancing understanding and productivity.
 - **Customizable Settings:** Tailor CodeMasterPro to your specific coding style and preferences.
