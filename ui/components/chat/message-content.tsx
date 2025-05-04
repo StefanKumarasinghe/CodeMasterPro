@@ -26,6 +26,11 @@ const isDarkMode = () => {
   );
 };
 
+type TextBlockProps = {
+  content: string;
+  imageData?: string;
+};
+
 export interface SavedSnippet {
   id: string;
   name: string;
@@ -35,6 +40,7 @@ export interface SavedSnippet {
 
 interface MessageContentProps {
   content: string;
+  imageData: string;
   syntaxHighlighting: boolean;
   showLineNumbers: boolean;
   onCodeAction: (action: string, code: string, lang: string) => void;
@@ -129,7 +135,7 @@ const isHtmlCode = (code: string, lang: string): boolean => {
   return false;
 };
 
-const TextBlock = memo(({ content }: { content: string }) => {
+const TextBlock = memo(({ content, imageData }: TextBlockProps) => {
   const [hasError, setHasError] = useState(false);
 
   if (hasError) {
@@ -145,6 +151,14 @@ const TextBlock = memo(({ content }: { content: string }) => {
 
   return (
     <div className="w-full  break-words bg-card rounded-md my-4 prose prose-zinc dark:prose-invert max-w-none">
+      {imageData && (
+        <div>
+        <p className="text-xl font-bold mt-5 mb-3">Generated Visualization from Python</p>
+        <img className="w-100 my-3 rounded-md" src={imageData} alt="Visualization generated" />
+        <p className="text-md dark:text-green-400 bg-yellow-100 dark:bg-background inline  mx-auto text-red-600 my-3">Visualization generated may be incorrect, so use it with Caution</p>
+        </div>
+      )}
+   
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
@@ -491,6 +505,7 @@ TextBlock.displayName = "TextBlock";
 
 function MessageContent({
   content,
+  imageData,
   showLineNumbers,
   onCodeAction,
   isInteractive,
@@ -713,7 +728,7 @@ function MessageContent({
       const beforeCode = safeContent.slice(lastIndex, match.index).trim();
       if (beforeCode) {
         parts.push(
-          <TextBlock key={`text-${blockIndex}`} content={beforeCode} />
+          <TextBlock key={`text-${blockIndex}`} content={beforeCode} imageData={imageData} />
         );
         blockIndex++;
       }

@@ -118,6 +118,8 @@ const ChatMessage = memo(function ChatMessage({
   }, []);
   const isUser = message.role === "user";
   const messageContent = typeof message.content === "string" ? message.content : "";
+  const messageImage = typeof message.dataImage === "string" ? message.dataImage : ""
+
   const hasCodeBlocks = extractCodeBlocks(messageContent).length > 0;
   return (
     <div className={cn("flex gap-3 w-full", isUser ? "ml-auto justify-end text-right" : "text-left")}>
@@ -146,6 +148,7 @@ const ChatMessage = memo(function ChatMessage({
           <Suspense fallback={<div className="animate-pulse bg-muted h-24 rounded-md"></div>}>
             <MessageContent
               content={messageContent}
+              imageData={messageImage}
               syntaxHighlighting={syntaxHighlighting}
               showLineNumbers={showLineNumbers}
               onCodeAction={onCodeAction}

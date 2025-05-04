@@ -137,18 +137,33 @@ async def process_message(request: Request):
                 client_ip = request.client.host
                 session = await init_python_session(client_ip=client_ip)
                 code_check = str(msg.message) + "PAST MESSAGE : " + str(recent_messages)
-                code_check = "# I want to try your best to visualize the logs, or input data, use your best judgement to visualize the data. # Also if you can print the the important information and insights\n" + code_check
+                instruction = (
+                    "# I want you to try your best to visualize the logs or input data.\n"
+                    "# Use your best judgment to generate a visualization.\n"
+                    "# Save the image in a buffer and return it as a data URL:\n"
+                    "#   data:image/{gif or png};base64,<encoded_image>\n"
+                    "# Do NOT load or launch the app.\n"
+                )
+                code_check = instruction + code_check
+                
                 result = await run_python_code(CodePayload(
                     session_id=session["session_id"],
                     code=code_check if code_check else msg.message,
                 ))
+                print(result)
+                image_url = None
+                if "stdout" in result and isinstance(result["stdout"], str) and "data:" in result["stdout"]:
+                    image_url = result["stdout"]
+                    result["stdout"] = "Successfully returned the image URL. Stripped to reduce overhead."
+
                 result = await invoke_with_retry(analyse_changes_python_chain, {"result": result, "query": msg.message})
                 result = result.content.strip()
+                
                 process = False
                 mem.save_context({"input": msg.message}, {"output": result})
                 await close_python_session(SessionPayload(session_id=session["session_id"]))
 
-                return {"result": result, "chatId": msg.chatId}
+                return {"result": result, "chatId": msg.chatId, "image_url" :  image_url}
             except Exception as e:
                 gemini.logger.error(f"Python execution error: {e}")
                 process = False

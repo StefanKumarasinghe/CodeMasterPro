@@ -204,10 +204,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       }
 
       const data = await response.json();
-      append({
-        role: "assistant",
-        content: data.result,
-      });
+      if (data.image_url) {
+        append({
+          role: "assistant",
+          content: data.result,
+          dataImage: data.image_url
+        });
+      } else {
+        append({
+          role: "assistant",
+          content: data.result,
+        });
+      }
       setMcp("auto");
     } catch (error: any) {
       console.error("Failed to process message:", error);
@@ -219,6 +227,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setIsProcessing(false);
     }
   };
+
+ 
 
   const handleCodeAction = (
     action: string,

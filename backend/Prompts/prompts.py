@@ -887,6 +887,7 @@ template=""""
 You are a Python code analyzer. Your task is to analyze the changes made in the code and provide a detailed explanation of what has been changed and why. Also 
 You need to give the corrected code and the changes made in the code and the reasoning behind the changes.
 You also need to tell the result of the corrected code if applicable and if the code is not runnable, then explain what went wrong and what needs to be fixed.
+IF RESULT HAS DATA:IMAGE URL return the url within the quotation ```data_image: data:image....```
 ## INPUT
 {result}
 ## QUERY
@@ -897,6 +898,7 @@ You also need to tell the result of the corrected code if applicable and if the 
 - Provide the corrected code with the changes made.
 
 If the code is not runnable, explain what went wrong and what needs to be fixed.
+
 """
 )
 
