@@ -22,8 +22,93 @@ CodeMasterPro is an advanced AI-powered coding assistant designed to elevate the
 - **Brave API Key (Optional):** Enhances search capabilities. Obtain a free API key from [Brave Search API](https://brave.com/search/api/).
 
 
-## Chain of Thought
+## Main Chain of Thought
 ![image](https://github.com/user-attachments/assets/597b550e-105d-4cd0-9ee1-feac3db32f2e)
+
+### ✅ Overview
+
+The workflow follows a structured decision-making and response generation pipeline, enhanced by reinforcement learning and multi-model reasoning.
+
+---
+
+### ⚙️ 1. Tool Selection & Execution
+
+* Checks for an appropriate tool.
+* Executes it immediately if available for a fast, actionable response.
+
+---
+
+### 🧠 2. Sentiment & Behavior Analysis
+
+* Evaluates user sentiment and past interactions.
+* Skipped if no behavioral history exists.
+
+---
+
+### 🌐 3. Resource Retrieval
+
+* Fetches additional resources (e.g., web data, Stack Overflow, internal KBs) when needed.
+
+---
+
+### 🧬 4. Reinforcement Learning Feedback
+
+* Uses sentiment data to reward or penalize the RL agent.
+* Influences future decisions and model behaviors.
+
+---
+
+### 🧾 5. Response Generation
+
+* Combines sentiment, context, and history to produce an initial response.
+
+---
+
+### 🪞 6. Response Refinement
+
+* Enhances clarity, quality, and coherence of the response.
+
+---
+
+### 🧠 7. Multi-Model Reasoning
+
+* Invokes models like Gemini and others for deeper, more diverse insights based on reasoning level.
+
+---
+
+### ⚡ 8. Fast Path Return
+
+* Skips validation when speed is critical and returns the response immediately.
+
+---
+
+### 🔁 9. Quick Reasoning Path
+
+* Uses a lightweight reasoner.
+* Validates up to 3 times using the best prior answer.
+* Iterates without external model input.
+
+---
+
+### 🧩 10. Pro-Level Reasoning
+
+* Engages advanced models and third-party outputs.
+* Ensures broader context and selects the best response.
+
+---
+
+### 🧠 11. RL Agent Optimization
+
+* Continuously tunes the RL agent via rewards/penalties.
+* Chooses the optimal result after multiple iterations.
+
+---
+
+### 🎯 12. Greedy Optimization Strategy
+
+* Prioritizes the best possible outcome.
+* May settle early if minimum quality is met.
+
 
 
 ### Installation
