@@ -1,4 +1,4 @@
-# CodeMasterPro: A Refined Coding ChatGPT for Software Engineers
+# The Search For A Refined Coding ChatGPT for Software Engineers
 
 [![Docker Pulls](https://img.shields.io/docker/pulls/stefankumarasinghe/codemasterpro)](https://hub.docker.com/r/stefankumarasinghe/codemasterpro)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -29,31 +29,31 @@ CodeMasterPro is an advanced AI-powered coding assistant designed to elevate the
 
 ### Available Tools
 
-- **web** – Allows access to the internet. Prompt your queries with natural instructions like:  
+- **WEB** – Allows access to the internet. Prompt your queries with natural instructions like:  
   *“Search online how to create an MCP server.”*
 
-- **stack** – Searches Stack Overflow for developer-relevant answers and code examples.  
+- **STACK** – Searches Stack Overflow for developer-relevant answers and code examples.  
   Great for resolving language-specific or library-related issues.
 
-- **internal** – Searches internal documentation or knowledge bases, such as team wikis or private datasets.  
+- **INTERNAL** – Searches internal documentation or knowledge bases, such as team wikis or private datasets.  
   Use when your answer likely exists within internal sources.
 
-- **python** – Executes Python code in an isolated environment.  
+- **PYTHON** – Executes Python code in an isolated environment.  
   Useful for testing logic, calculations, or snippets.
 
-- **compute** – Handles complex mathematical computations or factorial operations.  
+- **COMPUTE** – Handles complex mathematical computations or factorial operations.  
   Example: *“What is 756!?”*
 
-- **visualize** – Transforms raw log data into charts or graphs.  
+- **VISUALIZE** – Transforms raw log data into charts or graphs.  
   Example: *“Provide logs and give me a visualization of CPU usage over time.”*
 
-- **sast** – Performs static application security testing (SAST) on Python code.  
+- **SAST** – Performs static application security testing (SAST) on Python code.  
   Detects vulnerabilities, bad patterns, and unsafe practices.
 
-- **lightning** – Delivers very fast answers to lightweight or fact-based questions.  
+- **LIGHTNING** – Delivers very fast answers to lightweight or fact-based questions.  
   Optimized for speed over deep reasoning.
   
-- **deep_analysis** - Analyses the large codes in detail, mostly 50000+ character codes
+- **DEEP ANALYSIS** - Analyses the large codes in detail, mostly 50000+ character codes
   Can you give me a deep anaysis of the code
   
 
@@ -189,8 +189,7 @@ Designed for deep analysis of large codebases, **CodeAnalystPro** excels at code
 * A **lightweight Gemini model** performs final polishing and cleanup.
 
 ## Python Chain 
-![image](https://github.com/user-attachments/assets/3c6f9d3d-2f6a-4de9-b535-c2aaefe126f0)
-
+![image](https://github.com/user-attachments/assets/d7a8a3a8-a970-4e23-bc17-24ab9b718c67)
 
 ### Installation
 
