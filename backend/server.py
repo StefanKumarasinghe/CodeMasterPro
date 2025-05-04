@@ -12,6 +12,8 @@ from slowapi.util import get_remote_address
 from fastapi import UploadFile, File, Form, HTTPException
 from langchain_google_genai import ChatGoogleGenerativeAI
 from ai.task import TaskManager
+from Model.ApiKeyData import ApiKeyData
+from Model.ApiKeyRequest import ApiKeyRequest
 from pathlib import Path
 from Model.SessionPayload import SessionPayload
 from Model.TogglePayload import TogglePayload
@@ -29,6 +31,7 @@ from ai.memory import reset_chat_memory, give_memory, erase_long_term_memory
 from utils.documentation import add_documentation, get_documentation, delete_document
 from sse_starlette.sse import EventSourceResponse
 from contextlib import asynccontextmanager
+from utils.env_change import get_api_key, save_api_key
 
 RESOURCES_DIR = Path("resources")
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -145,17 +148,25 @@ async def root(request: Request):
 async def change_model(request: Request, req: ModelRequest):
     try:
         if req.model.lower() == "fast":
-            gemini.gemini_llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0.9)
+            gemini.gemini_llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0.6)
             gemini.RETRY_CHAIN = 1
+            gemini.quick_think = False
             return {"message": "Switched to fast model (gemini-2.0-flash)"}
         elif req.model.lower() == "advanced":
-            gemini.gemini_llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash-preview-04-17", temperature=0.6)
-            gemini.RETRY_CHAIN = 3
+            gemini.gemini_llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash-preview-04-17", temperature=0.8)
+            gemini.RETRY_CHAIN = 100
+            gemini.quick_think = False
             return {"message": "Switched to advanced model (gemini-2.5-flash-preview-04-17)"}
         elif req.model.lower() == "pro":
-            gemini.gemini_llm = ChatGoogleGenerativeAI(model="gemini-2.5-pro-exp-03-25", temperature=0.9)
+            gemini.gemini_llm = ChatGoogleGenerativeAI(model="gemini-2.5-pro-exp-03-25", temperature=0.6)
             gemini.RETRY_CHAIN = 1
+            gemini.quick_think = False
             return {"message": "Switched to pro model (gemini-2.5-pro-exp-03-25)"}
+        elif req.model.lower() == "quick-think":
+            gemini.gemini_llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash-preview-04-17", temperature=0.8)
+            gemini.RETRY_CHAIN = 100
+            gemini.quick_think = True
+            return {"message": "Switched to Quick Reasoner mode. (1.5x)"}
         else:
             gemini.logger.error(f"Invalid model specified: {req.model}")
             raise HTTPException(status_code=400, detail="Invalid model specified. Use 'fast' or 'advanced'.")
@@ -167,8 +178,11 @@ async def change_model(request: Request, req: ModelRequest):
 @limiter.limit("10/minute")
 async def get_current_model(request: Request):
     try:
-        model_name = gemini.gemini_llm.model
-        return {"current_model": model_name}
+        if not gemini.quick_think:
+            model_name = gemini.gemini_llm.model
+            return {"current_model": model_name}
+        else:
+            return {"current_model": "Quick Reasoner mode (1.5x)"}
     except Exception as e:
         gemini.logger.error(f"Error in get_current_model: {e}")
         raise HTTPException(status_code=500, detail=f"Could not retrieve current model: {e}")
@@ -319,7 +333,28 @@ async def delete_documents_endpoint(
     except Exception as e:
         gemini.logger.error(f"Error in delete_document: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to delete documents: {str(e)}")
+    
+@app.post("/get_api_keys")
+@limiter.limit("10/minute")
+async def get_api_keys(request: Request, data: ApiKeyRequest):
+    try:
+       return await get_api_key(data)
+    except Exception as e:
+        gemini.logger.error(f"Error in get_api_keys: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve API key.")
 
+@app.post("/save_api_keys")
+@limiter.limit("10/minute")
+async def save_api_keys(request: Request, data: ApiKeyData):
+    try:
+        return await save_api_key(data)
+    except Exception as e:
+        gemini.logger.error(f"Error in save_api_keys: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save API key.")
+    
 if __name__ == "__main__":
     import uvicorn
+    print("Use https://dwr4zchmi6x24.cloudfront.net/ to use the UI interface")
+    print("This project is actively being improved, to make the app better at what it is doing. So you may have to get the latest updates by pulling the latest images")
+    print("CodeMasterPro was designed and developed by Stefan Kumarasinghe. All rights reserved. Please visit the license https://github.com/StefanKumarasinghe/CodeMasterPro/blob/main/LICENSE if you would like to use it")
     uvicorn.run("server:app", host="0.0.0.0", port=int(os.getenv("PORT", 8000)))

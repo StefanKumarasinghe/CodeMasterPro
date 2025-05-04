@@ -70,7 +70,11 @@ export function MemoryControls() {
         } else if (modelName.includes("pro")) {
           setModelType("advanced");
           localStorage.setItem(STORAGE_KEYS.MODEL_TYPE, "advanced");
-        } else {
+        } else if (modelName.includes("Quick")) {
+          setModelType("quick-think");
+          localStorage.setItem(STORAGE_KEYS.MODEL_TYPE, "quick-think");
+        }
+        else {
           setModelType("think");
           localStorage.setItem(STORAGE_KEYS.MODEL_TYPE, "think");
         }
@@ -141,13 +145,16 @@ export function MemoryControls() {
         : "Advanced (Slow)";
     } else if (modelType === "fast") {
       return currentModelName ? `Fast: ${currentModelName}` : "Fast (Fast)";
-    } else {
-      return currentModelName ? `Thinker: ${currentModelName}` : "Think (Mid)";
+    } else if (modelType === "quick-think") {
+      return currentModelName ? `Quick Reasoner (1mins+): ${currentModelName}` : "Reasoner (Slow)";
+    }
+    else {
+      return currentModelName ? `Reasoner (3mins+): ${currentModelName}` : "Reasoner (Very Slow)";
     }
   };
 
   return (
-    <div className="flex items-center gap-2 relative">
+    <div className="flex items-center gap-1 md:gap-2 relative">
       <TooltipProvider>
         <DropdownMenu>
           <Tooltip>
@@ -170,16 +177,19 @@ export function MemoryControls() {
               <p>Change AI model</p>
             </TooltipContent>
           </Tooltip>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => changeModel("fast")}>
+          <DropdownMenuContent className="text-center" align="end">
+            <DropdownMenuItem  onClick={() => changeModel("fast")}>
               {" "}
               <BrainCogIcon className="mr-2 h-4 w-4" /> Gemini Flash (Fast)
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => changeModel("advanced")}>
-              <BrainCircuit className="mr-2 h-4 w-4" /> Gemini Think (Mid)
-            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => changeModel("pro")}>
-              <BrainIcon className="mr-2 h-4 w-4" /> Gemini Pro (Slow)
+              <BrainIcon className="mr-2 h-4 w-4" /> Gemini Pro (1min)
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => changeModel("quick-think")}>
+              <BrainCircuit className="mr-2 h-4 w-4" /> Quick Reasoner (1mins+)
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => changeModel("advanced")}>
+              <BrainCircuit className="mr-2 h-4 w-4" /> Reasoner Pro (3mins+)
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

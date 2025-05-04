@@ -20,3 +20,5 @@ python-pptx
 pytesseract
 sse-starlette
 scikit-learn
+setuptools>=70.0.0
+

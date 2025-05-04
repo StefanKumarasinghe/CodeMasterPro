@@ -67,7 +67,6 @@ async def analyze_chunk(
                 gemini.logger.warning(f"Invalid validation score format: {validate['text']}")
                 score = 0
 
-            print(f"Validation score: {score}")
             gemini.logger.debug(f"[Retry {retries + 1}] Validation score for chunk {index}: {score}")
 
             if score > 90:
@@ -124,7 +123,6 @@ async def code_analysis(
     code_input_temp = code_input[:100] + code_input[-100:]
     intent = await analyze_user_intent(code_input_temp)
     await set_update(" Understanding your intent..." + intent[:500])
-    print(f"User intent: {intent}")
     
     code_chunks = await break_code_into_chunks(code_input)
     
@@ -181,7 +179,7 @@ async def code_analysis(
 
         gemini.logger.info("Generating final explanation/combined output...")
         explanation_result = await invoke_with_retry(reword_chain, explanation_input)
-        return str(explanation_result.content).strip()
+        return str(explanation_result.content.strip())
 
     else:
         gemini.logger.warning(f"Unknown output format: {output_format}. Defaulting to codeOnly.")

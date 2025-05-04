@@ -46,12 +46,16 @@ async def run_code_in_shell(cmd: list, timeout: int = 10, cwd: str = None, env: 
         return "", f"Execution failed: {str(e)}"
 
 
-async def init_python_session(request: Request):
-    client_ip = request.client.host
+async def init_python_session(request: Request = None, client_ip: str = None):
+    if request:
+        client_ip = request.client.host
+    elif not client_ip:
+        raise ValueError("Either `request` or `client_ip` must be provided.")
     for session_id, info in SESSION_MAP.items():
         if info.get("client_ip") == client_ip:
             info["created_at"] = time.time()
             return {"session_id": session_id, "reused": True}
+
     try:
         temp_dir = tempfile.mkdtemp()
         venv_path = os.path.join(temp_dir, "venv")
@@ -67,9 +71,10 @@ async def init_python_session(request: Request):
         return {"session_id": session_id, "reused": False}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create session: {str(e)}")
-
+    
 async def run_python_code(payload: CodePayload):
     session = SESSION_MAP.get(payload.session_id)
+    
     if not session:
         raise HTTPException(status_code=404, detail="Invalid session_id")
 
@@ -132,6 +137,8 @@ async def run_python_code(payload: CodePayload):
             runnable_code = fixed_code
             installed_packages += await install_requirements(runnable_code)
             stdout, stderr = await write_and_run(runnable_code)
+            if "terminated" in stdout.lower():
+                break
         except Exception:
             break
         attempt += 1

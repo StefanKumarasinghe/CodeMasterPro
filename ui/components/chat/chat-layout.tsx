@@ -6,7 +6,7 @@ import { ChatInput } from "./chat-input"
 
 export function ChatLayout() {
   return (
-    <div className="flex flex-col h-[calc(100vh-3.5rem)] md:h-screen w-full max-w-full overflow-hidden">
+    <div className="flex flex-col md:h-screen w-full max-w-full overflow-hidden">
       <ChatHeader />
       <ChatMessageList />
       <ChatInput />

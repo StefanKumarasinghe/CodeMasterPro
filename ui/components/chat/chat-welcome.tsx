@@ -4,11 +4,12 @@ import type React from "react";
 import { FaDocker } from "react-icons/fa";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import {Terminal,Code,Zap,Sliders,MousePointerClick,LayoutTemplate,ShieldCheck,Lightbulb,Sparkles,Keyboard,BrainIcon,PlayCircle} from "lucide-react";
+import {Terminal,Code,Zap,Sliders,MousePointerClick,LayoutTemplate,ShieldCheck,Lightbulb,Sparkles,Keyboard,PlayCircle} from "lucide-react";
 import { APP_NAME } from "@/config/constants";
 import { API_ENDPOINT } from "@/config/constants";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import BinaryCodeBrainEffect from "./Brain";
 import { useChat } from "@/context/chat-context";
 
 const EXAMPLE_PROMPTS = [
@@ -58,7 +59,7 @@ const EXAMPLE_PROMPTS = [
 export function ChatWelcome() {
   const [serverStatus, setServerStatus] = useState(false);
   const [dockerRunCommand, setDockerRunCommand] = useState(
-    "docker run -e GOOGLE_API_KEY=TOKEN -e BRAVE_API_KEY=TOKEN -p 8000:8000 stefankumarasinghe/codemasterpro"
+    "docker run -e GOOGLE_API_KEY=TOKEN -p 8000:8000 stefankumarasinghe/codemasterpro"
   );
   const [activeTab, setActiveTab] = useState<"features" | "examples">(
     "features"
@@ -136,21 +137,21 @@ export function ChatWelcome() {
           </p>
         </div>
       </motion.div>
-      <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ duration: 0.5 }}
-        className="rounded-full flex items-center justify-center mb-6"
-      >
-        <BrainIcon className="h-20 w-20 text-black font-light" />
-      </motion.div>
+      <BinaryCodeBrainEffect
+        className="h-20 w-20 text-black font-light dark:text-white"
+        animationDuration={0.5}
+        generationInterval={1000}
+        particleLimit={50}
+        particleSize="text-sm"
+        codeColor="text-green-500 dark:text-green-400"
+      />
       <motion.h1
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.2, duration: 0.5 }}
         className="text-3xl font-bold mb-2"
       >
-        Hey there! I am {APP_NAME}
+        The CodeMaster Returns
       </motion.h1>
       <motion.p
         initial={{ y: 20, opacity: 0 }}
@@ -220,13 +221,13 @@ export function ChatWelcome() {
               />
               <FeatureCard
                 icon={<LayoutTemplate className="h-5 w-5 text-primary" />}
-                title="Run HTML codes"
-                description="To get a preview of your HTML, click run"
+                title="Multi-Agent System"
+                description="We integrate with other models to enhance the code generation process to it's extraordinary level. This is for super reasoning"
               />
               <FeatureCard
                 icon={<PlayCircle className="h-5 w-5 text-primary" />}
-                title="Run Python codes"
-                description="We run Python codes using a venv and return the result, the python uses a retry mechanism that self-corrects"
+                title="Run Codes"
+                description="We run Python codes using a venv and return the result, the python uses a retry mechanism that self-corrects and HTML codes are run using a webview"
               />
               <FeatureCard
                 icon={<ShieldCheck className="h-5 w-5 text-primary" />}
@@ -295,7 +296,7 @@ export function ChatWelcome() {
           className="text-base text-muted-foreground max-w-full"
         >
           <FaDocker className="h-16 w-16 text-primary inline-block mr-4" />
-          <p className="mb-6 text-lg">
+          <p className="mb-6  text-xs md:text-lg">
             You will need to download the Docker image to run the backend server
             locally.
           </p>
@@ -303,11 +304,11 @@ export function ChatWelcome() {
             href="https://hub.docker.com/repository/docker/stefankumarasinghe/codemasterpro"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-blue-600 hover:underline font-bold text-lg transition-colors"
+            className="text-blue-600 hover:underline font-bold text-xs md:text-lg transition-colors"
           >
             docker pull stefankumarasinghe/codemasterpro
           </a>
-          <div className="flex justify-center mt-6">
+          <div className="flex justify-center text-xs md:text--lg mt-6">
             <p>{dockerRunCommand}</p>
           </div>
         </motion.div>

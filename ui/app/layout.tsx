@@ -45,7 +45,7 @@ export default function Layout({ children }: { children: ReactNode }) {
                           <Terminal className="mr-2 h-4 w-4" />
                           Coding Assistant
                         </button>
-                        <a href={"https://github.com/https://github.com/StefanKumarasinghe/CodeMasterPro/blob/main/README.md/CodeMasterPro/wiki/"} className="flex items-center w-full px-3 py-2 text-sm rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">
+                        <a href={"https://github.com/StefanKumarasinghe/CodeMasterPro/blob/main/README.md"} className="flex items-center w-full px-3 py-2 text-sm rounded-md hover:bg-accent hover:text-accent-foreground transition-colors">
                           <BookOpen className="mr-2 h-4 w-4" />
                           Documentation
                         </a>
@@ -66,7 +66,7 @@ export default function Layout({ children }: { children: ReactNode }) {
                   </SidebarContent>
                 </Sidebar>
                 <div className="flex-1 flex flex-col overflow-hidden relative">
-                  <div className="flex-1 flex flex-col overflow-hidden">{children}</div>
+                  <div className="flex-1 flex overflow-hidden h-100">{children}</div>
                 </div>
               </div>
             </SidebarProvider>

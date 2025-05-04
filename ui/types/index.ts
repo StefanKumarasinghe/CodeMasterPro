@@ -36,6 +36,7 @@ export interface ClientInfo {
 export interface ApiRequest {
   message: string
   language?: string
+  mcp?: string
   outputFormat?: string
   codeQuality?: {
     linting?: boolean
@@ -94,6 +95,8 @@ export interface ChatContextType {
   error?: string | null
   currentChatId: string
   lastAutoSave?: Date | null
+  mcp?: string
+  setMcp: (mcp: string) => void
 }
 
 export interface ValidationResult {

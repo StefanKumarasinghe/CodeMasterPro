@@ -311,7 +311,7 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
             item.type === "command"
               ? "text-blue-400"
               : item.type === "system"
-                ? "text-gray-400 italic"
+                ? "text-gray-400 "
                 : "text-zinc-300",
           )}
         >
@@ -361,17 +361,17 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
             {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           </Button>
           {sessionId && (
-            <Badge variant="outline" className="text-xs bg-blue-900/30 text-blue-300 border-blue-700 truncate max-w-[250px]">
+            <Badge variant="outline" className="text-xs bg-blue-900/30 text-blue-300 border-blue-700 truncate max-w-[200px]">
               Session: {sessionId}
             </Badge>
           )}
-          <Badge variant="outline" className="position-fixed text-md bg-amber-900/30 text-amber-300 border-amber-700">
+          <Badge variant="outline" className="position-fixed text-xs bg-amber-900/30 text-amber-300 border-amber-700">
             <Clock className="h-3 w-3 mr-1" />
             {formatTimeRemaining()}
           </Badge>
         </div>
         <div className="flex items-center gap-1">
-          <Button variant="link" className="text-red-600" onClick={handleClose}>
+          <Button variant="link" className="text-red-500" onClick={handleClose}>
             Close session
           </Button>
         </div>
@@ -380,9 +380,9 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
       <div className="flex items-center p-2 border-b border-zinc-700 bg-zinc-800">
         <div className="flex items-center gap-1">
           <Button
-            variant="ghost"
+            variant="link"
             size="sm"
-            className="h-8 gap-1 bg-green-600 border-none text-white"
+            className="h-8 gap-1 border-none text-green-500"
             onClick={runCode}
             disabled={isRunning || !sessionId}
           >
@@ -391,9 +391,9 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
           </Button>
 
           <Button
-            variant="ghost"
+            variant="link"
             size="sm"
-            className="h-8 gap-1 bg-blue-300 text-black "
+            className="h-8 gap-1  text-purple-400 "
             onClick={askTarsAboutError}
             disabled={outputHistory.length === 0}
           >
@@ -402,9 +402,9 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
           </Button>
           {output?.corrected_code && (
             <Button
-              variant="ghost"
+              variant="link"
               size="sm"
-              className="h-8 gap-1 bg-yellow-500 text-white"
+              className="h-8 gap-1 text-yellow-400"
               onClick={() => setShowCorrectedCode(!showCorrectedCode)}
             >
               Corrected Code
@@ -442,7 +442,7 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
 
       <div
         ref={outputRef}
-        className="flex-1 p-3 overflow-auto font-mono text-sm text-zinc-300 whitespace-pre-wrap bg-zinc-900"
+        className="flex-1 p-3 overflow-auto text-sm text-zinc-300 whitespace-pre-wrap bg-zinc-900"
       >
         {showCorrectedCode && output?.corrected_code ? (
           <div>
@@ -481,7 +481,7 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
             value={command}
             onChange={(e) => setCommand(e.target.value)}
             className="flex-1 bg-zinc-800 border-none outline-none text-sm text-zinc-300 font-mono min-h-[60px] resize-y"
-            placeholder="Enter Python commands (Ctrl+Enter to execute)..."
+            placeholder="Enter Python commands or prompts, TARS will automatically try validate and fix them."
             disabled={!sessionId}
           />
         ) : (

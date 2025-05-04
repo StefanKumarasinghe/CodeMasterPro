@@ -29,6 +29,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const [currentChatId, setCurrentChatId] = useState<string>(uuidv4());
   const [lastAutoSave, setLastAutoSave] = useState<Date | null>(null);
+  const [mcp, setMcp] = useState<string>("auto");
 
   const {
     messages,
@@ -170,6 +171,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       const request = prepareApiRequest(
         messageInput,
         language,
+        mcp,
         preferences,
         customPrompt,
         personalInfo
@@ -206,6 +208,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         role: "assistant",
         content: data.result,
       });
+      setMcp("auto");
     } catch (error: any) {
       console.error("Failed to process message:", error);
       setError(error.message || "An unknown error occurred");
@@ -343,6 +346,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     error,
     currentChatId,
     lastAutoSave,
+    setMcp,
+    mcp,
   };
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

@@ -45,7 +45,7 @@ async def add_documentation(
             await save_resource(content=documentation_text, folder_name="resources")
         if documentation_links:
             try:
-                links = json.loads(json.dumps(json.loads(documentation_links)))
+                links = json.loads(documentation_links)
                 if not isinstance(links, list):
                     raise ValueError("documentation_links must be a list of URLs.")
                 for link in links:

@@ -67,7 +67,7 @@ async def save_resource(content: str, folder_name: str, filename: str = "raw.txt
         raw_md = markdown_output.content
         json_str = raw_md.replace("```json", "").replace("```", "").strip()
         try:
-            json_output = json.loads(json.dumps(json.loads(json_str)))
+            json_output = json.loads(json_str)
         except json.JSONDecodeError:
             gemini.logger.error("Failed to parse JSON from markdown output. Using alternative method.")
             json_output = {

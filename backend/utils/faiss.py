@@ -146,13 +146,13 @@ async def parse_json_response(response: str) -> dict:
         if text.endswith(suffix):
             text = text[:-len(suffix)].strip()
     try:
-        return json.loads(json.dumps(json.loads(text)))
+        return json.loads(text)
     except json.JSONDecodeError as e:
         gemini.logger.error(f"JSON parsing error: {e}, Response: {text[:100]}...")
         raise ValueError(f"Invalid JSON response: {e}")
 
 async def web_search(query: str, msg: MessageRequest) -> List[Dict[str, Any]]:
-    links = await brave_search(query, count=5)
+    links = await brave_search(query, count=10)
     await set_update("Searching Brave for relevant information... " + str(links))
     if not links:
         raise ValueError("No results from Brave Search")
@@ -162,6 +162,7 @@ async def web_search(query: str, msg: MessageRequest) -> List[Dict[str, Any]]:
     parsed_result = await parse_json_response(json_result)
     web_results = extract_all_articles(parsed_result)
     web_results = await invoke_with_retry(cleaned_search_result_chain, {"query": query, "answer": str(web_results)})
+    web_results = web_results.content.strip()
     if not web_results:
         raise ValueError("No content extracted from search results")   
     success = await save_resource(str(web_results), RESOURCES_FOLDER)
@@ -364,11 +365,11 @@ async def local_search(query: str, k: int = 2, min_relevance_threshold: float = 
             )
     return "\n\n".join(results)
 
-async def search_resources(query: str, msg: MessageRequest, k: int = 3) -> str:
+async def search_resources(query: str, msg: MessageRequest, tool, k: int = 3) -> str:
     if not query or len(query.strip()) < MIN_QUERY_LENGTH:
         return "Query is too short. Please provide a more detailed question."
     try:
-        if gemini.web_flag_state.get("enabled", False):
+        if gemini.web_flag_state.get("enabled", False) or tool == "web":
             try:
                 return await web_search(query, msg)
             except ValueError as e:

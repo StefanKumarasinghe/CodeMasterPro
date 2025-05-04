@@ -15,10 +15,11 @@ COPY ai/ /app/ai/
 COPY Prompts/ /app/Prompts/
 COPY Model/ /app/Model/
 COPY config/ /app/config/
-COPY index_store/ /app/index_store/
 COPY cache/ /app/cache/
 COPY logs/ /app/logs/
 COPY resources/ /app/resources/
+COPY index_store/ /app/index_store/
+
 EXPOSE 8000
 CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]
     

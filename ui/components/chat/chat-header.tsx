@@ -53,7 +53,7 @@ export function ChatHeader() {
   return (
     <>
       <header className="h-14 border-b overflow-x-auto px-4 flex md:flex items-center justify-between">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-1 md:gap-4">
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>

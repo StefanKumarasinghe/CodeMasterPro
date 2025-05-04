@@ -29,18 +29,16 @@ async def get_process_summary():
         return f"Summarization failed: {chain_error} | Fallback also failed: {chain_error}"
 
 
-async def event_generator(timeout: float = 120.0):
+async def event_generator(timeout: float = 300.0):
     global updates, process
     updates = None
     process = True
     last_update_hash = None
-    start_time = asyncio.get_event_loop().time()
 
     while process:
         try:
             await asyncio.wait_for(updates_event.wait(), timeout=timeout)
         except asyncio.TimeoutError:
-            print("Timeout expired.")
             process = False
             break
         updates_event.clear()

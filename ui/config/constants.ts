@@ -1,3 +1,5 @@
+import { Label } from "recharts"
+
 export const API_ENDPOINT = "http://127.0.0.1:8000"
 export const APP_NAME = "Tars"
 export const APP_VERSION = "v1.1.1"
@@ -17,6 +19,17 @@ export const LANGUAGE_OPTIONS = [
   { value: "kotlin", label: "Kotlin" },
   { value: "sql", label: "SQL" },
   { value: "html", label: "HTML/CSS" },
+]
+
+export const MCP_OPTIONS = [
+  { value: "compute", label: "Compute" },
+  { value: "python", label: "PyRun" },
+  { value: "sast", label: "Bandit" },
+  { value: "visualize", label: "Visualize" },
+  { value: "quick", label: "Lightning" },
+  { value: "deep_analysis", label: "Deep Analysis" },
+  { value: "auto", label: "Auto Detect" },
+
 ]
 
 export const STORAGE_KEYS = {

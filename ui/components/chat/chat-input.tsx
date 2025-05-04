@@ -8,7 +8,7 @@ import {Lightbulb,Send,FileUp,Upload,Code,Zap,Bug,RefreshCw,Braces,FileCode,Wand
 import { OutputFormatToggle } from "./output-format-toggle"
 import { useState, useRef, useEffect, useCallback } from "react"
 import { useChat } from "@/context/chat-context"
-import { LANGUAGE_OPTIONS } from "@/config/constants"
+import { MCP_OPTIONS } from "@/config/constants"
 import type React from "react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Badge } from "@/components/ui/badge"
@@ -53,8 +53,9 @@ export function ChatInput() {
 
   const {
     language,
-    setLanguage,
     preferences,
+    mcp,
+    setMcp,
     setPreferences,
     isLoading,
     handleSubmit,
@@ -106,10 +107,6 @@ export function ChatInput() {
           try {
             const content = await readFileAsText(file)
             const fileLanguage = detectLanguage(file.name)
-
-            if (fileLanguage && fileLanguage !== "plaintext") {
-              setLanguage(fileLanguage)
-            }
             const codeBlock = `File: ${file.name}\n\n\`\`\`${fileLanguage}\n${content}\n\`\`\``
             newAttachments.push({
               fileName: file.name,
@@ -146,7 +143,7 @@ export function ChatInput() {
         setProcessingFile(false)
       }
     },
-    [toast, setLanguage],
+    [toast],
   )
 
   useEffect(() => {
@@ -179,9 +176,6 @@ export function ChatInput() {
         const code = e.detail.code
         const lang = e.detail.language || detectCodeLanguage(code) || "plaintext"
         const fileName = e.detail.fileName || `snippet.${lang}`
-        if (lang && lang !== "plaintext") {
-          setLanguage(lang)
-        }
         setCodeAttachments((prev) => [
           ...prev,
           {
@@ -204,7 +198,7 @@ export function ChatInput() {
     }
     window.addEventListener("use-code", handleUseCode as EventListener)
     return () => window.removeEventListener("use-code", handleUseCode as EventListener)
-  }, [toast, setLanguage])
+  }, [toast])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -292,7 +286,7 @@ export function ChatInput() {
         })
       }
     },
-    [messageInput, charCount, toast, setLanguage],
+    [messageInput, charCount, toast],
   )
 
   const handlePaste = useCallback(
@@ -328,7 +322,7 @@ export function ChatInput() {
         }
       }
     },
-    [messageInput, toast, setLanguage],
+    [messageInput, toast],
   )
 
   const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
@@ -494,20 +488,21 @@ export function ChatInput() {
 
   return (
     <div className="p-2 sm:p-4 border-t">
-      <div className="flex flex-col gap-2 mx-auto">
+      <div className="flex flex-col gap-1 mx-auto">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
           <div className="flex flex-wrap items-center gap-2">
-            <Select value={language} onValueChange={setLanguage}>
-              <SelectTrigger className="w-[120px] sm:w-[140px] h-8">
-                <SelectValue placeholder="Select Language" />
-              </SelectTrigger>
-              <SelectContent>
-                {LANGUAGE_OPTIONS.map((option) => (
+            <Select value={mcp} onValueChange={setMcp}>
+                <SelectTrigger className="w-[120px] sm:w-[140px] h-8">
+                <SelectValue placeholder="✨ MCP ✨" />
+                </SelectTrigger>
+                <SelectContent>
+                {MCP_OPTIONS.map((option) => (
                   <SelectItem key={option.value} value={option.value}>
-                    {option.label}
+                  {option.label}
                   </SelectItem>
                 ))}
-              </SelectContent>
+                
+                </SelectContent>
             </Select>
             <TooltipProvider>
               <Tooltip>
@@ -525,6 +520,19 @@ export function ChatInput() {
                 <TooltipContent>
                   <p>Browse code templates</p>
                 </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 text-xs gap-1"
+                    onClick={() => setShowPromptButtons(!showPromptButtons)}
+                  >
+                    <Braces className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Quick Actions</span>
+                  </Button>
+                </TooltipTrigger>
               </Tooltip>
             </TooltipProvider>
           </div>
@@ -682,8 +690,8 @@ export function ChatInput() {
             </TooltipProvider>
             <Textarea
               ref={textareaRef}
-              placeholder={`Ask a coding question or paste code here... Press ${isMac ? "⌘" : "Ctrl"}+Enter to send`}
-              className="min-h-[44px] max-h-32 flex-1 resize-none"
+              placeholder={`How can I help you... Press ${isMac ? "⌘" : "Ctrl"}+Enter to send`}
+              className="min-h-[44px] max-h-10 md:max-h-32 flex-1 resize-none"
               value={messageInput}
               onChange={handleInputChange}
               autoFocus={true}
@@ -739,22 +747,6 @@ export function ChatInput() {
                 </Tooltip>
               </TooltipProvider>
             </div>
-          </div>
-        </div>
-        <div className="text-xs text-muted-foreground mt-1 flex items-center justify-between flex-wrap gap-2">
-          <div className="flex items-center gap-2 flex-1">
-            <FileUp className="h-3 w-3" />
-            <span>Drag & drop files or paste code for automatic formatting</span>
-          </div>
-          <div className="flex justify-end flex-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 px-2 text-xs"
-              onClick={() => setShowPromptButtons(!showPromptButtons)}
-            >
-              {showPromptButtons ? "Hide Prompts" : "Show Prompts"}
-            </Button>
           </div>
         </div>
         <AnimatePresence>

@@ -3,6 +3,7 @@ import type { ApiRequest, Preferences } from "@/types"
 export function prepareApiRequest(
   message: string,
   language: string,
+  mcp: string,
   preferences: Preferences,
   customPrompt?: string,
   personalInfo?: string,
@@ -10,6 +11,7 @@ export function prepareApiRequest(
   return {
     message,
     language,
+    mcp,
     outputFormat: preferences.outputFormat,
     codeQuality: preferences.codeQuality,
     syntaxHighlighting: preferences.syntaxHighlighting,

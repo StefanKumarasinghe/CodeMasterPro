@@ -5,12 +5,14 @@ from Prompts.prompts import rank_chain, refine_search_stack_chain, cleaned_searc
 from utils.invoke_retry import invoke_with_retry
 import json
 import config.tars as gemini
+from utils.updates import set_update
 
 shared_client = httpx.AsyncClient(timeout=15)
 
 async def search_stackoverflow(query, sort='votes'):
     try:
         refine_query = await invoke_with_retry(refine_search_stack_chain, {"query": query})
+        refine_query = refine_query.content.strip()
         url = "https://api.stackexchange.com/2.3/search/advanced"
         params = {
             "order": "desc",
@@ -39,7 +41,7 @@ async def rank_with_gemini(questions, user_query):
         response = result.content.strip()
         response = response.replace("```json", "").replace("```", "")
         clean_json = response
-        parsed = json.loads(json.dumps(json.loads(clean_json)))
+        parsed = json.loads(clean_json)
         ranked_indices = parsed["ranked_questions"]
         return ranked_indices
 
@@ -69,6 +71,7 @@ async def clean_html_answer(answer_html):
 
 async def search_stackoverflow_and_rank(user_query):
     questions = await search_stackoverflow(user_query)
+    await set_update("Fetching StackOverflow results")
     if not questions:
         return []
     ranked_questions = await rank_with_gemini(questions, user_query)

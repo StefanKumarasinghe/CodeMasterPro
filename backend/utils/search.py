@@ -12,7 +12,7 @@ import config.tars as gemini
 BASE_URL = gemini.BRAVE_URL
 API_KEY = gemini.BRAVE_API_KEY
 
-async def brave_search(query: str, count: int = 6) -> List[dict]:
+async def brave_search(query: str, count: int =10) -> List[dict]:
     headers = {"Accept": "application/json","X-Subscription-Token": API_KEY}
     if len(query) > 200:
         result = await invoke_with_retry(refine_search_chain, {"query": query})
@@ -70,7 +70,7 @@ def extract_article_data(url: str) -> dict | None:
         body = soup.body or soup
         content = [str(tag) for tag in body.find_all(target_tags) if is_meaningful(tag)]
         if not content:
-            print(f"No meaningful content found in {url}")
+            gemini.logger.warning(f"No meaningful content found in {url}")
             return None
         markdown = html_to_markdown("\n".join(content)).strip()
         return {

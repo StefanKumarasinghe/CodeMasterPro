@@ -53,11 +53,9 @@ const PreformattedCode = ({
   darkMode = true,
 }: PreformattedCodeProps) => {
   const style = isDarkMode() ? oneDark : oneLight;
+  const lowerCasedLang = language.toLowerCase();
   if (
-    language === "Block" ||
-    language === "plaintext" ||
-    language === "text" ||
-    language === "Markdown"
+      ["block", "plaintext", "markdown", "text", "general", "codeandexplanation"].includes(lowerCasedLang)
   ) {
     return <pre className="bg-muted text-lg p-4 rounded-md my-4">{code}</pre>;
   } else {
@@ -732,11 +730,9 @@ function MessageContent({
         code = code.substring(firstLineBreak + 1).trim();
       }
     }
+    const lowerCasedLang = lang.toLowerCase();
     if (
-      lang === "Block" ||
-      lang === "plaintext" ||
-      lang === "Markdown" ||
-      lang === "text"
+      ["block", "plaintext", "markdown", "text", "general", "codeandexplanation"].includes(lowerCasedLang)
     ) {
       parts.push(<Markdown>{code}</Markdown>);
     } else {

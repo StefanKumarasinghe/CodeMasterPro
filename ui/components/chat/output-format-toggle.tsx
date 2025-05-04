@@ -155,7 +155,7 @@ export function OutputFormatToggle({ value, onChange }) {
               onClick={() => onChange("codeAndExplanation")}
             >
               <CodepenIcon className="h-4 w-4" />
-              <span className="sr-only md:not-sr-only md:inline-block">Code & Explanation</span>
+              <span className="sr-only md:not-sr-only md:inline-block">Balanced</span>
             </Button>
           </TooltipTrigger>
           <TooltipContent>
