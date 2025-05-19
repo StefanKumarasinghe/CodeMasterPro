@@ -84,7 +84,7 @@ export function QuickActionBar({
 
   return (
     <TooltipProvider>
-      <div className="flex items-center gap-1 overflow-x-auto pb-2 scrollbar-hide overflow-y-hidden">
+      <div className="flex items-center gap-1 overflow-x-auto pb-2 scrollbar-hide  overflow-y-hidden">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button

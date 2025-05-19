@@ -1,28 +1,41 @@
 import httpx
 import asyncio
 from bs4 import BeautifulSoup
-from Prompts.prompts import rank_chain, refine_search_stack_chain, cleaned_search_result_chain
-from utils.invoke_retry import invoke_with_retry
 import json
+from typing import List, Dict, Any, Optional
+from functools import lru_cache
+
+from ai.model_switcher import rank_chain, refine_search_stack_chain, cleaned_search_result_chain
+from utils.invoke_retry import invoke_with_retry
 import config.tars as gemini
-from utils.updates import set_update
 
 shared_client = httpx.AsyncClient(timeout=15)
 
-async def search_stackoverflow(query, sort='votes'):
+@lru_cache(maxsize=128)
+async def refine_query(query: str) -> str:
+    result = await invoke_with_retry(
+        refine_search_stack_chain(
+            model_type=gemini.modelType, 
+            provider_type=gemini.providerName
+        ), 
+        {"query": query}
+    )
+    return result.content.strip()
+
+async def search_stackoverflow(query: str, sort: str = 'votes') -> List[Dict[str, Any]]:
     try:
-        refine_query = await invoke_with_retry(refine_search_stack_chain, {"query": query})
-        refine_query = refine_query.content.strip()
+        refined_query = await refine_query(query)
         url = "https://api.stackexchange.com/2.3/search/advanced"
         params = {
             "order": "desc",
             "sort": sort,
-            "q": refine_query,
+            "q": refined_query,
             "accepted": True,
             "answers": 1,
             "views": 10,
             "site": "stackoverflow",
         }
+        
         response = await shared_client.get(url, params=params)
         response.raise_for_status()
         return response.json().get("items", [])
@@ -30,26 +43,37 @@ async def search_stackoverflow(query, sort='votes'):
         gemini.logger.error(f"[ERROR] StackOverflow search failed: {e}")
         return []
 
-async def rank_with_gemini(questions, user_query):
-    question_texts = "\n".join([f"{i+1}. {q['title']} (ID: {q['question_id']})" for i, q in enumerate(questions)])
+async def rank_with_gemini(questions: List[Dict[str, Any]], user_query: str) -> List[Dict[str, Any]]:
+    if not questions:
+        return []
+        
+    question_texts = "\n".join([
+        f"{i+1}. {q['title']} (ID: {q['question_id']})" 
+        for i, q in enumerate(questions)
+    ])
+    
     prompt_input = {
         "query": user_query,
         "questions": question_texts
     }
+    
     try:
-        result = await invoke_with_retry(rank_chain, prompt_input)  
-        response = result.content.strip()
-        response = response.replace("```json", "").replace("```", "")
-        clean_json = response
-        parsed = json.loads(clean_json)
-        ranked_indices = parsed["ranked_questions"]
-        return ranked_indices
-
+        result = await invoke_with_retry(
+            rank_chain(
+                model_type=gemini.modelType, 
+                provider_type=gemini.providerName
+            ), 
+            prompt_input
+        )
+        
+        ranked_questions = result.output.ranked_questions
+        
+        return [questions[i] for i in ranked_questions if i < len(questions)]
     except Exception as e:
         gemini.logger.error(f"[ERROR] Ranking failed: {e}")
         return questions[:5]
 
-async def get_top_answer(question_id):
+async def get_top_answer(question_id: int) -> Optional[Dict[str, Any]]:
     try:
         url = f"https://api.stackexchange.com/2.3/questions/{question_id}/answers"
         params = {
@@ -58,46 +82,71 @@ async def get_top_answer(question_id):
             "site": "stackoverflow",
             "filter": "withbody"
         }
+        
         res = await shared_client.get(url, params=params)
         res.raise_for_status()
+        
         items = res.json().get("items", [])
         return items[0] if items else None
     except Exception as e:
         gemini.logger.error(f"[ERROR] Failed to get top answer for question {question_id}: {e}")
         return None
 
-async def clean_html_answer(answer_html):
+async def clean_html_answer(answer_html: str) -> str:
     return BeautifulSoup(answer_html, "html.parser").get_text()
 
-async def search_stackoverflow_and_rank(user_query):
+async def process_answer(answer: Optional[Dict[str, Any]], user_query: str) -> str:
+    if not answer:
+        return "No answer found, please use your own knowledge"
+    
+    try:
+        plain_text = await clean_html_answer(answer["body"])
+        if not plain_text:
+            return "No content to clean."
+            
+        result = await invoke_with_retry(
+            cleaned_search_result_chain(
+                model_type=gemini.modelType, 
+                provider_type=gemini.providerName
+            ), 
+            {
+                "answer": plain_text,
+                "query": user_query
+            }
+        )
+        
+        return result.content.strip()
+    except Exception as e:
+        gemini.logger.error(f"[ERROR] Processing answer failed: {e}")
+        return plain_text if 'plain_text' in locals() else "Error processing answer"
+
+async def search_stackoverflow_and_rank(user_query: str) -> List[Dict[str, str]]:
     questions = await search_stackoverflow(user_query)
-    await set_update("Fetching StackOverflow results")
     if not questions:
         return []
+        
     ranked_questions = await rank_with_gemini(questions, user_query)
-    tasks = [get_top_answer(q["question_id"]) for q in ranked_questions[:5]]
+    
+    tasks = [
+        asyncio.create_task(get_top_answer(q["question_id"])) 
+        for q in ranked_questions[:5]
+    ]
+    
     answers = await asyncio.gather(*tasks)
-    cleaned_results = []
-    for q, a in zip(ranked_questions[:5], answers):
-        if not a:
-            answer_text = "No answer found, please use your own knowledge"
-        else:
-            plain_text = await clean_html_answer(a["body"])
-            if plain_text:
-                try:
-                    result = await invoke_with_retry(cleaned_search_result_chain, {
-                        "answer": plain_text,
-                        "query": user_query
-                    })
-                    answer_text = result.content.strip()
-                except Exception:
-                    gemini.logger.error(f"[ERROR] Cleaning answer failed: {e}")
-                    answer_text = plain_text
-            else:
-                answer_text = "No content to clean."
-        cleaned_results.append({
+    
+    answer_processing_tasks = [
+        asyncio.create_task(process_answer(answer, user_query))
+        for answer in answers
+    ]
+    
+    processed_answers = await asyncio.gather(*answer_processing_tasks)
+    return [
+        {
             "title": q["title"],
-            "answer": answer_text
-        })
+            "answer": answer
+        }
+        for q, answer in zip(ranked_questions[:5], processed_answers)
+    ]
 
-    return cleaned_results
+async def close_client():
+    await shared_client.aclose()

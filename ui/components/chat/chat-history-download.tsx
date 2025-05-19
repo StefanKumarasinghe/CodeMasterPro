@@ -43,7 +43,7 @@ export function ChatHistoryDownload({ messages }: ChatHistoryDownloadProps) {
     <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TARS Chat History</title>
+    <title>CodeMasterPro Chat History</title>
     <style>
       body {
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
@@ -94,7 +94,7 @@ export function ChatHistoryDownload({ messages }: ChatHistoryDownloadProps) {
     </style>
     </head>
     <body>
-    <h1>TARS Chat History</h1>
+    <h1>CodeMasterPro Chat History</h1>
     <div class="meta">Generated on ${formatDate(date)}</div>`;
     messages.forEach((message) => {
       const roleClass = message.role === "user" ? "user" : "assistant";
@@ -155,13 +155,12 @@ export function ChatHistoryDownload({ messages }: ChatHistoryDownloadProps) {
     toast.success(`Chat history downloaded as ${format.toUpperCase()}`);
     setIsOpen(false);
   };
-  
+
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-1">
-          <Download className="h-4 w-4" />
-          <span className="hidden sm:inline">Download Chat</span>
+        <Button variant="ghost" size="sm" className="gap-1">
+          <Download style={{ height: "1.2rem", width: "1.2rem" }}  />
         </Button>
       </DialogTrigger>
       <DialogContent>

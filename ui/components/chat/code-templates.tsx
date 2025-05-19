@@ -100,7 +100,7 @@ export function CodeTemplates({ onSelectTemplate }: CodeTemplatesProps) {
     <div className="rounded-2xl border bg-card shadow-sm">
       <div className="p-4 border-b flex items-center justify-between">
         <h3 className="text-sm font-semibold tracking-tight">Code Templates</h3>
-        <Button variant="destructive" size="sm" onClick={deleteAllTemplates}>
+        <Button variant="ghost" size="sm"  className="text-red-400" onClick={deleteAllTemplates}>
           <Trash className="h-4 w-4 mr-2" />
           Delete All
         </Button>

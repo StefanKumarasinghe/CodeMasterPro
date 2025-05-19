@@ -1,7 +1,3 @@
-/**
- * Static Application Security Testing (SAST) analyzer
- * Implements SonarQube-like rules for code analysis
- */
 
 interface SastRule {
   id: string
@@ -35,22 +31,20 @@ export interface SastResult {
     total: number
   }
   metrics: {
-    reliability: number // 0-100
-    security: number // 0-100
-    maintainability: number // 0-100
-    duplication: number // percentage
-    complexity: number // average cyclomatic complexity
+    reliability: number 
+    security: number 
+    maintainability: number 
+    duplication: number 
+    complexity: number 
   }
   passed: boolean
 }
 
-// Helper to find line number for a match
 function findLineNumber(code: string, index: number): number {
   const lines = code.substring(0, index).split("\n")
   return lines.length
 }
 
-// Helper to extract code snippet around an issue
 function extractCodeSnippet(code: string, line: number, contextLines = 2): string {
   const lines = code.split("\n")
   const start = Math.max(0, line - contextLines - 1)
@@ -59,7 +53,6 @@ function extractCodeSnippet(code: string, line: number, contextLines = 2): strin
   return lines.slice(start, end).join("\n")
 }
 
-// JavaScript/TypeScript specific rules
 const javascriptRules: SastRule[] = [
   {
     id: "javascript:S1116",
@@ -83,7 +76,6 @@ const javascriptRules: SastRule[] = [
           codeSnippet: extractCodeSnippet(code, line),
         })
       }
-
       return issues
     },
   },
@@ -95,14 +87,12 @@ const javascriptRules: SastRule[] = [
     tags: ["unused"],
     languages: ["javascript", "typescript"],
     check: (code: string) => {
-      // This is a simplified check - a real implementation would use an AST
       const varDeclarationRegex = /(?:let|const|var)\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*(?:=|;)/g
       const issues: SastIssue[] = []
 
       let match
       while ((match = varDeclarationRegex.exec(code)) !== null) {
         const varName = match[1]
-        // Check if variable is used elsewhere in the code (simplified)
         const varUsageRegex = new RegExp(`[^a-zA-Z0-9_$]${varName}[^a-zA-Z0-9_$]`, "g")
         varUsageRegex.lastIndex = match.index + match[0].length
 
@@ -157,7 +147,6 @@ const javascriptRules: SastRule[] = [
     check: (code: string) => {
       const regex = /new\s+([A-Z][a-zA-Z0-9_$]*)$$[^)]*$$(?!\s*[.;,)\]}])/g
       const issues: SastIssue[] = []
-
       let match
       while ((match = regex.exec(code)) !== null) {
         const line = findLineNumber(code, match.index)
@@ -207,18 +196,14 @@ const javascriptRules: SastRule[] = [
     tags: ["brain-overload"],
     languages: ["javascript", "typescript"],
     check: (code: string) => {
-      // Simplified complexity check - counts if/for/while/switch statements
       const regex = /\b(if|for|while|switch)\b/g
       const issues: SastIssue[] = []
-
-      // Count occurrences
       let count = 0
       let match
       while ((match = regex.exec(code)) !== null) {
         count++
       }
 
-      // If more than 10 control flow statements, flag the code
       if (count > 10) {
         issues.push({
           ruleId: "javascript:S3776",
@@ -265,7 +250,6 @@ const javascriptRules: SastRule[] = [
     tags: ["bug", "performance"],
     languages: ["javascript", "typescript"],
     check: (code: string) => {
-      // This is a simplified check - a real implementation would use an AST
       const regex = /\b(for|while)\b[^{]*\{[^}]*function\s+[a-zA-Z_$][a-zA-Z0-9_$]*\s*\(/g
       const issues: SastIssue[] = []
 
@@ -286,7 +270,6 @@ const javascriptRules: SastRule[] = [
   },
 ]
 
-// Python specific rules
 const pythonRules: SastRule[] = [
   {
     id: "python:S1481",
@@ -296,19 +279,16 @@ const pythonRules: SastRule[] = [
     tags: ["unused"],
     languages: ["python"],
     check: (code: string) => {
-      // Simplified check for unused variables
       const varDeclarationRegex = /([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*[^=]/g
       const issues: SastIssue[] = []
 
       let match
       while ((match = varDeclarationRegex.exec(code)) !== null) {
         const varName = match[1]
-        // Skip common names like self, cls, etc.
         if (["self", "cls", "_", "i", "j", "k"].includes(varName)) {
           continue
         }
 
-        // Check if variable is used elsewhere in the code (simplified)
         const varUsageRegex = new RegExp(`[^a-zA-Z0-9_]${varName}[^a-zA-Z0-9_=]`, "g")
         varUsageRegex.lastIndex = match.index + match[0].length
 
@@ -335,7 +315,6 @@ const pythonRules: SastRule[] = [
     tags: ["convention"],
     languages: ["python"],
     check: (code: string) => {
-      // Look for nested if statements with no else
       const regex = /if\s+.*:\s*\n\s+if\s+/g
       const issues: SastIssue[] = []
 
@@ -408,7 +387,6 @@ const pythonRules: SastRule[] = [
   },
 ]
 
-// HTML specific rules
 const htmlRules: SastRule[] = [
   {
     id: "html:S1827",
@@ -480,7 +458,6 @@ const htmlRules: SastRule[] = [
 
       let match
       while ((match = regex.exec(code)) !== null) {
-        // Make sure it really doesn't have alt (the regex above is simplified)
         if (!/<img[^>]*\salt=/i.test(match[0])) {
           const line = findLineNumber(code, match.index)
           issues.push({
@@ -498,7 +475,6 @@ const htmlRules: SastRule[] = [
   },
 ]
 
-// Security rules for all languages
 const securityRules: SastRule[] = [
   {
     id: "security:S5131",
@@ -508,12 +484,10 @@ const securityRules: SastRule[] = [
     tags: ["security", "xss"],
     languages: ["javascript", "typescript", "python", "html"],
     check: (code: string) => {
-      // Look for patterns that might indicate XSS vulnerabilities
       const jsRegex = /\.(innerHTML|outerHTML)\s*=|document\.write\(/g
       const reactRegex = /dangerouslySetInnerHTML\s*=\s*\{\s*\{\s*__html\s*:/g
       const issues: SastIssue[] = []
 
-      // Check JavaScript/React patterns
       ;[jsRegex, reactRegex].forEach((regex) => {
         let match
         while ((match = regex.exec(code)) !== null) {
@@ -539,12 +513,9 @@ const securityRules: SastRule[] = [
     tags: ["security", "ssrf"],
     languages: ["javascript", "typescript", "python"],
     check: (code: string) => {
-      // Look for HTTP request patterns with variables
       const jsRegex = /\b(fetch|axios\.get|http\.get)\s*\(\s*([a-zA-Z_$][a-zA-Z0-9_$]*)/g
       const pyRegex = /\b(requests\.get|urllib\.request\.urlopen)\s*\(\s*([a-zA-Z_][a-zA-Z0-9_]*)/g
       const issues: SastIssue[] = []
-
-      // Check JavaScript patterns
       let match
       while ((match = jsRegex.exec(code)) !== null) {
         const line = findLineNumber(code, match.index)
@@ -557,7 +528,6 @@ const securityRules: SastRule[] = [
         })
       }
 
-      // Check Python patterns
       while ((match = pyRegex.exec(code)) !== null) {
         const line = findLineNumber(code, match.index)
         issues.push({
@@ -580,12 +550,10 @@ const securityRules: SastRule[] = [
     tags: ["security", "cryptography"],
     languages: ["javascript", "typescript", "python"],
     check: (code: string) => {
-      // Look for weak crypto algorithms
       const jsRegex = /\bcreateHash\s*$$\s*['"]md5['"]$$|\bcreateHash\s*$$\s*['"]sha1['"]$$/g
       const pyRegex = /\bhashlib\.(md5|sha1)\b/g
       const issues: SastIssue[] = []
 
-      // Check JavaScript patterns
       let match
       while ((match = jsRegex.exec(code)) !== null) {
         const line = findLineNumber(code, match.index)
@@ -598,7 +566,6 @@ const securityRules: SastRule[] = [
         })
       }
 
-      // Check Python patterns
       while ((match = pyRegex.exec(code)) !== null) {
         const line = findLineNumber(code, match.index)
         issues.push({
@@ -615,24 +582,18 @@ const securityRules: SastRule[] = [
   },
 ]
 
-// Combine all rules
 const allRules: SastRule[] = [...javascriptRules, ...pythonRules, ...htmlRules, ...securityRules]
 
-/**
- * Analyzes code for security and quality issues
- */
 export function analyzeSast(code: string, language: string): SastResult {
-  // Filter rules applicable to the language
+
   const applicableRules = allRules.filter((rule) => rule.languages.includes(language) || rule.languages.includes("*"))
 
-  // Run all applicable rules
   const allIssues: SastIssue[] = []
   applicableRules.forEach((rule) => {
     const issues = rule.check(code)
     allIssues.push(...issues)
   })
 
-  // Count issues by severity
   const summary = {
     blockers: allIssues.filter((i) => i.severity === "blocker").length,
     critical: allIssues.filter((i) => i.severity === "critical").length,
@@ -642,16 +603,14 @@ export function analyzeSast(code: string, language: string): SastResult {
     total: allIssues.length,
   }
 
-  // Calculate metrics (simplified)
   const metrics = {
     reliability: calculateReliabilityScore(allIssues),
     security: calculateSecurityScore(allIssues),
     maintainability: calculateMaintainabilityScore(allIssues),
-    duplication: 0, // Would require more complex analysis
+    duplication: 0, 
     complexity: calculateComplexityScore(code),
   }
 
-  // Determine if the code passes quality gates
   const passed = summary.blockers === 0 && summary.critical <= 1
 
   return {
@@ -662,20 +621,17 @@ export function analyzeSast(code: string, language: string): SastResult {
   }
 }
 
-// Helper functions to calculate metrics
 function calculateReliabilityScore(issues: SastIssue[]): number {
   const reliabilityIssues = issues.filter(
     (i) => i.ruleId.includes("bug") || i.severity === "blocker" || i.severity === "critical",
   )
 
-  // More issues = lower score
   return Math.max(0, 100 - reliabilityIssues.length * 10)
 }
 
 function calculateSecurityScore(issues: SastIssue[]): number {
   const securityIssues = issues.filter((i) => i.ruleId.includes("security") || i.tags?.includes("security"))
 
-  // Security issues are weighted more heavily
   return Math.max(0, 100 - securityIssues.length * 20)
 }
 
@@ -689,10 +645,8 @@ function calculateMaintainabilityScore(issues: SastIssue[]): number {
 }
 
 function calculateComplexityScore(code: string): number {
-  // Simplified complexity calculation
   const controlFlowCount = (code.match(/\b(if|for|while|switch|catch)\b/g) || []).length
   const functionCount = (code.match(/\b(function|=>)\b/g) || []).length
 
-  // Normalize to a reasonable range
   return Math.min(10, (controlFlowCount + functionCount) / 10)
 }

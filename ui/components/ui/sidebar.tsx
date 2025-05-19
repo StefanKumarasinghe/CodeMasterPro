@@ -3,7 +3,7 @@
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"
 import { VariantProps, cva } from "class-variance-authority"
-import { PanelLeft } from "lucide-react"
+import { PanelLeft, GripVertical } from "lucide-react"
 
 import { useIsMobile } from "@/hooks/use-mobile"
 import { cn } from "@/lib/utils"
@@ -25,6 +25,14 @@ const SIDEBAR_WIDTH = "16rem"
 const SIDEBAR_WIDTH_MOBILE = "18rem"
 const SIDEBAR_WIDTH_ICON = "3rem"
 const SIDEBAR_KEYBOARD_SHORTCUT = "b"
+const SIDEBAR_MIN_WIDTH = 200
+const SIDEBAR_MAX_WIDTH = 500
+const SIDEBAR_DEFAULT_WIDTH = 280
+
+// Font size scaling factors
+const FONT_SIZE_MIN = 0.8
+const FONT_SIZE_MAX = 1.2
+const FONT_SIZE_DEFAULT = 1.0
 
 type SidebarContext = {
   state: "expanded" | "collapsed"
@@ -34,6 +42,12 @@ type SidebarContext = {
   setOpenMobile: (open: boolean) => void
   isMobile: boolean
   toggleSidebar: () => void
+  width: number
+  setWidth: (width: number) => void
+  isResizing: boolean
+  setIsResizing: (isResizing: boolean) => void
+  fontScale: number
+  setFontScale: (scale: number) => void
 }
 
 const SidebarContext = React.createContext<SidebarContext | null>(null)
@@ -53,6 +67,9 @@ const SidebarProvider = React.forwardRef<
     defaultOpen?: boolean
     open?: boolean
     onOpenChange?: (open: boolean) => void
+    defaultWidth?: number
+    onWidthChange?: (width: number) => void
+    defaultFontScale?: number
   }
 >(
   (
@@ -60,6 +77,9 @@ const SidebarProvider = React.forwardRef<
       defaultOpen = true,
       open: openProp,
       onOpenChange: setOpenProp,
+      defaultWidth = SIDEBAR_DEFAULT_WIDTH,
+      onWidthChange,
+      defaultFontScale = FONT_SIZE_DEFAULT,
       className,
       style,
       children,
@@ -69,7 +89,10 @@ const SidebarProvider = React.forwardRef<
   ) => {
     const isMobile = useIsMobile()
     const [openMobile, setOpenMobile] = React.useState(false)
-
+    const [width, setWidth] = React.useState(defaultWidth)
+    const [isResizing, setIsResizing] = React.useState(false)
+    const [fontScale, setFontScale] = React.useState(defaultFontScale)
+    
     // This is the internal state of the sidebar.
     // We use openProp and setOpenProp for control from outside the component.
     const [_open, _setOpen] = React.useState(defaultOpen)
@@ -95,6 +118,47 @@ const SidebarProvider = React.forwardRef<
         ? setOpenMobile((open) => !open)
         : setOpen((open) => !open)
     }, [isMobile, setOpen, setOpenMobile])
+
+    // Custom width setter that also calls the onWidthChange callback
+    const handleWidthChange = React.useCallback((newWidth: number) => {
+      setWidth(newWidth)
+      onWidthChange?.(newWidth)
+    }, [onWidthChange])
+
+    // Save sidebar width to localStorage
+    React.useEffect(() => {
+      if (!isResizing && width !== SIDEBAR_DEFAULT_WIDTH) {
+        localStorage.setItem('sidebar-width', width.toString())
+        onWidthChange?.(width)
+      }
+    }, [width, isResizing, onWidthChange])
+
+    // Save font scale to localStorage
+    React.useEffect(() => {
+      if (fontScale !== FONT_SIZE_DEFAULT) {
+        localStorage.setItem('sidebar-font-scale', fontScale.toString())
+      }
+    }, [fontScale])
+
+    // Load sidebar width and font scale from localStorage
+    React.useEffect(() => {
+      const savedWidth = localStorage.getItem('sidebar-width')
+      if (savedWidth) {
+        const parsedWidth = parseInt(savedWidth)
+        if (!isNaN(parsedWidth) && parsedWidth >= SIDEBAR_MIN_WIDTH && parsedWidth <= SIDEBAR_MAX_WIDTH) {
+          setWidth(parsedWidth)
+          onWidthChange?.(parsedWidth)
+        }
+      }
+      
+      const savedFontScale = localStorage.getItem('sidebar-font-scale')
+      if (savedFontScale) {
+        const parsedScale = parseFloat(savedFontScale)
+        if (!isNaN(parsedScale) && parsedScale >= FONT_SIZE_MIN && parsedScale <= FONT_SIZE_MAX) {
+          setFontScale(parsedScale)
+        }
+      }
+    }, [onWidthChange])
 
     // Adds a keyboard shortcut to toggle the sidebar.
     React.useEffect(() => {
@@ -125,8 +189,27 @@ const SidebarProvider = React.forwardRef<
         openMobile,
         setOpenMobile,
         toggleSidebar,
+        width,
+        setWidth: handleWidthChange,
+        isResizing,
+        setIsResizing,
+        fontScale,
+        setFontScale
       }),
-      [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar]
+      [
+        state, 
+        open, 
+        setOpen, 
+        isMobile, 
+        openMobile, 
+        setOpenMobile, 
+        toggleSidebar, 
+        width, 
+        handleWidthChange, 
+        isResizing,
+        fontScale, 
+        setFontScale
+      ]
     )
 
     return (
@@ -135,8 +218,9 @@ const SidebarProvider = React.forwardRef<
           <div
             style={
               {
-                "--sidebar-width": SIDEBAR_WIDTH,
+                "--sidebar-width": `${width}px`,
                 "--sidebar-width-icon": SIDEBAR_WIDTH_ICON,
+                "--font-scale": fontScale,
                 ...style,
               } as React.CSSProperties
             }
@@ -162,6 +246,7 @@ const Sidebar = React.forwardRef<
     side?: "left" | "right"
     variant?: "sidebar" | "floating" | "inset"
     collapsible?: "offcanvas" | "icon" | "none"
+    resizable?: boolean
   }
 >(
   (
@@ -169,14 +254,67 @@ const Sidebar = React.forwardRef<
       side = "left",
       variant = "sidebar",
       collapsible = "offcanvas",
+      resizable = true,
       className,
       children,
       ...props
     },
     ref
   ) => {
-    const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
-
+    const { 
+      isMobile, 
+      state, 
+      openMobile, 
+      setOpenMobile, 
+      width, 
+      setWidth, 
+      isResizing, 
+      setIsResizing,
+      fontScale,
+      setFontScale
+    } = useSidebar()
+    
+    const resizingRef = React.useRef<HTMLDivElement>(null)
+    
+    // Handle resize drag
+    const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+      if (!resizable) return
+      
+      e.preventDefault()
+      setIsResizing(true)
+      
+      const startWidth = width
+      const startX = e.clientX
+      
+      const onMouseMove = (e: MouseEvent) => {
+        if (!isResizing) return
+        
+        const dx = side === "left" ? e.clientX - startX : startX - e.clientX
+        const newWidth = Math.max(
+          SIDEBAR_MIN_WIDTH,
+          Math.min(SIDEBAR_MAX_WIDTH, startWidth + dx)
+        )
+        
+        setWidth(newWidth)
+        document.body.style.cursor = side === "left" ? "e-resize" : "w-resize"
+        
+        // Calculate font scale based on sidebar width
+        const normalized = (newWidth - SIDEBAR_MIN_WIDTH) / (SIDEBAR_MAX_WIDTH - SIDEBAR_MIN_WIDTH)
+        const newFontScale = FONT_SIZE_MIN + normalized * (FONT_SIZE_MAX - FONT_SIZE_MIN)
+        setFontScale(Math.max(FONT_SIZE_MIN, Math.min(FONT_SIZE_MAX, newFontScale)))
+      }
+      
+      const onMouseUp = () => {
+        setIsResizing(false)
+        document.body.style.cursor = ""
+        document.removeEventListener("mousemove", onMouseMove)
+        document.removeEventListener("mouseup", onMouseUp)
+      }
+      
+      document.addEventListener("mousemove", onMouseMove)
+      document.addEventListener("mouseup", onMouseUp)
+    }
+    
     if (collapsible === "none") {
       return (
         <div
@@ -198,7 +336,7 @@ const Sidebar = React.forwardRef<
           <SheetContent
             data-sidebar="sidebar"
             data-mobile="true"
-            className="w-[--sidebar-width] bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
+            className="w-[--sidebar-width] bg-background border-r p-0 text-sidebar-foreground [&>button]:hidden"
             style={
               {
                 "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
@@ -220,8 +358,8 @@ const Sidebar = React.forwardRef<
         data-collapsible={state === "collapsed" ? collapsible : ""}
         data-variant={variant}
         data-side={side}
+        data-resizing={isResizing ? "true" : undefined}
       >
-        {/* This is what handles the sidebar gap on desktop */}
         <div
           className={cn(
             "duration-200 relative h-svh w-[--sidebar-width] bg-transparent transition-[width] ease-linear",
@@ -242,8 +380,12 @@ const Sidebar = React.forwardRef<
             variant === "floating" || variant === "inset"
               ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4)_+2px)]"
               : "group-data-[collapsible=icon]:w-[--sidebar-width-icon] group-data-[side=left]:border-r group-data-[side=right]:border-l",
+            "group-data-[resizing=true]:transition-none",
             className
           )}
+          style={{
+            fontSize: `calc(1rem * var(--font-scale, 1))`
+          }}
           {...props}
         >
           <div
@@ -252,6 +394,33 @@ const Sidebar = React.forwardRef<
           >
             {children}
           </div>
+          
+          {/* Resize handle - updated with better visibility */}
+          {resizable && (
+            <div
+              ref={resizingRef}
+              onMouseDown={handleMouseDown}
+              className={cn(
+                "absolute inset-y-0 z-30 group/resizer",
+                side === "left" ? "right-0 -mr-1" : "left-0 -ml-1",
+                "group-data-[collapsible=offcanvas]:hidden group-data-[collapsible=icon]:hidden"
+              )}
+            >
+              <div className={cn(
+                "absolute inset-y-0 w-2 cursor-col-resize hover:bg-primary/20 group-hover/resizer:bg-primary/20 group-data-[resizing=true]:bg-primary/40",
+                side === "left" ? "right-0" : "left-0",
+                isResizing && "bg-primary/40"
+              )}>
+                <div className={cn(
+                  "absolute top-1/2 -translate-y-1/2 h-8 rounded-full opacity-0 group-hover/resizer:opacity-100 flex items-center justify-center",
+                  side === "left" ? "right-[3px]" : "left-[3px]",
+                  isResizing && "opacity-100"
+                )}>
+                  <GripVertical className="h-4 w-4 text-primary" />
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     )

@@ -26,7 +26,7 @@ export function ThemeToggle() {
         className={theme === "light" ? "bg-accent text-accent-foreground" : ""}
         aria-label="Light mode"
       >
-        <Sun className="h-4 w-4" />
+        <Sun style={{ height: "1.2rem", width: "1.2rem" }}  />
       </Button>
       <Button
         variant="ghost"
@@ -35,7 +35,7 @@ export function ThemeToggle() {
         className={theme === "dark" ? "bg-accent text-accent-foreground" : ""}
         aria-label="Dark mode"
       >
-        <Moon className="h-4 w-4" />
+        <Moon style={{ height: "1.2rem", width: "1.2rem" }}  />
       </Button>
     </div>
   )

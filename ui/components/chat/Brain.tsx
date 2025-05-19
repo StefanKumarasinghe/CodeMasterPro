@@ -14,6 +14,7 @@ const AURORA_COLORS = [
     'rgba(75, 75, 75, 0.6)',
     'rgba(0, 191, 255, 0.6)',
 ];
+
 const AURORA_SPREAD = [
     '0 0 40px',
     '0 0 30px',
@@ -21,6 +22,7 @@ const AURORA_SPREAD = [
     '0 0 25px',
     '0 0 20px'
 ];
+
 const AURORA_DURATION = 20;
 const AURORA_TIMES = [0, 0.25, 0.5, 0.75, 1];
 const BinaryCodeBrainEffect: React.FC = () => {
@@ -51,9 +53,9 @@ const BinaryCodeBrainEffect: React.FC = () => {
                         times: AURORA_TIMES,
                     }
                 }}
-                className="rounded-full flex items-center justify-center z-10 p-4 bg-white/10 backdrop-blur-sm"
+                className="rounded-full border-2 dark:border-white border-black flex items-center justify-center z-10 p-4 bg-white/10 backdrop-blur-sm bg-gradient-to-r from-green-400 to-blue-500 "
             >
-                <BrainIcon className="h-20 w-20 text-black font-light dark:text-white" />
+                <BrainIcon  className="h-20 w-20 text-white dark:text-white" />
             </motion.div>
 
         </div>

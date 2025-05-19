@@ -95,7 +95,6 @@ export function maskSensitiveInfo(text: string): string {
       if (!sensitivePart) return match
 
       if (groups.length === 3) {
-        // env-style format (e.g., FOO_KEY="abc")
         return `${groups[0]}="**********"`
       }
 

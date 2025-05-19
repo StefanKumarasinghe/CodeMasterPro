@@ -1,12 +1,12 @@
 "use client";
 
 import type React from "react";
-import { useEffect, useRef, useState, useCallback, memo } from "react";
+import { useEffect, useRef, useState, useCallback, memo, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import { useTheme } from "next-themes";
 import remarkGfm from "remark-gfm";
 import { QuickActionBar } from "./quick-action-bar";
-import {Copy,Check,Download,ExternalLink,ArrowDown,Play,Shield} from "lucide-react";
+import {Copy,Check,Download,ExternalLink,ArrowDown,Play,Shield,Edit} from "lucide-react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import {oneDark,oneLight} from "react-syntax-highlighter/dist/esm/styles/prism";
 import { Button } from "@/components/ui/button";
@@ -16,15 +16,8 @@ import { HtmlPreview } from "./html-preview";
 import { PythonShell } from "./python-shell";
 import { CodeSast } from "./code-sast";
 import Markdown from "react-markdown";
+import { CodeEditorCanvas } from "@/components/canvas/code-editor-canvas";
 
-const isDarkMode = () => {
-  const { theme } = useTheme();
-  return (
-    theme === "dark" ||
-    (theme === "system" &&
-      window.matchMedia("(prefers-color-scheme: dark)").matches)
-  );
-};
 
 type TextBlockProps = {
   content: string;
@@ -38,6 +31,12 @@ export interface SavedSnippet {
   code: string;
 }
 
+interface CodeBlockInfo {
+  code: string;
+  language: string;
+  index: number;
+}
+
 interface MessageContentProps {
   content: string;
   imageData: string;
@@ -45,42 +44,56 @@ interface MessageContentProps {
   showLineNumbers: boolean;
   onCodeAction: (action: string, code: string, lang: string) => void;
   isInteractive?: boolean;
+  onContentUpdate?: (newContent: string) => void;
+  editorInfo?: {
+    x: number;
+    y: number;
+    width: number;
+  };
 }
 
 interface PreformattedCodeProps {
   code: string;
   language?: string;
   darkMode?: boolean;
+  className?: string;
+  customStyle?: React.CSSProperties;
 }
 
 const PreformattedCode = ({
   code,
   language = "plaintext",
   darkMode = true,
+  className,
+  customStyle
 }: PreformattedCodeProps) => {
-  const style = isDarkMode() ? oneDark : oneLight;
+  const syntaxStyle = darkMode ? oneDark : oneLight;
   const lowerCasedLang = language.toLowerCase();
-  if (
-      ["block", "plaintext", "markdown", "text", "general", "codeandexplanation"].includes(lowerCasedLang)
-  ) {
-    return <pre className="bg-muted text-lg p-4 rounded-md my-4">{code}</pre>;
+  const plainTextLangs = ["block", "plaintext", "text", "general", "output", ""];
+
+  if (plainTextLangs.includes(lowerCasedLang)) {
+    return <p className={cn("p-4 rounded-md my-4 whitespace-pre-wrap break-words font-scale-base", className)} style={{border: "1px solid #374151", borderRadius: "0 0 0.375rem 0.375rem", ...customStyle}}>{code}</p>;
   } else {
     return (
       <SyntaxHighlighter
         language={language}
-        style={style}
+        style={syntaxStyle}
         showLineNumbers={false}
         wrapLines={true}
         PreTag="div"
-        className="overflow-x-auto m-0"
+        className="overflow-x-auto m-0 max-w-prose"
         customStyle={{
           margin: 0,
-          border: isDarkMode() ? "1px solid #374151" : "1px solid #e5e7eb",
+          border: darkMode ? "1px solid #374151" : "1px solid rgb(105, 105, 105)",
           borderRadius: "0 0 0.375rem 0.375rem",
-          fontSize: "0.9rem",
+          fontSize: "inherit",
+          transition: "font-size 0.3s ease-in-out",
+          boxSizing: "border-box",
+          ...customStyle,
+          maxWidth: "100%",
         }}
       >
-        {code}
+        {code.trim()}
       </SyntaxHighlighter>
     );
   }
@@ -116,9 +129,9 @@ const normalizeLang = (lang: string): string => {
     rust: "rust",
     php: "php",
     xml: "xml",
-    text: "Block",
   };
-  return map[lang] || lang.toLowerCase();
+  const lowerLang = lang.toLowerCase();
+  return map[lowerLang] || lowerLang;
 };
 
 
@@ -126,64 +139,182 @@ const isHtmlCode = (code: string, lang: string): boolean => {
   if (lang === "html") return true;
   if (["text", "markup", "xml"].includes(lang) || !lang) {
     return (
-      /<html|<!DOCTYPE html|<body|<head|<div|<span|<p>|<a\s|<img\s|<ul>|<ol>|<li>|<table>|<form>|<input\s/i.test(
+      /<html|<!DOCTYPE html|<body|<head|<div|<span|<p>|<a\s|<img\s|<ul>|<ol>|<li>|<table>|<form|<input/i.test(
         code
       ) && /<\/[a-z]+>/i.test(code)
     );
   }
-
   return false;
+};
+
+const calculateFontSize = () => {
+  const windowWidth = typeof window !== 'undefined' ? window.innerWidth : 0;
+  if (windowWidth < 768) {
+    return "14px";
+  }
+  return "16px";
 };
 
 const TextBlock = memo(({ content, imageData }: TextBlockProps) => {
   const [hasError, setHasError] = useState(false);
+  const textBlockRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+
+  useEffect(() => {
+    // Reset error state when content changes
+    setHasError(false);
+  }, [content]);
+
+  // Effect to measure the parent container width
+  useEffect(() => {
+    if (textBlockRef.current) {
+      // First try to find the scroll viewport which is the chat-message-list container
+      let scrollViewport = textBlockRef.current.closest('[data-radix-scroll-area-viewport]');
+      if (scrollViewport instanceof HTMLElement && scrollViewport.offsetWidth > 0) {
+        // Use the scroll viewport width with padding adjustment
+        setContainerWidth(Math.max(scrollViewport.offsetWidth - 48, 300));
+      } else {
+        // Find the closest message container by checking common classes or parents
+        let messageContainer = textBlockRef.current.closest('.message-container') || 
+                               textBlockRef.current.closest('.chat-message-list') ||
+                               textBlockRef.current.parentElement;
+                             
+        // If found a container with width, use that
+        if (messageContainer && messageContainer instanceof HTMLElement && messageContainer.offsetWidth > 0) {
+          setContainerWidth(Math.max(messageContainer.offsetWidth - 32, 300));
+        }
+      }
+      
+      // Set up a resize observer to handle dynamic width changes
+      const resizeObserver = new ResizeObserver(entries => {
+        // First check for the scroll viewport
+        const scrollViewport = textBlockRef.current?.closest('[data-radix-scroll-area-viewport]');
+        if (scrollViewport instanceof HTMLElement && scrollViewport.offsetWidth > 0) {
+          setContainerWidth(Math.max(scrollViewport.offsetWidth - 48, 300));
+          return;
+        }
+        
+        // Otherwise look for other containers with width
+        let bestContainer: HTMLElement | null = null;
+        let bestWidth = 0;
+        
+        // Look for parent elements with width
+        let parent = textBlockRef.current?.parentElement;
+        while (parent) {
+          if (parent instanceof HTMLElement && parent.offsetWidth > bestWidth) {
+            bestContainer = parent;
+            bestWidth = parent.offsetWidth;
+          }
+          parent = parent.parentElement;
+        }
+        
+        if (bestContainer && bestWidth > 0) {
+          setContainerWidth(Math.max(bestWidth - 32, 300));
+        }
+      });
+
+      if (textBlockRef.current) {
+        resizeObserver.observe(textBlockRef.current);
+        
+        // Also observe parents for better responsiveness
+        let parent = textBlockRef.current.parentElement;
+        if (parent) {
+          resizeObserver.observe(parent);
+        }
+        
+        // Observe the scroll viewport if available
+        const scrollViewport = textBlockRef.current.closest('[data-radix-scroll-area-viewport]');
+        if (scrollViewport) {
+          resizeObserver.observe(scrollViewport);
+        }
+      }
+      
+      return () => resizeObserver.disconnect();
+    }
+  }, []);
+
+  const handleError = () => {
+    setHasError(true);
+  };
+
+  // Calculate the optimal width for the text block
+  const getOptimalTextWidth = useMemo(() => {
+    // If we have a container width, use that to calculate
+    if (containerWidth > 0) {
+      // Use responsive sizing based on the container width
+      if (containerWidth < 500) {
+        return `${Math.min(containerWidth, 450)}px`;
+      } else if (containerWidth < 700) {
+        return `${Math.min(containerWidth, 650)}px`;
+      } else {
+        return `${Math.min(containerWidth, 800)}px`;
+      }
+    }
+    
+    // Fallback sizing if container width couldn't be determined
+    return "100%";
+  }, [containerWidth]);
 
   if (hasError) {
     return (
       <div className="w-full p-4 bg-red-100 border border-red-400 text-red-700 rounded-md my-4">
         <p>
-          Oops! Something went wrong while rendering the content. We're
-          displaying this message to prevent the app from breaking.
+          There was an error rendering this content. The markdown might be malformed.
         </p>
+        <pre className="mt-2 p-2 bg-white rounded overflow-auto max-w-full whitespace-pre-wrap break-all">
+          {content.substring(0, 500)}{content.length > 500 ? '...' : ''}
+        </pre>
       </div>
     );
   }
 
   return (
-    <div className="w-full  break-words bg-card rounded-md my-4 prose prose-zinc dark:prose-invert max-w-none">
+    <div 
+      ref={textBlockRef}
+      className="w-full break-words bg-card rounded-md my-4 prose prose-zinc dark:prose-invert max-w-full overflow-hidden" 
+      style={{ 
+        fontSize: calculateFontSize(),
+        overflowWrap: "break-word",
+        wordWrap: "break-word",
+        wordBreak: "break-word",
+        maxWidth: getOptimalTextWidth,
+        width: "100%",
+        transition: "max-width 0.3s ease-in-out"
+      }}
+    >
       {imageData && (
         <div>
         <p className="text-xl font-bold mt-5 mb-3">Generated Visualization from Python</p>
         <img className="w-100 my-3 rounded-md" src={imageData} alt="Visualization generated" />
-        <p className="text-md dark:text-green-400 bg-yellow-100 dark:bg-background inline  mx-auto text-red-600 my-3">Visualization generated may be incorrect, so use it with Caution</p>
+        <p className="text-md dark:text-green-400 bg-yellow-100 dark:bg-background inline mx-auto text-red-600 my-3">Visualization generated may be incorrect, so use it with Caution</p>
         </div>
       )}
-   
+
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
           h1: ({ node, ...props }) => (
-            <h1 {...props} className="text-2xl font-bold mt-6 mb-4" />
+            <h1 {...props} className="text-2xl font-bold mt-6 mb-4 max-w-full overflow-hidden break-words" />
           ),
           h2: ({ node, ...props }) => (
-            <h2 {...props} className="text-xl font-bold mt-5 mb-3" />
+            <h2 {...props} className="text-xl font-bold mt-5 mb-3 max-w-full overflow-hidden break-words" />
           ),
           h3: ({ node, ...props }) => (
-            <h3 {...props} className="text-lg font-bold mt-4 mb-2" />
+            <h3 {...props} className="text-lg font-bold mt-4 mb-2 max-w-full overflow-hidden break-words" />
           ),
           h4: ({ node, ...props }) => (
-            <h4 {...props} className="text-base font-semibold mt-3 mb-2" />
+            <h4 {...props} className="text-base font-semibold mt-3 mb-2 max-w-full overflow-hidden break-words" />
           ),
           p: ({ node, ...props }) => (
-            <p {...props} className="my-2 mb-3 leading-relaxed break-words" />
+            <p {...props} className="my-2 mb-3 p-3 leading-relaxed break-words max-w-full overflow-hidden" />
           ),
           ul: ({ node, ...props }) => (
-            <ul {...props} className="list-disc pl-6 ml-4 my-3" />
+            <ul {...props} className="list-disc pl-6 ml-4 my-3 max-w-full overflow-hidden" />
           ),
           ol: ({ node, ...props }) => (
-            <ol {...props} className="list-decimal pl-6 ml-4 my-3" />
+            <ol {...props} className="list-decimal pl-6 ml-4 my-3 max-w-full overflow-hidden" />
           ),
-          li: ({ node, ...props }) => <li {...props} className="my-1" />,
+          li: ({ node, ...props }) => <li {...props} className="my-1 max-w-full overflow-hidden break-words" />,
           blockquote: ({ node, ...props }) => (
             <blockquote
               {...props}
@@ -191,15 +322,16 @@ const TextBlock = memo(({ content, imageData }: TextBlockProps) => {
             />
           ),
           code({ node, className, children, ...props }) {
-            const codeStr = String(children).replace(/\n$/, "");
+            const isInlineCode = !className || !/language-(\w+)/.test(className);
+            
             return (
-                <code
-                className="bg-muted px-2.5 py-1 rounded my-4 font-mono break-words whitespace-pre-wrap w-full min-w-0"
+              <code
+                className="bg-zinc-100 dark:bg-zinc-800 text-pink-600 dark:text-pink-400 px-1.5 py-0.5 rounded font-mono text-sm font-scale-sm"
                 {...props}
-                >
-                {codeStr.replace(/^\s+|\s+$/g, "")}
-                </code>
-            );            
+              >
+                {children?.toString().trim()}
+              </code>
+            );
           },
           a: ({ node, ...props }) => (
             <a
@@ -240,7 +372,7 @@ const TextBlock = memo(({ content, imageData }: TextBlockProps) => {
             <img
               {...props}
               className="max-w-full h-auto rounded-md my-4"
-              onError={() => setHasError(true)}
+              onError={handleError}
             />
           ),
           strong: ({ node, ...props }) => (
@@ -255,7 +387,6 @@ const TextBlock = memo(({ content, imageData }: TextBlockProps) => {
           mark: ({ node, ...props }) => (
             <mark {...props} className="bg-yellow-200" />
           ),
-
         }}
       >
         {content}
@@ -266,7 +397,7 @@ const TextBlock = memo(({ content, imageData }: TextBlockProps) => {
 
 const CodeBlock = memo(
   ({
-    code,
+    code: initialCode,
     lang,
     fileName,
     blockIndex,
@@ -274,6 +405,7 @@ const CodeBlock = memo(
     onCopy,
     onAction,
     isInteractive,
+    onCodeUpdate,
   }: {
     code: string;
     lang: string;
@@ -284,11 +416,102 @@ const CodeBlock = memo(
     onCopy: (code: string, blockIndex: number) => void;
     onAction: (action: string, code: string, lang: string) => void;
     isInteractive?: boolean;
+    onCodeUpdate?: (newCode: string, blockIndex: number) => void;
   }) => {
+    const [code, setCode] = useState(initialCode);
     const [isHovered, setIsHovered] = useState(false);
     const [showHtmlPreview, setShowHtmlPreview] = useState(false);
     const [showPythonShell, setShowPythonShell] = useState(false);
     const [showSastAnalysis, setShowSastAnalysis] = useState(false);
+    const [showEditor, setShowEditor] = useState(false);
+    const codeBlockRef = useRef<HTMLDivElement>(null);
+    const [blockWidth, setBlockWidth] = useState<number | null>(null);
+    const [containerWidth, setContainerWidth] = useState(0);
+    
+    // Effect to measure the container width (chat message container)
+    useEffect(() => {
+      if (codeBlockRef.current) {
+        // Find the closest message container
+        let parentElement = codeBlockRef.current.parentElement;
+        
+        // Look for parent elements that might represent the message container
+        while (parentElement) {
+          // First check for the chat-message-list or its viewport
+          if (parentElement.closest('[data-radix-scroll-area-viewport]') || 
+              parentElement.closest('.chat-message-list')) {
+            if (parentElement instanceof HTMLElement) {
+              const containerWidth = parentElement.offsetWidth;
+              // Set a width that's slightly less than container to account for padding
+              setContainerWidth(Math.max(containerWidth - 48, 300));
+              break;
+            }
+          }
+          
+          // Then check more generic containers
+          if (parentElement.classList.contains('message-container') || 
+              parentElement.classList.contains('prose') || 
+              (parentElement instanceof HTMLElement && parentElement.offsetWidth > 0)) {
+            // Found a parent with width set
+            if (parentElement instanceof HTMLElement) {
+              const containerWidth = parentElement.offsetWidth;
+              // Set a width that's slightly less than container to account for padding
+              setContainerWidth(Math.max(containerWidth - 32, 300));
+              break;
+            }
+          }
+          parentElement = parentElement.parentElement;
+        }
+        
+        // Set up a resize observer to reactively update width
+        const resizeObserver = new ResizeObserver(entries => {
+          // Try to find the parent chat container element first
+          let parent = codeBlockRef.current?.closest('[data-radix-scroll-area-viewport]');
+          
+          if (parent instanceof HTMLElement && parent.offsetWidth > 100) {
+            setContainerWidth(Math.max(parent.offsetWidth - 48, 300));
+            return;
+          }
+          
+          // Fallback to checking other parents
+          parent = codeBlockRef.current?.parentElement;
+          while (parent) {
+            if (parent instanceof HTMLElement && parent.offsetWidth > 100) {
+              setContainerWidth(Math.max(parent.offsetWidth - 32, 300));
+              break;
+            }
+            parent = parent.parentElement;
+          }
+          
+          // Also set block width based on the code block itself
+          if (entries[0] && codeBlockRef.current) {
+            setBlockWidth(entries[0].contentRect.width);
+          }
+        });
+
+        if (codeBlockRef.current) {
+          resizeObserver.observe(codeBlockRef.current);
+          
+          // Also observe a parent element if possible
+          const parent = codeBlockRef.current.parentElement;
+          if (parent) {
+            resizeObserver.observe(parent);
+          }
+          
+          // Try to observe the scroll viewport too for better responsiveness
+          const scrollViewport = codeBlockRef.current.closest('[data-radix-scroll-area-viewport]');
+          if (scrollViewport) {
+            resizeObserver.observe(scrollViewport);
+          }
+        }
+        
+        return () => resizeObserver.disconnect();
+      }
+    }, []);
+
+    const { theme } = useTheme();
+    const isSystemDark = typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const actualDarkMode = theme === "dark" || (theme === "system" && isSystemDark);
+
     const isHtml = isHtmlCode(code, lang);
     const languageExtensions = {
       javascript: "js",
@@ -318,40 +541,86 @@ const CodeBlock = memo(
       sql: "sql",
     };
 
+    useEffect(() => {
+      setCode(initialCode);
+    }, [initialCode]);
+
+    const calculateCodeFontSize = useCallback(() => {
+      return `calc(0.9rem * var(--font-scale, 1))`;
+    }, [blockWidth]);
+
     const downloadCode = useCallback(() => {
       const fileExtension =
-        languageExtensions[lang as keyof typeof languageExtensions] || ".cmp";
-      const filename = fileName || `code-snippet.${fileExtension}`;
+        languageExtensions[lang as keyof typeof languageExtensions] || "txt";
+      const resolvedFileName = fileName || `code-snippet.${fileExtension}`;
       const blob = new Blob([code], { type: "text/plain" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = filename;
+      link.download = resolvedFileName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
       toast.success("Code downloaded successfully!");
     }, [code, lang, fileName]);
+
     const runSastAnalysis = () => {
       setShowSastAnalysis(true);
     };
 
+    const handleCodeSave = (newCode: string) => {
+      setCode(newCode);
+      if (onCodeUpdate) {
+        onCodeUpdate(newCode, blockIndex);
+      }
+      setShowEditor(false);
+    };
+
+    const handleEditorOpen = () => {
+      setShowEditor(true);
+    };
+
+    // Calculate the optimal width for the code block
+    const getOptimalWidth = useMemo(() => {
+      // If we have a container width, use that to calculate
+      if (containerWidth > 0) {
+        // Use a percentage of the container width based on its size
+        if (containerWidth < 500) {
+          return `${Math.min(containerWidth, 450)}px`;
+        } else if (containerWidth < 700) {
+          return `${Math.min(containerWidth, 600)}px`;
+        } else {
+          return `${Math.min(containerWidth, 800)}px`;
+        }
+      }
+      
+      // Fallback sizing if container width couldn't be determined
+      return "min(100%, 600px)";
+    }, [containerWidth]);
+
     return (
       <div
+        ref={codeBlockRef}
         className={cn(
-          "relative mb-0 mt-0 group shadow-md w-full overflow-x-auto",
+          "relative mb-0 mt-0 group shadow-md rounded-md",
           isInteractive &&
             "hover:ring-1 hover:ring-primary/50 transition-all duration-200"
         )}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
+        style={{
+          fontSize: calculateCodeFontSize(),
+          transition: "font-size 0.3s ease-in-out, max-width 0.3s ease-in-out",
+          maxWidth: getOptimalWidth,
+          width: "100%"
+        }}
       >
         {isInteractive && (
           <div
             className={cn(
-              "bg-zinc-800/90 border-b border-zinc-700 p-1 transition-opacity duration-200",
-              isHovered ? "opacity-100" : "opacity-0"
+              "bg-zinc-800/90 border-b border-zinc-700 p-1  transition-opacity duration-200",
+              isHovered ? "opacity-100" : "opacity-0 "
             )}
           >
             <QuickActionBar
@@ -362,14 +631,14 @@ const CodeBlock = memo(
           </div>
         )}
 
-        <div className="bg-zinc-800 text-zinc-300 text-xs px-4 py-2 flex justify-between items-center font-mono">
-          <div className="flex bg-zinc-800 items-center gap-2">
+        <div className="bg-zinc-800  text-zinc-300 text-xs px-4 py-2 flex justify-between items-center font-mono">
+          <div className="flex bg-zinc-800 border-2 border-zinc-700  items-center gap-2">
             {fileName ? (
-              <span>
-                {fileName} <span className="opacity-50">({lang})</span>
+              <span className="px-2 font-scale-sm">
+                {fileName} <span className="opacity-50 px-2">({lang})</span>
               </span>
             ) : (
-              <span>{lang}</span>
+              <span className="px-2 font-scale-sm">{lang}</span>
             )}
             {isHtml && (
               <span className="bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded text-xs">
@@ -383,6 +652,98 @@ const CodeBlock = memo(
             )}
           </div>
           <div className="flex bg-zinc-800 items-center gap-2">
+            {isHtml && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-emerald-400  text-xs"
+                onClick={() => {
+                  setShowHtmlPreview(true);
+                  // Close any existing Python shell or code editor
+                  window.dispatchEvent(
+                    new CustomEvent("python-shell-close", {
+                      detail: { forced: true },
+                    }),
+                  )
+                  window.dispatchEvent(
+                    new CustomEvent("code-editor-close", {
+                      detail: { forced: true },
+                    }),
+                  )
+                }}
+              >
+                <Play className="h-3.5 w-3.5 mr-1" />
+                Run
+              </Button>
+            )}
+            {lang === "python" && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-blue-400 text-xs"
+                onClick={() => {
+                  // Handle Python shell opening
+                  window.dispatchEvent(
+                    new CustomEvent("code-editor-close", {
+                      detail: { forced: true },
+                    }),
+                  );
+                  // Allow time for the previous shell to close if it was open
+                  setTimeout(() => {
+                    setShowPythonShell(true);
+                  }, 100);
+                }}
+              >
+                <Play className="h-3.5 w-3.5 mr-1" />
+                Run
+              </Button>
+            )}
+            
+            {(lang === "javascript" ||
+              lang === "typescript" ||
+              lang === "python" ||
+              lang === "java") && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-purple-400  text-xs"
+                onClick={() => {
+                  runSastAnalysis();
+                  // Close any existing Python shell or code editor
+                  window.dispatchEvent(
+                    new CustomEvent("python-shell-close", {
+                      detail: { forced: true },
+                    }),
+                  );
+                  window.dispatchEvent(
+                    new CustomEvent("code-editor-close", {
+                      detail: { forced: true },
+                    }),
+                  );
+                }}
+              >
+                <Shield className="h-3.5 w-3.5 mr-1" />
+                SAST
+              </Button>
+            )}
+            
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-zinc-400 text-xs"
+              onClick={() => {
+                handleEditorOpen();
+                // Close any existing Python shell
+                window.dispatchEvent(
+                  new CustomEvent("python-shell-close", {
+                    detail: { forced: true },
+                  }),
+                );
+              }}
+            >
+              <Edit className="h-3.5 w-3.5 mr-1" />
+              Edit
+            </Button>
             <Button
               variant="ghost"
               size="sm"
@@ -405,42 +766,6 @@ const CodeBlock = memo(
             >
               <Download className="h-3.5 w-3.5" />
             </Button>
-            {isHtml && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 px-2 text-emerald-400 hover:text-emerald-600 text-xs"
-                onClick={() => setShowHtmlPreview(true)}
-              >
-                <Play className="h-3.5 w-3.5 mr-1" />
-                Run
-              </Button>
-            )}
-            {lang === "python" && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 px-2 text-blue-400 hover:text-blue-500 text-xs"
-                onClick={() => setShowPythonShell(true)}
-              >
-                <Play className="h-3.5 w-3.5 mr-1" />
-                Run
-              </Button>
-            )}
-            {(lang === "javascript" ||
-              lang === "typescript" ||
-              lang === "python" ||
-              lang === "java") && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 px-2 text-purple-400 hover:text-purple-500 text-xs"
-                onClick={runSastAnalysis}
-              >
-                <Shield className="h-3.5 w-3.5 mr-1" />
-                SAST
-              </Button>
-            )}
             {isInteractive && (
               <Button
                 variant="ghost"
@@ -469,11 +794,21 @@ const CodeBlock = memo(
               </Button>
             )}
             <span className="text-xs opacity-70 hidden sm:inline-block">
-              {copiedBlockIndex === blockIndex ? "Copied!" : "Click to copy"}
+              {copiedBlockIndex === blockIndex ? "Copied..." : ""}
             </span>
           </div>
         </div>
-        <PreformattedCode code={code} language={lang} darkMode={true} />
+        <PreformattedCode
+          code={code}
+          language={lang}
+          darkMode={actualDarkMode}
+          className="font-scale-base"
+          customStyle={{
+            fontSize: "inherit",
+            maxWidth: "100%", // Ensure content doesn't exceed container width
+            transition: "font-size 0.3s ease-in-out",
+          }}
+        />
         {showHtmlPreview && (
           <HtmlPreview
             htmlContent={code}
@@ -495,6 +830,16 @@ const CodeBlock = memo(
             onClose={() => setShowSastAnalysis(false)}
           />
         )}
+        {showEditor && (
+          <CodeEditorCanvas
+           
+            code={code}
+            language={lang}
+            isOpen={showEditor}
+            onClose={() => setShowEditor(false)}
+            onSave={handleCodeSave}
+          />
+        )}
       </div>
     );
   }
@@ -504,35 +849,278 @@ CodeBlock.displayName = "CodeBlock";
 TextBlock.displayName = "TextBlock";
 
 function MessageContent({
-  content,
+  content: initialContent,
   imageData,
+  syntaxHighlighting,
   showLineNumbers,
   onCodeAction,
   isInteractive,
+  onContentUpdate,
+  editorInfo
 }: MessageContentProps) {
-  const contentRef = useRef<HTMLDivElement>(null);
-  const [copiedBlockIndex, setCopiedBlockIndex] = useState<number | null>(null);
+  const [content, setContent] = useState("")
+  const [safeMode, setSafeMode] = useState(false)
+  const [showLongContentWarning, setShowLongContentWarning] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(false)
+  const codeBlocksRef = useRef<CodeBlockInfo[]>([])
+  const textRef = useRef<HTMLDivElement>(null)
+  const [safeModeContent, setSafeModeContent] = useState("")
+  const [containerWidth, setContainerWidth] = useState(0)
+  
+  // Error handling state
+  const [hasRenderError, setHasRenderError] = useState(false)
+  const [errorDetails, setErrorDetails] = useState<string | null>(null)
+  
+  // Custom sanitize function to handle broken markdown
+  const sanitizeContent = useCallback((rawContent: string): string => {
+    if (!rawContent || typeof rawContent !== 'string') return ""
+    
+    try {
+      // Prevent common markdown rendering issues
+      
+      // 1. Fix unbalanced backticks (```) that break code blocks
+      // Count backticks to check if they're balanced
+      const countBackticks = (str: string): number => {
+        return (str.match(/```/g) || []).length;
+      };
+      
+      let fixedContent = rawContent;
+      
+      // If odd number of code fence markers, add a closing marker
+      if (countBackticks(fixedContent) % 2 !== 0) {
+        fixedContent += "\n```";
+      }
+      
+      // Find unmatched/open code blocks
+      const codeBlockRegex = /```([^`]*?)(?!```)/g;
+      fixedContent = fixedContent.replace(codeBlockRegex, (match, code) => {
+        if (!match.endsWith('```')) {
+          return `${match}\n\`\`\``;
+        }
+        return match;
+      });
+      
+      // Handle broken backticks with 4 or more consecutive backticks by replacing with 3
+      fixedContent = fixedContent.replace(/````+/g, '```');
+      
+      // Ensure backticks have proper spacing
+      fixedContent = fixedContent.replace(/```(\w+)/g, '``` $1');
+      
+      // 2. Limit extremely long lines that might break layout
+      const maxLineLength = 2000;
+      fixedContent = fixedContent.split('\n').map(line => {
+        if (line.length > maxLineLength) {
+          return line.substring(0, maxLineLength) + '... [line truncated]';
+        }
+        return line;
+      }).join('\n');
+      
+      // 3. Limit total content size for safety
+      const maxContentLength = 100000;
+      if (fixedContent.length > maxContentLength) {
+        fixedContent = fixedContent.substring(0, maxContentLength) + '\n\n... [content truncated for performance]';
+      }
+      
+      return fixedContent;
+    } catch (e) {
+      console.error("Error sanitizing content:", e);
+      setErrorDetails(e instanceof Error ? e.message : "Unknown error");
+      return rawContent.substring(0, 1000) + "... [Error processing content]";
+    }
+  }, []);
+  
+  // Content size monitoring & sanitization
   useEffect(() => {
-    const handleCopy = (e: ClipboardEvent) => {
+    try {
+      if (!initialContent) {
+        setContent("");
+        return;
+      }
+      
+      const contentStr = typeof initialContent === 'string' ? initialContent : JSON.stringify(initialContent);
+      
+      if (contentStr.length > 50000) {
+        setSafeMode(true);
+        setSafeModeContent(contentStr.substring(0, 500) + "... [Content truncated for performance]");
+        setShowLongContentWarning(true);
+      } else {
+        // Apply sanitization to ensure content doesn't break UI
+        const sanitized = sanitizeContent(contentStr);
+        setContent(sanitized);
+        setSafeMode(false);
+      }
+      
+      // Reset error state when content changes
+      setHasRenderError(false);
+      setErrorDetails(null);
+    } catch (e) {
+      console.error("Error processing content:", e);
+      setHasRenderError(true);
+      setErrorDetails(e instanceof Error ? e.message : "Unknown error");
+      setSafeMode(true);
+      setSafeModeContent("Error processing content. Please try refreshing the page.");
+    }
+  }, [initialContent, sanitizeContent]);
+  
+  // Error boundary for render failures
+  useEffect(() => {
+    const handleError = (event: ErrorEvent) => {
+      event.preventDefault();
+      setHasRenderError(true);
+      setErrorDetails(event.error?.message || event.message || "Unknown error");
+      setSafeMode(true);
+      
+      const contentStr = typeof initialContent === 'string' ? initialContent : 
+                         (initialContent ? JSON.stringify(initialContent) : "");
+      setSafeModeContent(contentStr.substring(0, 500) + "... [Content truncated due to render issues]");
+    };
+    
+    window.addEventListener('error', handleError);
+    return () => window.removeEventListener('error', handleError);
+  }, [initialContent]);
+
+  const [copiedBlockIndex, setCopiedBlockIndex] = useState<number | null>(null);
+
+  // Effect to measure the parent container width (message container)
+  useEffect(() => {
+    if (textRef.current) {
+      // First try to find scroll viewport directly which is the chat-message-list
+      const scrollViewport = textRef.current.closest('[data-radix-scroll-area-viewport]');
+      if (scrollViewport instanceof HTMLElement && scrollViewport.offsetWidth > 0) {
+        // Set width based on the scroll viewport with some padding adjustment
+        setContainerWidth(Math.max(scrollViewport.offsetWidth - 40, 300));
+        return;
+      }
+      
+      // Otherwise look for message containers by class or traversing up
+      let messageContainer = textRef.current.closest('.message-container') || 
+                             textRef.current.closest('.chat-message-list') ||
+                             textRef.current.parentElement;
+                           
+      // If found a container with width, use that
+      if (messageContainer && messageContainer instanceof HTMLElement && messageContainer.offsetWidth > 0) {
+        setContainerWidth(messageContainer.offsetWidth);
+      }
+      
+      // Set up a resize observer to handle dynamic width changes
+      const resizeObserver = new ResizeObserver(entries => {
+        // First check the scroll viewport
+        const viewport = textRef.current?.closest('[data-radix-scroll-area-viewport]');
+        if (viewport instanceof HTMLElement && viewport.offsetWidth > 0) {
+          setContainerWidth(Math.max(viewport.offsetWidth - 40, 300));
+          return;
+        }
+        
+        // Then check other container elements
+        let parent = textRef.current?.parentElement;
+        let bestWidth = 0;
+        
+        while (parent) {
+          if (parent instanceof HTMLElement && parent.offsetWidth > bestWidth) {
+            bestWidth = parent.offsetWidth;
+          }
+          parent = parent.parentElement;
+        }
+        
+        if (bestWidth > 0) {
+          setContainerWidth(Math.max(bestWidth - 24, 300));
+        }
+      });
+
+      if (textRef.current) {
+        resizeObserver.observe(textRef.current);
+        
+        // Also try to observe parent elements for better responsiveness
+        let parent = textRef.current.parentElement;
+        if (parent) {
+          resizeObserver.observe(parent);
+        }
+        
+        // Observe the scroll viewport for best results
+        if (scrollViewport) {
+          resizeObserver.observe(scrollViewport);
+        }
+      }
+      
+      return () => resizeObserver.disconnect();
+    }
+  }, []);
+
+  // Calculate font scale based on container width
+  const calculateFontScale = useCallback(() => {
+    if (containerWidth) {
+      // Use container width for responsive sizing
+      if (containerWidth < 400) return 0.85;
+      if (containerWidth < 600) return 0.9;
+      if (containerWidth < 800) return 0.95;
+      if (containerWidth < 1024) return 1.0;
+      return 1.05;
+    }
+
+    // Fallback to default scale
+    return 1;
+  }, [containerWidth]);
+
+  // Calculate optimal content width
+  const getOptimalContentWidth = useMemo(() => {
+    if (containerWidth > 0) {
+      // Use a percentage of container width, with a cap
+      return `${Math.min(containerWidth - 16, 850)}px`;
+    }
+    return "100%";
+  }, [containerWidth]);
+
+  const handleCodeUpdate = (newCode: string, blockIndexToUpdate: number) => {
+    const codeBlockRegex = /^(```(?:[\s\S]*?)```)/gm;
+    let currentBlockIdx = 0;
+    const newContent = content.replace(codeBlockRegex, (matchedBlock) => {
+      if (currentBlockIdx === blockIndexToUpdate) {
+        currentBlockIdx++;
+        const firstLineBreak = matchedBlock.indexOf('\n');
+        const header = firstLineBreak !== -1 ? matchedBlock.substring(0, firstLineBreak) : matchedBlock;
+        return `${header}\n${newCode.trim()}\n\`\`\``;
+      }
+      currentBlockIdx++;
+      return matchedBlock;
+    });
+
+    setContent(newContent);
+    if (onContentUpdate) {
+      onContentUpdate(newContent);
+    }
+  };
+
+  useEffect(() => {
+    const handleCopyEvent = (e: ClipboardEvent) => {
       const selection = window.getSelection();
       if (!selection || selection.isCollapsed) return;
+
       const selectedNode = selection.anchorNode?.parentElement;
-      const codeBlock = selectedNode?.closest("pre");
-      if (codeBlock) {
-        e.preventDefault();
-        const selectedText = selection.toString();
-        const lines = selectedText.split("\n");
-        const cleanedLines = lines.map((line) => {
-          return line.replace(/^\s*\d+(?:\s{2,}|\t+)/, "");
-        });
-        const cleanedText = cleanedLines.join("\n");
-        e.clipboardData?.setData("text/plain", cleanedText);
+      const codeBlockElement = selectedNode?.closest("div[class*='react-syntax-highlighter'] pre, div > p[class*='bg-muted']");
+
+
+      if (codeBlockElement) {
+        const isSyntaxHighlightedBlock = codeBlockElement.tagName === 'PRE';
+
+        if (showLineNumbers && isSyntaxHighlightedBlock) {
+            e.preventDefault();
+            const selectedText = selection.toString();
+            const lines = selectedText.split("\n");
+            const cleanedLines = lines.map((line) => {
+
+            return line.replace(/^\s*\d+(?:\s{2,}|\t)\s*/, "");
+            });
+            const cleanedText = cleanedLines.join("\n");
+            e.clipboardData?.setData("text/plain", cleanedText);
+        }
+
       }
     };
 
-    document.addEventListener("copy", handleCopy);
-    return () => document.removeEventListener("copy", handleCopy);
+    document.addEventListener("copy", handleCopyEvent);
+    return () => document.removeEventListener("copy", handleCopyEvent);
   }, [showLineNumbers]);
+
 
   const getSavedSnippets = (): SavedSnippet[] => {
     try {
@@ -561,32 +1149,21 @@ function MessageContent({
   const addSnippetToLocalStorage = (
     snippetName: string,
     snippetDescription: string,
-    code: string
+    codeToAdd: string
   ) => {
     const humanReadableDate = new Date().toLocaleString();
     addSnippet({
       id: Date.now().toString(),
       name: snippetName,
       description: `${snippetDescription} - ${humanReadableDate}`,
-      code: code,
+      code: codeToAdd,
     });
     toast.success("Snippet added to local storage!");
   };
 
-  const copyCodeBlock = useCallback((code: string, blockIndex: number) => {
-    const lines = code.split("\n");
-    const isLineNumbered = lines.every(
-      (line) => line.trim() === "" || /^\s*\d+(?:\s{2,}|\t+)/.test(line)
-    );
-
-    const cleanedLines = isLineNumbered
-      ? lines.map((line) => line.replace(/^\s*\d+(?:\s{2,}|\t+)/, ""))
-      : lines;
-
-    const cleanedCode = cleanedLines.join("\n");
-
+  const copyCodeBlock = useCallback((codeToCopy: string, blockIndex: number) => {
     navigator.clipboard
-      .writeText(cleanedCode)
+      .writeText(codeToCopy)
       .then(() => {
         setCopiedBlockIndex(blockIndex);
         toast.success("Code was copied");
@@ -598,6 +1175,84 @@ function MessageContent({
       });
   }, []);
 
+  const isLikelyCode = (text: string) => {
+
+    if (text.length < 10) return false;
+
+    const codePatterns = [
+      /\b(if|else|for|while|function|class|import|export|return|const|let|var)\b/,
+      /[{}[\](),;:]/,
+      /=>|\+\+|--|\+=|-=|\*=|\/=/,
+      /\/\/|\/\*|\*\//,
+      /[a-zA-Z_][a-zA-Z0-9_]*\s*\(/,
+      /[a-zA-Z_][a-zA-Z0-9_]*\s*=/,
+    ];
+
+    const matches = codePatterns.filter(pattern => pattern.test(text));
+    if (matches.length < 2) return false;
+
+    const brackets = text.match(/[{}[\]]/g) || [];
+    const stack: string[] = [];
+    const pairs: Record<string, string> = { '{': '}', '[': ']' };
+
+    for (const bracket of brackets) {
+      if (bracket in pairs) {
+        stack.push(bracket);
+      } else {
+        const last = stack.pop();
+        if (!last || pairs[last] !== bracket) {
+          return false;
+        }
+      }
+    }
+
+    return stack.length === 0;
+  };
+
+  const detectCodeLanguage = (text: string): string | null => {
+    const patterns: Record<string, RegExp[]> = {
+      javascript: [
+        /\b(import|export|const|let|var|function|class)\b/,
+        /=>|\{|\}/,
+        /console\.log/,
+      ],
+      typescript: [
+        /\b(interface|type|enum|namespace)\b/,
+        /: (string|number|boolean|any|void|never)/,
+        /\b(import|export|const|let|var|function|class)\b/,
+      ],
+      python: [
+        /\b(def|class|import|for|while|if|else|elif|return)\b/,
+        /:/,
+        /\b(True|False|None)\b/,
+      ],
+      java: [
+        /\b(public|private|protected|class|static|void|String|int|System\.out\.println)\b/,
+        /[{};]/,
+      ],
+      html: [
+        /<[a-z][^>]*>/i,
+        /<\/[a-z][^>]*>/i,
+        /<[a-z][^>]*\/>/i,
+      ],
+      css: [
+        /[a-zA-Z-]+\s*:/,
+        /{[^}]*}/,
+        /#[0-9a-fA-F]{3,6}/,
+      ],
+    };
+
+    const scores: Record<string, number> = {};
+    for (const [lang, langPatterns] of Object.entries(patterns)) {
+      scores[lang] = langPatterns.filter(pattern => pattern.test(text)).length;
+    }
+
+    const maxScore = Math.max(...Object.values(scores));
+    if (maxScore === 0) return null;
+
+    return Object.entries(scores).find(([_, score]) => score === maxScore)?.[0] || null;
+  };
+
   const handleCodeSelection = () => {
     const selection = window.getSelection();
     if (!selection || selection.isCollapsed) return;
@@ -605,82 +1260,73 @@ function MessageContent({
     const selectedText = selection.toString().trim();
     if (!selectedText) return;
 
-    const isLikelyCode = (text: string) => {
-      return text.length > 10 && text.split("\n").length > 1;
-    };
-
-    const detectCodeLanguage = (text: string) => {
-      if (text.includes("import React")) return "javascript";
-      if (text.includes("def ")) return "python";
-      return null;
-    };
+    const anchorNode = selection.anchorNode as Element;
+    const codeBlockElement = anchorNode?.closest?.("div[class*='react-syntax-highlighter'] pre, div > p[class*='bg-muted']");
+    if (codeBlockElement) return;
 
     if (isLikelyCode(selectedText)) {
+      const detectedLang = detectCodeLanguage(selectedText);
+      if (!detectedLang) return;
+
       const range = selection.getRangeAt(0);
       const rect = range.getBoundingClientRect();
       const menu = document.createElement("div");
-      menu.className =
-        "fixed z-50 bg-background border rounded-md shadow-md p-1 flex gap-1";
-      menu.style.left = `${rect.left}px`;
+      menu.className = "fixed z-50 bg-background border rounded-md shadow-lg p-1 flex gap-1";
+      menu.style.left = `${Math.max(0, rect.left)}px`;
       menu.style.top = `${rect.bottom + 5}px`;
+
       const actions = [
         {
-          label: "Explain part of code",
-          icon: "MessageSquare",
-          action: () =>
-            onCodeAction(
-              "explain-code",
-              selectedText,
-              detectCodeLanguage(selectedText) || "text"
-            ),
+          label: "Explain",
+          action: () => onCodeAction("explain-code", selectedText, detectedLang),
         },
         {
           label: "Modify",
-          icon: "Edit",
           action: () => {
             window.dispatchEvent(
               new CustomEvent("use-code", {
                 detail: {
                   code: selectedText,
-                  language: detectCodeLanguage(selectedText) || "text",
-                  fileName: `snippet.${
-                    detectCodeLanguage(selectedText) || "txt"
-                  }`,
+                  language: detectedLang,
+                  fileName: `snippet.${detectedLang}`,
                 },
               })
             );
           },
         },
         {
-          label: "Add to code templates",
-          icon: "Plus",
+          label: "Save Snippet",
           action: () => {
             addSnippetToLocalStorage(
-              "Partial Code Snippet",
-              "Description",
+              "Selected Code Snippet",
+              `Saved from selection (${detectedLang})`,
               selectedText
             );
           },
         },
       ];
 
-      actions.forEach((action) => {
+      actions.forEach((actionItem) => {
         const button = document.createElement("button");
         button.className =
           "px-2 py-1 text-xs rounded hover:bg-muted flex items-center gap-1";
-        button.innerHTML = `<span>${action.label}</span>`;
-        button.onclick = () => {
-          action.action();
+        button.textContent = actionItem.label;
+        button.onclick = (e) => {
+          e.stopPropagation();
+          actionItem.action();
           if (document.body.contains(menu)) {
             document.body.removeChild(menu);
           }
         };
         menu.appendChild(button);
       });
+
       const closeButton = document.createElement("button");
-      closeButton.className = "px-1 text-xs rounded hover:bg-muted";
-      closeButton.innerHTML = "×";
-      closeButton.onclick = () => {
+      closeButton.className = "px-1.5 py-0.5 text-xs rounded hover:bg-muted flex items-center justify-center";
+      closeButton.innerHTML = "&times;";
+      closeButton.setAttribute("aria-label", "Close menu");
+      closeButton.onclick = (e) => {
+        e.stopPropagation();
         if (document.body.contains(menu)) {
           document.body.removeChild(menu);
         }
@@ -694,133 +1340,290 @@ function MessageContent({
             document.body.removeChild(menu);
           }
           document.removeEventListener("mousedown", handleClickOutside);
+          window.removeEventListener("blur", handleBlur);
         }
       };
-      document.addEventListener("mousedown", handleClickOutside);
+      const handleBlur = () => {
+         if (document.body.contains(menu)) {
+            document.body.removeChild(menu);
+          }
+          document.removeEventListener("mousedown", handleClickOutside);
+          window.removeEventListener("blur", handleBlur);
+      }
+      setTimeout(() => {
+        document.addEventListener("mousedown", handleClickOutside);
+        window.addEventListener("blur", handleBlur);
+      }, 0);
     }
   };
   useEffect(() => {
+    const currentRef = textRef.current;
     const handleMouseUp = () => {
-      handleCodeSelection();
+
+      setTimeout(handleCodeSelection, 50);
     };
 
-    contentRef.current?.addEventListener("mouseup", handleMouseUp);
-
+    currentRef?.addEventListener("mouseup", handleMouseUp);
     return () => {
-      contentRef.current?.removeEventListener("mouseup", handleMouseUp);
+      currentRef?.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [onCodeAction]);
+  }, [onCodeAction, content]);
 
-  const multilineRegex = /^(`{3,})(\w*)\n([\s\S]*?)\n?\1 *$/gm;
-  const inlineSameLineRegex = /(`{3,})(\w+)?\s+(.*?)(?:\s*\1)/g;
+  // Fix the regex patterns to correctly match code blocks with backticks
+  const multilineRegex = /^[ \t]*(\`{3,})[ \t]*([^\`\r\n]*?)[ \t]*\n([\s\S]*?)(\1)[ \t]*$/gm;
+  
+  // Fallback pattern for unclosed code blocks (will still capture content)
+  const unclosedCodeBlockRegex = /^[ \t]*(\`{3,})[ \t]*([^\`\r\n]*?)[ \t]*\n([\s\S]*?)($)/gm;
+  
+  // Regex for inline code blocks (three or more backticks on a single line)
+  const inlineSameLineRegex = /(\`{3,})[ \t]*([^\s\`\r\n]+)[ \t]+([\s\S]*?)[ \t]*\1/g;
 
   const parts: React.ReactNode[] = [];
   const safeContent = typeof content === "string" ? content : "";
 
+  // Modified code block processing algorithm
   let lastIndex = 0;
   let match: RegExpExecArray | null;
-  let blockIndex = 0;
-
+  let partKeyIndex = 0;
+  let codeBlockRenderIndex = 0;
+  
+  // First try to match proper code blocks
   while ((match = multilineRegex.exec(safeContent)) !== null) {
-    const [fullMatch, backticks, langRaw = "text", rawCode] = match;
+    const [fullMatch, openingFence, langAndFileRaw = "", rawCodeContent] = match;
 
     if (match.index > lastIndex) {
-      const beforeCode = safeContent.slice(lastIndex, match.index).trim();
-      if (beforeCode) {
+      const beforeCode = safeContent.slice(lastIndex, match.index);
+      if (beforeCode.trim()) {
         parts.push(
-          <TextBlock key={`text-${blockIndex}`} content={beforeCode} imageData={imageData} />
+          <TextBlock key={`part-${partKeyIndex++}`} content={beforeCode} imageData={imageData} />
         );
-        blockIndex++;
       }
     }
 
-    const lang = normalizeLang(langRaw.trim() || "Block");
-    let code = rawCode.trim();
-
+    let lang = "";
     let fileName = "";
-    if (code.startsWith("File:")) {
+    const langAndFile = langAndFileRaw.trim();
+
+    if (langAndFile) {
+        const firstSpaceIndex = langAndFile.indexOf(" ");
+        if (firstSpaceIndex !== -1) {
+            lang = langAndFile.substring(0, firstSpaceIndex);
+            const rest = langAndFile.substring(firstSpaceIndex + 1).trim();
+            if (rest.toLowerCase().startsWith("file:")) {
+                fileName = rest.substring(5).trim();
+            } else {
+                lang = langAndFile;
+            }
+        } else {
+            lang = langAndFile;
+        }
+    }
+
+    const normalizedLang = normalizeLang(lang || "output");
+    let code = rawCodeContent.replace(/\n$/, '');
+    if (!fileName && code.startsWith("File:")) {
       const firstLineBreak = code.indexOf("\n");
       if (firstLineBreak !== -1) {
         fileName = code.substring(5, firstLineBreak).trim();
-        code = code.substring(firstLineBreak + 1).trim();
+        code = code.substring(firstLineBreak + 1);
       }
     }
-    const lowerCasedLang = lang.toLowerCase();
-    if (
-      ["block", "plaintext", "markdown", "text", "general", "codeandexplanation"].includes(lowerCasedLang)
-    ) {
-      parts.push(<Markdown>{code}</Markdown>);
+
+    code = code.trim();
+
+    if (normalizedLang === "codeandexplanation") {
+      parts.push(
+        <Markdown key={`part-${partKeyIndex++}`} remarkPlugins={[remarkGfm]}>
+          {code}
+        </Markdown>
+      );
+      codeBlockRenderIndex++;
     } else {
       parts.push(
         <CodeBlock
-          key={`code-${blockIndex}`}
+          key={`part-${partKeyIndex++}`}
           code={code}
-          lang={lang}
+          lang={normalizedLang}
           fileName={fileName}
           showLineNumbers={showLineNumbers}
-          blockIndex={blockIndex}
+          blockIndex={codeBlockRenderIndex}
           copiedBlockIndex={copiedBlockIndex}
           onCopy={copyCodeBlock}
           onAction={onCodeAction}
           isInteractive={isInteractive}
+          onCodeUpdate={handleCodeUpdate}
         />
       );
+      codeBlockRenderIndex++;
     }
-
-    lastIndex = match.index + fullMatch.length;
-    blockIndex++;
+    lastIndex = multilineRegex.lastIndex;
   }
-  let trailing = safeContent.slice(lastIndex).trim();
+  
+  // Try to match unclosed code blocks
+  unclosedCodeBlockRegex.lastIndex = lastIndex;
+  while ((match = unclosedCodeBlockRegex.exec(safeContent)) !== null) {
+    // Skip if this match overlaps with already processed content
+    if (match.index < lastIndex) continue;
+    
+    const [fullMatch, openingFence, langAndFileRaw = "", rawCodeContent] = match;
 
-  while ((match = inlineSameLineRegex.exec(trailing)) !== null) {
-    const [fullMatch, backticks, langRaw = "text", rawCode] = match;
-
-    const beforeInline = trailing.slice(0, match.index).trim();
-    if (beforeInline) {
-      parts.push(
-        <TextBlock key={`text-${blockIndex}`} content={beforeInline} />
-      );
-      blockIndex++;
+    if (match.index > lastIndex) {
+      const beforeCode = safeContent.slice(lastIndex, match.index);
+      if (beforeCode.trim()) {
+        parts.push(
+          <TextBlock key={`part-${partKeyIndex++}`} content={beforeCode} imageData={imageData} />
+        );
+      }
     }
+
+    let lang = langAndFileRaw.trim() || "output";
+    const normalizedLang = normalizeLang(lang);
+    let code = rawCodeContent.trim();
 
     parts.push(
       <CodeBlock
-        key={`inline-${blockIndex}`}
-        code={rawCode.trim()}
-        lang={normalizeLang(langRaw.trim() || "text")}
-        showLineNumbers={false}
-        blockIndex={blockIndex}
+        key={`part-${partKeyIndex++}`}
+        code={code}
+        lang={normalizedLang}
+        fileName={""}
+        showLineNumbers={showLineNumbers}
+        blockIndex={codeBlockRenderIndex}
         copiedBlockIndex={copiedBlockIndex}
         onCopy={copyCodeBlock}
         onAction={onCodeAction}
         isInteractive={isInteractive}
+        onCodeUpdate={handleCodeUpdate}
       />
     );
-
-    trailing = trailing.slice(match.index + fullMatch.length).trim();
-    inlineSameLineRegex.lastIndex = 0;
-    blockIndex++;
+    codeBlockRenderIndex++;
+    lastIndex = unclosedCodeBlockRegex.lastIndex;
   }
 
-  if (trailing.trim()) {
-    parts.push(
-      <TextBlock key={`text-${blockIndex}`} content={trailing.trim()} />
+  // Process any remaining content
+  let trailingContent = safeContent.slice(lastIndex);
+
+  // Try to match inline code blocks (triple backticks on single line)
+  inlineSameLineRegex.lastIndex = 0;
+  let currentTrailingIndex = 0;
+  let tempTrailingParts: React.ReactNode[] = [];
+
+  while ((match = inlineSameLineRegex.exec(trailingContent)) !== null) {
+    if (match.index > currentTrailingIndex) {
+        const textBeforeInline = trailingContent.slice(currentTrailingIndex, match.index);
+        if (textBeforeInline.trim()){
+             tempTrailingParts.push(
+                <TextBlock key={`part-${partKeyIndex++}`} content={textBeforeInline} imageData={imageData} />
+             );
+        }
+    }
+
+    const [_fullMatch, _backticks, langRaw = "text", rawCode] = match;
+    const normalizedLang = normalizeLang(langRaw.trim() || "text");
+    const code = rawCode?.trim();
+
+    if (normalizedLang === "codeandexplanation") {
+         tempTrailingParts.push(
+            <Markdown key={`part-${partKeyIndex++}`} remarkPlugins={[remarkGfm]}>
+                {code}
+            </Markdown>
+         );
+         codeBlockRenderIndex++;
+    } else {
+         tempTrailingParts.push(
+            <CodeBlock
+                key={`part-${partKeyIndex++}`}
+                code={code}
+                lang={normalizedLang}
+                showLineNumbers={false}
+                blockIndex={codeBlockRenderIndex}
+                copiedBlockIndex={copiedBlockIndex}
+                onCopy={copyCodeBlock}
+                onAction={onCodeAction}
+                isInteractive={isInteractive}
+                onCodeUpdate={handleCodeUpdate}
+            />
+         );
+         codeBlockRenderIndex++;
+    }
+    currentTrailingIndex = inlineSameLineRegex.lastIndex;
+  }
+
+  parts.push(...tempTrailingParts);
+
+  if (currentTrailingIndex < trailingContent.length) {
+    const finalText = trailingContent.slice(currentTrailingIndex);
+    if (finalText.trim()) {
+      parts.push(
+        <TextBlock key={`part-${partKeyIndex++}`} content={finalText} imageData={parts.length === 0 ? imageData : undefined} />
+      );
+    }
+  }
+  
+  // Add image if only image is present
+  if (parts.length === 0 && imageData && !safeContent.trim()) {
+    parts.push(<TextBlock key={`part-${partKeyIndex++}`} content="" imageData={imageData} />);
+  }
+
+  // Render fallback for safe mode or errors
+  if (safeMode || hasRenderError) {
+    return (
+      <div className="w-full break-words">
+        <div className="p-4 rounded-md my-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
+          <h3 className="font-medium text-amber-800 dark:text-amber-200">
+            {hasRenderError ? "Rendering Error" : "Content Safety Mode"}
+          </h3>
+          <p className="text-sm mt-2 text-amber-700 dark:text-amber-300">
+            {hasRenderError 
+              ? `There was an error rendering this content: ${errorDetails || "Unknown error"}` 
+              : "This content is too large to display fully and has been truncated for performance."}
+          </p>
+          <div className="mt-3 p-2 bg-white dark:bg-gray-800 rounded overflow-auto max-h-[200px]">
+            <pre className="text-xs whitespace-pre-wrap break-all">
+              {safeModeContent}
+            </pre>
+          </div>
+          {showLongContentWarning && !hasRenderError && (
+            <Button 
+              size="sm" 
+              variant="outline" 
+              className="mt-3" 
+              onClick={() => {
+                setSafeMode(false);
+                setContent(typeof initialContent === 'string' ? initialContent : JSON.stringify(initialContent));
+                setIsExpanded(true);
+              }}
+            >
+              Show Full Content (May Affect Performance)
+            </Button>
+          )}
+        </div>
+      </div>
     );
   }
 
   return (
-    <div ref={contentRef} className="w-full overflow-x-auto break-words">
+    <div
+      ref={textRef}
+      className="w-full break-words overflow-hidden"
+      style={{
+        maxWidth: getOptimalContentWidth,
+        width: "100%",
+        transition: "font-size 0.3s ease-in-out, max-width 0.3s ease-in-out",
+        fontSize: containerWidth ? `calc(${calculateFontScale()} * 1rem * var(--font-scale, 1))` : undefined
+      }}
+    >
       {parts.length > 0 ? (
         parts.map((part, index) => (
-          <div key={index} className="mb-4 last:mb-0 overflow-x-auto">
+          <div key={index} className="mb-4 last:mb-0 w-full overflow-x-hidden">
             {part}
           </div>
         ))
       ) : (
-        <div className="text-muted-foreground">No content to display</div>
+        <div className="text-muted-foreground p-3">No content to display.</div>
       )}
     </div>
   );
 }
 
 export default memo(MessageContent);
+

@@ -1,7 +1,6 @@
 "use client";
 
 import type React from "react";
-
 import { useState, useEffect, useRef, useCallback } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
@@ -16,6 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useChat } from "@/context/chat-context";
 import { loadChatHistory, deleteChatFromHistory } from "@/utils/chat-utils";
 import { STORAGE_KEYS } from "@/config/constants";
+import { useSidebar } from "@/components/ui/sidebar";
 
 interface ChatHistoryItem {
   id: string;
@@ -28,9 +28,7 @@ interface ChatHistoryItem {
 
 export function ChatHistory() {
   const [chatHistory, setChatHistory] = useState<ChatHistoryItem[]>([]);
-  const [selectedChat, setSelectedChat] = useState<ChatHistoryItem | null>(
-    null
-  );
+  const [selectedChat, setSelectedChat] = useState<ChatHistoryItem | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [chatToDelete, setChatToDelete] = useState<string | null>(null);
@@ -40,9 +38,18 @@ export function ChatHistory() {
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
   const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
   const [previousMessages, setPreviousMessages] = useState<any[] | null>(null);
-  const { messages, setMessages } = useChat();
-
+  const { messages, setMessages, chatId } = useChat();
   const initialLoadRef = useRef(false);
+  
+  const sidebarContext = (() => {
+    try {
+      return useSidebar();
+    } catch {
+      return null;
+    }
+  })();
+  
+  const { fontScale } = sidebarContext || { fontScale: 1 };
 
   useEffect(() => {
     setIsLoading(true);
@@ -119,7 +126,7 @@ export function ChatHistory() {
         .filter((message) => message.role === "assistant")
         .map((message) => message.content)
         .join("\n -- Next Message from AI -- \n");
-      giveMemory("default", userMessages, assistantMessages);
+      giveMemory(chatId, userMessages, assistantMessages);
       toast.success(
         "Your messages are restored for you, if you want to make the AI understand them, use the 'Use this' button"
       );
@@ -194,7 +201,7 @@ export function ChatHistory() {
           .filter((message) => message.role === "assistant")
           .map((message) => message.content)
           .join("\n -- Next Assistant Message -- \n");
-        giveMemory("default", userMessages, assistantMessages);
+        giveMemory(chatId, userMessages, assistantMessages);
         toast.success(
           "Your messages are restored for you, if you want to make the AI understand them, use the 'Use this' button"
         );
@@ -276,8 +283,10 @@ export function ChatHistory() {
     <div className="flex flex-col h-full">
       <div className="px-4 border-b">
         {bubbleOpen && (
-          <div className="w-100 my-3 items-center gap-2 py-3 p-2 bg-blue-500/10 rounded-md border border-blue-200 dark:border-blue-800">
-            <p className="text-xs ">
+          <div className={cn(
+            "w-100 my-3 items-center gap-2 py-3 px-2  bg-blue-500/10 rounded-md border border-blue-200 dark:border-blue-800",
+          )}>
+            <p className="text-xs">
               Your previous session has {previousMessages?.length || 0} messages
               that weren't saved. You can restore it or just ignore it.
             </p>
@@ -294,8 +303,8 @@ export function ChatHistory() {
             </Button>
           </div>
         )}
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-semibold flex items-center gap-1">
+        <div className="flex items-center justify-between mb-2 mt-4">
+          <h3 className={cn("text-sm font-semibold flex items-center gap-1")}>
             <HistoryIcon className="h-4 w-4" />
             Saved Chats
           </h3>
@@ -310,7 +319,7 @@ export function ChatHistory() {
             <span className="sr-only">Refresh</span>
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground mb-2">
+        <p className={cn("text-xs text-muted-foreground mb-4")}>
           Reference your previous conversations
         </p>
         <div className="relative">
@@ -322,11 +331,11 @@ export function ChatHistory() {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-        <div className="flex items-center justify-between mt-2">
+        <div className="flex items-center justify-between mt-2 mb-3">
           <Button
             variant="ghost"
             size="sm"
-            className="h-7 text-xs flex items-center gap-1"
+            className={cn("h-7 text-xs flex items-center gap-1")}
             onClick={toggleSortOrder}
           >
             <ArrowUpDown className="h-3 w-3" />
@@ -356,11 +365,11 @@ export function ChatHistory() {
           ))}
         </div>
       ) : chatHistory.length === 0 ? (
-        <div className="flex flex-col items-center justify-center flex-1 p-4 text-center">
-          <div className="bg-muted/50 p-6 rounded-lg">
+        <div className="flex flex-col items-center justify-center flex-1 p-3 text-center">
+          <div className=" p-6 rounded-lg">
             <MessageSquare className="h-10 w-10 text-muted-foreground mb-3 mx-auto" />
-            <h4 className="text-sm font-medium">No saved chats</h4>
-            <p className="text-xs text-muted-foreground mt-1 mb-3">
+            <h4 className={cn("text-sm font-medium")}>No saved chats</h4>
+            <p className={cn("text-xs text-muted-foreground mt-1 mb-3")}>
               Your saved chats will appear here for future reference. All chats
               are saved locally
             </p>
@@ -372,7 +381,7 @@ export function ChatHistory() {
             {filteredHistory.length === 0 ? (
               <div className="flex flex-col items-center justify-center p-4 text-center">
                 <Search className="h-8 w-8 text-muted-foreground mb-2 opacity-50" />
-                <p className="text-sm text-muted-foreground">
+                <p className={cn("text-sm text-muted-foreground")}>
                   No chats match your search
                 </p>
                 <Button
@@ -388,17 +397,20 @@ export function ChatHistory() {
               filteredHistory.map((chat) => (
                 <div
                   key={chat.id}
-                  className="p-3 rounded-md border hover:bg-accent/50 cursor-pointer transition-colors"
+                  className={cn(
+                    "p-3 rounded-md border hover:bg-accent/50 cursor-pointer transition-colors",
+                    fontScale > 1 ? "space-y-1.5" : "space-y-0.5" // Add more spacing for larger font sizes
+                  )}
                   onClick={() => viewChat(chat)}
                 >
                   <div className="flex justify-between items-start">
                     <div className="flex-1 min-w-0">
-                      <h4 className="text-sm font-medium truncate">
+                      <h4 className={cn("text-sm font-medium truncate")}>
                         {chat.title}
                       </h4>
                       <div className="flex items-center gap-1 mt-1">
                         <Clock className="h-3 w-3 text-muted-foreground" />
-                        <p className="text-xs text-muted-foreground">
+                        <p className={cn("text-xs text-muted-foreground")}>
                           {formatRelativeTime(chat.lastUpdated || chat.date)}
                         </p>
                       </div>
@@ -424,7 +436,7 @@ export function ChatHistory() {
                       </Button>
                     </div>
                   </div>
-                  <p className="text-xs mt-2 line-clamp-2 text-muted-foreground">
+                  <p className={cn("text-xs mt-2 line-clamp-2 text-muted-foreground")}>
                     {chat.preview}
                   </p>
 
@@ -434,7 +446,7 @@ export function ChatHistory() {
                       {chat.messages.length}{" "}
                       {chat.messages.length === 1 ? "message" : "messages"}
                     </Badge>
-                    <div className="text-xs text-muted-foreground">
+                    <div className={cn("text-xs text-muted-foreground")}>
                       <Calendar className="h-3 w-3 inline mr-1" />
                       {new Date(chat.date).toLocaleDateString()}
                     </div>
@@ -478,7 +490,7 @@ export function ChatHistory() {
                 >
                   <div className="flex items-center gap-2 mb-1">
                     <Badge variant="outline">
-                      {message.role === "user" ? "You" : "TARS"}
+                      {message.role === "user" ? "You" : "CodeMasterPro"}
                     </Badge>
                   </div>
                   <p className="text-sm whitespace-pre-wrap">

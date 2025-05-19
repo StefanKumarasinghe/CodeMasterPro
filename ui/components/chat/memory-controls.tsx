@@ -2,100 +2,19 @@
 
 import type React from "react";
 import { Button } from "@/components/ui/button";
-import {ChevronDown,BrainCircuit,BrainCogIcon,BrainIcon} from "lucide-react";
-import { API_ENDPOINT, STORAGE_KEYS } from "@/config/constants";
+import {ChevronDown,BrainCircuit,BrainCogIcon, MessageCircleDashed ,BrainIcon} from "lucide-react";
+import { API_ENDPOINT } from "@/config/constants";
 import {Tooltip,TooltipContent,TooltipProvider,TooltipTrigger} from "@/components/ui/tooltip";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { toast } from "@/utils/toast-util";
 import { useChat } from "@/context/chat-context";
 
 import {DropdownMenu,DropdownMenuContent,DropdownMenuItem,DropdownMenuTrigger} from "@/components/ui/dropdown-menu";
 
-const IconButton = ({ onClick,icon: Icon,tooltip,variant = "outline"}: {onClick: () => void; icon: React.ElementType; tooltip: string; variant?: "outline" | "secondary";}) => (
-  <Tooltip>
-    <TooltipTrigger asChild>
-      <Button
-        variant={variant}
-        size="icon"
-        className="rounded-full h-9 w-9"
-        onClick={onClick}
-      >
-        <Icon className="h-4 w-4" />
-      </Button>
-    </TooltipTrigger>
-    <TooltipContent>
-      <p>{tooltip}</p>
-    </TooltipContent>
-  </Tooltip>
-);
 
 export function MemoryControls() {
-  const { setMessages } = useChat();
-  const [modelType, setModelType] = useState<string>("fast");
-  const [currentModelName, setCurrentModelName] = useState<string>("");
+  const { setMessages, modelType, setModelType , setMcp, mcp} = useChat();
   const [isLoading, setIsLoading] = useState(false);
-
-  useEffect(() => {
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = "";
-      forgetMemory();
-    };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-    };
-  }, []);
-
-  useEffect(() => {
-    fetchCurrentModel();
-  }, []);
-
-  const fetchCurrentModel = async () => {
-    try {
-      setIsLoading(true);
-      const response = await fetch(`${API_ENDPOINT}/current_model`);
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch current model");
-      }
-
-      const data = await response.json();
-      if (data.current_model) {
-        const modelName = data.current_model;
-        setCurrentModelName(modelName);
-        if (modelName.includes("2.0-flash")) {
-          setModelType("fast");
-          localStorage.setItem(STORAGE_KEYS.MODEL_TYPE, "fast");
-        } else if (modelName.includes("pro")) {
-          setModelType("advanced");
-          localStorage.setItem(STORAGE_KEYS.MODEL_TYPE, "advanced");
-        } else if (modelName.includes("Quick")) {
-          setModelType("quick-think");
-          localStorage.setItem(STORAGE_KEYS.MODEL_TYPE, "quick-think");
-        }
-        else {
-          setModelType("think");
-          localStorage.setItem(STORAGE_KEYS.MODEL_TYPE, "think");
-        }
-      }
-    } catch (error) {
-      console.error("Failed to fetch current model:", error);
-      const savedModelType = localStorage.getItem(STORAGE_KEYS.MODEL_TYPE);
-      if (savedModelType) {
-        setModelType(savedModelType);
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    const savedModelType = localStorage.getItem(STORAGE_KEYS.MODEL_TYPE);
-    if (savedModelType) {
-      setModelType(savedModelType);
-    }
-  }, []);
 
   const forgetMemory = async () => {
     try {
@@ -107,7 +26,15 @@ export function MemoryControls() {
         throw new Error("Failed to clear memory");
       }
 
-      toast.success("Memory erased successfully!");
+      window.dispatchEvent(new CustomEvent('code-editor-state', {
+        detail: { isOpen: false, width: 0 }
+      }));
+      window.dispatchEvent(new CustomEvent('python-shell-state', {
+        detail: { isOpen: false, width: 0 }
+      }));
+      window.dispatchEvent(new CustomEvent('memory-cleared'));
+
+      toast.success("All Short Term Memory erased successfully!");
     } catch (error) {
       console.error("Failed to clear memory:", error);
       toast.error("Failed to clear memory");
@@ -116,20 +43,10 @@ export function MemoryControls() {
 
   const changeModel = async (type: string) => {
     try {
-      const response = await fetch(`${API_ENDPOINT}/change_model`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ model: type }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to change model");
-      }
       setModelType(type);
-      localStorage.setItem(STORAGE_KEYS.MODEL_TYPE, type);
-      await fetchCurrentModel();
+      if (["quick"].includes(mcp)) {
+        setMcp("auto");
+      }
       toast.success(`Model changed to ${type}`);
     } catch (error) {
       console.error("Failed to change model:", error);
@@ -140,16 +57,14 @@ export function MemoryControls() {
   const getModelDisplayName = () => {
     if (isLoading) return "Loading...";
     if (modelType === "advanced") {
-      return currentModelName
-        ? `Advanced: ${currentModelName}`
-        : "Advanced (Slow)";
+      return "Reasoner"
     } else if (modelType === "fast") {
-      return currentModelName ? `Fast: ${currentModelName}` : "Fast (Fast)";
+      return "Fast";
     } else if (modelType === "quick-think") {
-      return currentModelName ? `Quick Reasoner (1mins+): ${currentModelName}` : "Reasoner (Slow)";
+      return `Quick Reasoner`
     }
     else {
-      return currentModelName ? `Reasoner (3mins+): ${currentModelName}` : "Reasoner (Very Slow)";
+      return `Gemini 2.5 Pro` 
     }
   };
 
@@ -178,7 +93,7 @@ export function MemoryControls() {
             </TooltipContent>
           </Tooltip>
           <DropdownMenuContent className="text-center" align="end">
-            <DropdownMenuItem  onClick={() => changeModel("fast")}>
+            <DropdownMenuItem onClick={() => changeModel("fast")}>
               {" "}
               <BrainCogIcon className="mr-2 h-4 w-4" /> Gemini Flash (Fast)
             </DropdownMenuItem>
@@ -193,14 +108,22 @@ export function MemoryControls() {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <IconButton
-          onClick={() => {
-            forgetMemory();
-            setMessages([]);
-          }}
-          icon={BrainIcon}
-          tooltip="Forget Short-Term Memory"
-        />
+        <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            onClick={() => {
+              forgetMemory();
+              setMessages([]);
+            }}
+            variant="ghost"
+          >
+            <MessageCircleDashed style={{ height: "1.2rem", width: "1.2rem" }} />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Erase all short term memory</p>
+        </TooltipContent>
+      </Tooltip>
       </TooltipProvider>
     </div>
   );

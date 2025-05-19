@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState, useRef, useEffect } from "react"
-import { Maximize2, Minimize2, Play, Square, ChevronRight, Terminal, Package, Clock, MessageSquare, Copy } from "lucide-react"
+import { Maximize2, Minimize2, Play, Square, ChevronRight, Package, Clock, MessageSquare, Copy } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { API_ENDPOINT } from "@/config/constants"
 import { toast } from "@/utils/toast-util"
@@ -29,7 +29,9 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
   const [isFullscreen, setIsFullscreen] = useState(true)
   const [isRunning, setIsRunning] = useState(false)
   const [output, setOutput] = useState<PythonOutput | null>(null)
-  const [outputHistory, setOutputHistory] = useState<Array<{ type: "command" | "result" | "system"; content: string | PythonOutput }>>([])
+  const [outputHistory, setOutputHistory] = useState<
+    Array<{ type: "command" | "result" | "system"; content: string | PythonOutput }>
+  >([])
   const [command, setCommand] = useState("")
   const [sessionId, setSessionId] = useState<string>("")
   const [dependencies, setDependencies] = useState<string[]>([])
@@ -39,9 +41,11 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
   const [showCorrectedCode, setShowCorrectedCode] = useState(false)
   const outputRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement | HTMLInputElement>(null)
+  const shellRef = useRef<HTMLDivElement>(null)
   const { handleSubmit } = useChat()
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const hasInitializedRef = useRef(false)
+  const instanceId = useRef(`python-shell-${Date.now()}`)
 
   useEffect(() => {
     if (!hasInitializedRef.current && isOpen) {
@@ -52,18 +56,60 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
 
     if (!isOpen) {
       hasInitializedRef.current = false
+      window.dispatchEvent(
+        new CustomEvent("python-shell-state", {
+          detail: { isOpen: false, width: 0, instanceId: instanceId.current },
+        }),
+      )
+    } else {
+
+      window.dispatchEvent(
+        new CustomEvent("code-editor-close", {
+          detail: { forced: true },
+        }),
+      )
+
+      setTimeout(() => {
+        window.dispatchEvent(
+          new CustomEvent("python-shell-state", {
+            detail: { isOpen: true, width: 400, instanceId: instanceId.current },
+          }),
+        )
+      }, 50)
     }
 
-    return () => {
-      if (sessionId) {
-        terminateSession()
-      }
-      if (timerRef.current) {
-        clearInterval(timerRef.current)
-        timerRef.current = null
+    const handleForcedClose = (event: CustomEvent) => {
+      if (event.detail?.forced) {
+        handleClose()
       }
     }
-  }, [isOpen])
+
+
+    const handleNewShell = (event: CustomEvent) => {
+      if (event.detail?.isOpen && event.detail?.instanceId !== instanceId.current) {
+        // Instead of closing, just update the UI state
+        onClose()
+      }
+    }
+
+    window.addEventListener("python-shell-close", handleForcedClose as EventListener)
+    window.addEventListener("python-shell-state", handleNewShell as EventListener)
+
+    return () => {
+      // Only terminate session if we're actually closing the shell
+      if (!isOpen) {
+        if (sessionId) {
+          terminateSession()
+        }
+        if (timerRef.current) {
+          clearInterval(timerRef.current)
+          timerRef.current = null
+        }
+      }
+      window.removeEventListener("python-shell-close", handleForcedClose as EventListener)
+      window.removeEventListener("python-shell-state", handleNewShell as EventListener)
+    }
+  }, [isOpen, sessionId])
 
   const startSessionTimer = () => {
     setTimeRemaining(300)
@@ -81,7 +127,7 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
           }
           toast.warning("Python session timed out after 5 minutes")
           terminateSession()
-          onClose()
+          handleClose()
           return 0
         }
         return prev - 1
@@ -180,12 +226,12 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
         stderr: data.stderr || "",
         dependencies: data.dependencies || [],
         corrected_code: data.corrected_code || "",
-        installed_packages: data.installed_packages || []
+        installed_packages: data.installed_packages || [],
       }
 
       setOutput(result)
-      setDependencies(result.dependencies)
-      setInstalledPackages(result.installed_packages)
+      setDependencies(result.dependencies || [])
+      setInstalledPackages(result.installed_packages || [])
 
       setOutputHistory((prev) => [...prev, { type: "result", content: result }])
     } catch (error) {
@@ -231,14 +277,14 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
         stderr: data.stderr || "",
         dependencies: data.dependencies || [],
         corrected_code: data.corrected_code || "",
-        installed_packages: data.installed_packages || []
+        installed_packages: data.installed_packages || [],
       }
 
       setOutput(result)
       if (result.dependencies.length > 0) {
-        setDependencies(result.dependencies)
+        setDependencies(result.dependencies || [])
       }
-      setInstalledPackages(result.installed_packages)
+      setInstalledPackages(result.installed_packages || [])
 
       setOutputHistory((prev) => [...prev, { type: "result", content: result }])
     } catch (error) {
@@ -259,7 +305,18 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
   }
 
   const handleClose = () => {
-    terminateSession()
+    // Only terminate session if we're actually closing the shell
+    if (!isOpen) {
+      terminateSession()
+    }
+
+
+    window.dispatchEvent(
+      new CustomEvent("python-shell-state", {
+        detail: { isOpen: false, width: 0, instanceId: instanceId.current },
+      }),
+    )
+
     onClose()
   }
 
@@ -278,7 +335,7 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
 
     handleSubmit(prompt)
 
-    toast.success("Sent Python logs to TARS for analysis")
+    toast.success("Sent Python logs to CodeMasterPro for analysis")
   }
 
   useEffect(() => {
@@ -308,11 +365,7 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
       return (
         <div
           className={cn(
-            item.type === "command"
-              ? "text-blue-400"
-              : item.type === "system"
-                ? "text-gray-400 "
-                : "text-zinc-300",
+            item.type === "command" ? "text-blue-400" : item.type === "system" ? "text-gray-400 " : "text-zinc-300",
           )}
         >
           {item.content}
@@ -341,27 +394,19 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
 
   return (
     <div
+      ref={shellRef}
       className={cn(
         "border-l border-zinc-700 shadow-xl flex flex-col bg-zinc-900 transition-all duration-300",
-        isFullscreen
-          ? "fixed z-50 top-0 right-0 h-full  w-1/3 min-w-[350px] "
-          : "my-2 w-fit w-full rounded-lg bottom-5 right-5 shadow-2xl border border-zinc-800",
-          
+        isOpen ? "fixed z-50 top-0 right-0 h-full w-[400px] min-w-[350px]" : "hidden",
       )}
-      style={{ resize: "horizontal" }}
     >
       <div className="flex items-center justify-between p-2 border-b border-zinc-700 bg-zinc-800">
         <div className="flex items-center gap-2">
-        <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
-            onClick={toggleFullscreen}
-          >
-            {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-          </Button>
           {sessionId && (
-            <Badge variant="outline" className="text-xs bg-blue-900/30 text-blue-300 border-blue-700 truncate max-w-[200px]">
+            <Badge
+              variant="outline"
+              className="text-xs bg-blue-900/30 text-blue-300 border-blue-700 truncate max-w-[200px]"
+            >
               Session: {sessionId}
             </Badge>
           )}
@@ -372,7 +417,7 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
         </div>
         <div className="flex items-center gap-1">
           <Button variant="link" className="text-red-500" onClick={handleClose}>
-            Close session
+            Close
           </Button>
         </div>
       </div>
@@ -398,7 +443,7 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
             disabled={outputHistory.length === 0}
           >
             <MessageSquare className="h-3.5 w-3.5 mr-1" />
-            Ask TARS
+            Ask AI
           </Button>
           {output?.corrected_code && (
             <Button
@@ -440,15 +485,17 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
         </div>
       )}
 
-      <div
-        ref={outputRef}
-        className="flex-1 p-3 overflow-auto text-sm text-zinc-300 whitespace-pre-wrap bg-zinc-900"
-      >
+      <div ref={outputRef} className="flex-1 p-3 overflow-auto text-sm text-zinc-300 whitespace-pre-wrap bg-zinc-900">
         {showCorrectedCode && output?.corrected_code ? (
           <div>
             <div className="flex justify-between items-center mb-2">
               <p className="text-zinc-500 italic">Corrected Code:</p>
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-zinc-400 hover:text-zinc-100" onClick={copyCorrectedCode}>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-zinc-400 hover:text-zinc-100"
+                onClick={copyCorrectedCode}
+              >
                 <Copy className="h-4 w-4" />
               </Button>
             </div>
@@ -465,13 +512,13 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
         )}
       </div>
       <Button
-          variant="outline"
-          size="sm"
-          className={cn("h-8 rounded-none", multilineMode ? "bg-blue-600 text-white " : "text-zinc-400")}
-          onClick={() => setMultilineMode(!multilineMode)}
-        >
-          {multilineMode ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-          {multilineMode ? "Single Line" : "Multiline"}
+        variant="outline"
+        size="sm"
+        className={cn("h-8 rounded-none", multilineMode ? "bg-blue-600 text-white " : "text-zinc-400")}
+        onClick={() => setMultilineMode(!multilineMode)}
+      >
+        {multilineMode ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+        {multilineMode ? "Single Line" : "Multiline"}
       </Button>
       <form onSubmit={executeCommand} className="flex items-start p-2 border-t border-zinc-700 bg-zinc-800">
         <ChevronRight className="h-4 w-4 text-blue-500 mr-2 mt-2" />
@@ -481,7 +528,7 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
             value={command}
             onChange={(e) => setCommand(e.target.value)}
             className="flex-1 bg-zinc-800 border-none outline-none text-sm text-zinc-300 font-mono min-h-[60px] resize-y"
-            placeholder="Enter Python commands or prompts, TARS will automatically try validate and fix them."
+            placeholder="Enter Python commands or prompts, CodeMasterPro will automatically try validate and fix them."
             disabled={!sessionId}
           />
         ) : (

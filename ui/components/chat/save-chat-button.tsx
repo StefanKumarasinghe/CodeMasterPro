@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {Dialog,DialogContent,DialogDescription,DialogFooter,DialogHeader,DialogTitle} from "@/components/ui/dialog"
 import { toast } from "@/utils/toast-util"
-import { BookmarkPlus } from "lucide-react"
+import { MessageCircleHeart } from "lucide-react"
 import { formatDate } from "@/utils/format-utils"
 import { v4 as uuidv4 } from "uuid"
 import type { Message } from "ai"
@@ -54,14 +54,13 @@ export function SaveChatButton({ messages }: SaveChatButtonProps) {
   return (
     <>
       <Button
-        variant="outline"
+        variant="ghost"
         size="sm"
         className="gap-1"
         onClick={() => setIsOpen(true)}
         disabled={messages.length === 0}
       >
-        <BookmarkPlus className="h-4 w-4" />
-        <span className="hidden sm:inline">Save Chat</span>
+        <MessageCircleHeart style={{ height: "1.2rem", width: "1.2rem" }}  />
       </Button>
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>

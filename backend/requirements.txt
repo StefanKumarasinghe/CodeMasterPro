@@ -1,5 +1,5 @@
-fastapi
-uvicorn
+fastapi>=0.68.0
+uvicorn>=0.15.0
 aiofiles
 aiomultiprocess
 tenacity
@@ -7,18 +7,20 @@ slowapi
 python-dotenv
 langchain[core]
 langchain-community
-pydantic
+pydantic>=1.8.0
 hf_xet
 langchain-google-genai
 html2text
 aiohttp
 beautifulsoup4
 PyPDF2
-python-multipart
+python-multipart>=0.0.5
 python-docx
 python-pptx
 pytesseract
 sse-starlette
 scikit-learn
 setuptools>=70.0.0
+networkx>=2.6.3
+numpy>=1.21.2
 

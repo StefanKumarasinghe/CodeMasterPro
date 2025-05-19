@@ -1,7 +1,7 @@
 import type { CodeBlock, Preferences, ValidationResult } from "@/types"
 import { STORAGE_KEYS } from "@/config/constants"
 
-// Extract code blocks from input content
+
 export const extractCodeBlocks = (content: string): CodeBlock[] => {
   const codeBlockRegex = /```(\w+)?[\r\n]([\s\S]*?)```/g
   const blocks: CodeBlock[] = []
@@ -16,7 +16,6 @@ export const extractCodeBlocks = (content: string): CodeBlock[] => {
   return blocks
 }
 
-// Provide message for output format
 export const getOutputFormatMessage = (format: string): string => {
   switch (format) {
     case "codeAndExplanation":
@@ -28,7 +27,6 @@ export const getOutputFormatMessage = (format: string): string => {
   }
 }
 
-// Create prompt from action, without sanitizing input
 export const createPromptFromAction = (action: string, code: string, lang: string): string => {
   switch (action) {
     case "explain-code":
@@ -96,7 +94,6 @@ ${code}
   }
 }
 
-// Load user preferences from localStorage - safely
 export const loadPreferences = (): Preferences | null => {
   if (typeof window === "undefined") return null
 
@@ -110,7 +107,6 @@ export const loadPreferences = (): Preferences | null => {
   }
 }
 
-// Save user preferences to localStorage - safely
 export const savePreferences = (preferences: Preferences): boolean => {
   if (typeof window === "undefined") return false
 
@@ -123,7 +119,6 @@ export const savePreferences = (preferences: Preferences): boolean => {
   }
 }
 
-// Validate user input
 export const validateInput = (input: string): ValidationResult => {
   if (!input || !input.trim()) {
     return {
@@ -142,7 +137,6 @@ export const validateInput = (input: string): ValidationResult => {
   return { isValid: true }
 }
 
-// Debounce function to limit the rate of function execution
 export const debounce = <F extends (...args: any[]) => any>(
   func: F,
   waitFor: number,
@@ -157,7 +151,6 @@ export const debounce = <F extends (...args: any[]) => any>(
   }
 }
 
-// Add function to save chat history
 export const saveChatToHistory = (messages: any[], title: string): boolean => {
   if (typeof window === "undefined" || !messages.length) return false
 
@@ -174,13 +167,10 @@ export const saveChatToHistory = (messages: any[], title: string): boolean => {
       })),
     }
 
-    // Get existing history or initialize empty array
     const existingHistory = JSON.parse(localStorage.getItem("tars-chat-history") || "[]")
 
-    // Add new chat to history
     const updatedHistory = [chatItem, ...existingHistory]
 
-    // Save back to localStorage
     localStorage.setItem("tars-chat-history", JSON.stringify(updatedHistory))
 
     return true
@@ -190,7 +180,6 @@ export const saveChatToHistory = (messages: any[], title: string): boolean => {
   }
 }
 
-// Add function to load chat history
 export const loadChatHistory = () => {
   if (typeof window === "undefined") return []
 
@@ -206,7 +195,6 @@ export const loadChatHistory = () => {
   }
 }
 
-// Add function to delete chat from history
 export const deleteChatFromHistory = (chatId: string): boolean => {
   if (typeof window === "undefined") return false
 
@@ -221,7 +209,6 @@ export const deleteChatFromHistory = (chatId: string): boolean => {
   }
 }
 
-// Auto-save current chat session
 export const autoSaveCurrentChat = (messages: any[], chatId: string): boolean => {
   if (typeof window === "undefined" || !messages.length) return false
 

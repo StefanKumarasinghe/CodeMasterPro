@@ -162,8 +162,7 @@ export function CodeSast({ code, language, onClose }: CodeSastProps) {
             </p>
           </div>
         ) : results ? (
-          <div className="flex-1 overflow-hidden flex flex-col">
-            {/* Summary Cards */}
+          <div className="flex-1 overflow-hidden flex flex-col z-50">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
               <div
                 className={cn(

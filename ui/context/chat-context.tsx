@@ -1,22 +1,39 @@
 "use client";
 
-import {createContext,useContext,useState,useEffect,type ReactNode} from "react";
-import { useChat as useAIChat } from "ai/react";
-import type {Preferences,MemoryState,ChatContextType,ActiveView} from "@/types";
-import {STORAGE_KEYS,API_ENDPOINT,DEFAULT_PREFERENCES} from "@/config/constants";
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  type ReactNode,
+  useCallback,
+  useMemo,
+} from "react";
+import type {
+  Preferences,
+  MemoryState,
+  ChatContextType,
+  ActiveView,
+  Message,
+} from "@/types";
+import { STORAGE_KEYS, API_ENDPOINT, DEFAULT_PREFERENCES } from "@/config/constants";
 import { createPromptFromAction, validateInput } from "@/utils/chat-utils";
 import { prepareApiRequest } from "@/utils/api";
 import { toast } from "@/utils/toast-util";
 import { v4 as uuidv4 } from "uuid";
 import { autoSaveCurrentChat } from "@/utils/chat-utils";
+
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
+
+const MAX_PINNED_FILES = 5;
+const MAX_PINNED_CHARS = 80000;
 
 export function ChatProvider({ children }: { children: ReactNode }) {
   const [language, setLanguage] = useState<string>("general");
   const [isProcessing, setIsProcessing] = useState(false);
   const [hasMounted, setHasMounted] = useState(false);
-  const [preferences, setPreferences] =
-    useState<Preferences>(DEFAULT_PREFERENCES);
+  const [preferences, setPreferences] = useState<Preferences>(DEFAULT_PREFERENCES);
+  const [freeModel, setFreeModel] = useState<string>("");
   const [memoryState, setMemoryState] = useState<MemoryState>({
     noComments: false,
     forgetMemory: false,
@@ -26,36 +43,26 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [customPrompt, setCustomPrompt] = useState<string>("");
   const [personalInfo, setPersonalInfo] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
-
-  const [currentChatId, setCurrentChatId] = useState<string>(uuidv4());
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
+  const [chatId, setChatId] = useState<string>(uuidv4());
   const [lastAutoSave, setLastAutoSave] = useState<Date | null>(null);
   const [mcp, setMcp] = useState<string>("auto");
+  const [modelType, setModelType] = useState<string>("fast");
+  const [providerName, setProviderName] = useState<string>("gemini");
+  const [pinnedFiles, setPinnedFiles] = useState<{
+    path: string;
+    name: string;
+    charCount?: number;
+  }>([]);
 
-  const {
-    messages,
-    input,
-    handleInputChange,
-    append,
-    reload,
-    setMessages,
-    isLoading: aiLoading,
-  } = useAIChat({
-    body: {
-      language,
-      preferences,
-      customPrompt,
-      personalInfo,
-    },
-  });
+  const isLoading = isProcessing;
 
-  const isLoading = aiLoading || isProcessing;
   useEffect(() => {
     setHasMounted(true);
   }, []);
 
-  useEffect(() => {
-    if (!hasMounted) return;
-
+  const loadPreferences = useCallback(async () => {
     try {
       const savedPrefs = localStorage.getItem(STORAGE_KEYS.PREFERENCES);
       if (savedPrefs) {
@@ -84,34 +91,45 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         STORAGE_KEYS.PERSONAL_INFO
       );
       if (savedPersonalInfo) setPersonalInfo(savedPersonalInfo);
+
     } catch (error) {
       console.error("Failed to load preferences:", error);
     }
-  }, [hasMounted]);
+  }, []);
+
+  useEffect(() => {
+    if (!hasMounted) return;
+    loadPreferences();
+  }, [hasMounted, loadPreferences]);
+
+  useEffect(() => {
+    if (preferences.freeModel) {
+      setFreeModel(preferences.freeModel);
+    }
+  }, [preferences.freeModel]);
 
   useEffect(() => {
     if (messages.length > 0) {
-      autoSaveCurrentChat(messages, currentChatId);
+      autoSaveCurrentChat(messages, chatId);
       setLastAutoSave(new Date());
     }
-  }, [messages, currentChatId]);
+  }, [messages, chatId]);
 
-  useEffect(() => {
+  const handleMemoryState = useCallback(async () => {
     if (memoryState.forgetMemory) {
       setMessages([]);
       setMemoryState((prev) => ({ ...prev, forgetMemory: false }));
-      toast.success("Conversation memory has been cleared");
     }
 
     if (memoryState.rememberMemory) {
       try {
-        const prefsToSave = JSON.stringify(preferences);
-        localStorage.setItem(STORAGE_KEYS.PREFERENCES, prefsToSave);
-
+        localStorage.setItem(
+          STORAGE_KEYS.PREFERENCES,
+          JSON.stringify(preferences)
+        );
         if (customPrompt) {
           localStorage.setItem(STORAGE_KEYS.CUSTOM_PROMPT, customPrompt);
         }
-
         if (personalInfo) {
           localStorage.setItem(STORAGE_KEYS.PERSONAL_INFO, personalInfo);
         }
@@ -123,9 +141,35 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         toast.error("Failed to save preferences. Please try again.");
       }
     }
-  }, [memoryState, preferences, customPrompt, personalInfo, setMessages]);
+  }, [memoryState, preferences, customPrompt, personalInfo]);
 
-  const handleLoad = async () => {
+  useEffect(() => {
+    handleMemoryState();
+  }, [handleMemoryState]);
+
+
+  const handleInputChange = useCallback(
+    (
+      e: React.ChangeEvent<HTMLInputElement> | { target: { value: string } }
+    ) => {
+      setInput(e.target.value);
+    },
+    []
+  );
+
+  const append = useCallback((message: Omit<Message, "id">) => {
+    const newMessage: Message = {
+      ...message,
+      id: uuidv4(),
+    };
+    setMessages((prev) => [...prev, newMessage]);
+  }, []);
+
+  const reload = useCallback(() => {
+    window.dispatchEvent(new CustomEvent("new-chat"));
+  }, []);
+
+  const handleLoad = useCallback(async () => {
     try {
       append({
         role: "user",
@@ -135,232 +179,383 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       console.error("Failed to load chat history:", error);
       toast.error("Failed to load chat history. Please try again.");
     }
-  };
+  }, [append]);
 
-  const handleSubmit = async (messageInput: string) => {
-    const validation = validateInput(messageInput);
-    console.log("Validation result:", validation);
-    if (!validation.isValid) {
-      toast.error(validation.message ?? "Please enter a valid message");
-      return;
-    }
-    if (!language) {
-      toast.error("Please select a programming language before submitting.");
-      return;
-    }
-    if (!preferences.outputFormat) {
-      toast.error("Please select an output format before submitting.");
-      return;
-    }
+  const handleSubmit = useCallback(
+    async (messageInput: string) => {
+      const validation = validateInput(messageInput);
+      if (!validation.isValid) {
+        toast.error(validation.message ?? "Please enter a valid message");
+        return;
+      }
+      if (!language) {
+        toast.error("Please select a programming language before submitting.");
+        return;
+      }
+      if (!preferences.outputFormat) {
+        toast.error("Please select an output format before submitting.");
+        return;
+      }
 
-    setIsProcessing(true);
-    try {
-      if (messageInput.length > 25000) {
+      setIsProcessing(true);
+      try {
         append({
           role: "user",
           content:
-            "Large message detected. Using CodeMasterProAnalyst for processing.",
+            messageInput.length > 50000
+              ? "Large message detected. Using CodeMasterProAnalyst for processing."
+              : messageInput,
         });
-      } else {
+
+        const request = prepareApiRequest(
+          messageInput,
+          language,
+          mcp,
+          providerName,
+          freeModel,
+          preferences,
+          chatId,
+          modelType,
+          customPrompt,
+          personalInfo,
+          pinnedFiles
+        );
+
+        const response = await fetch(`${API_ENDPOINT}/process`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(request),
+        });
+
+        if (!response.ok) {
+          let errorMessage = "An unexpected error occurred.";
+          switch (response.status) {
+            case 429:
+              errorMessage = "Rate limit exceeded. Please try again later.";
+              break;
+            case 500:
+              errorMessage = "Internal server error. Please try again later.";
+              break;
+            case 503:
+              errorMessage = "Service unavailable. Please try again later.";
+              break;
+            case 400:
+              const errorData = await response.json();
+              errorMessage = errorData.text || "Bad request. Please try again.";
+              break;
+          }
+          toast.error(errorMessage);
+          return;
+        }
+
+        const data = await response.json();
         append({
-          role: "user",
-          content: messageInput,
+          role: "assistant",
+          content: data.result,
+          dataImage: data.image_url,
         });
+
+        if (!["context", "github", "quick"].includes(mcp)) {
+          setMcp("auto");
+        }
+      } catch (error: any) {
+        toast.error(
+          error.message || "Failed to process your message. Please try again."
+        );
+      } finally {
+        setIsProcessing(false);
+      }
+    },
+    [
+      append,
+      chatId,
+      customPrompt,
+      freeModel,
+      language,
+      mcp,
+      modelType,
+      personalInfo,
+      pinnedFiles,
+      preferences,
+      providerName,
+    ]
+  );
+
+  const handleCodeAction = useCallback(
+    async (
+      action: string,
+      code: string,
+      lang: string = language
+    ) => {
+      if (!code.trim()) {
+        toast.error("Please provide code to perform this action on.");
+        return;
+      }
+      if (code.length > 100000) {
+        toast.error("The code is too long. Please provide a shorter snippet.");
+        return;
       }
 
-      const request = prepareApiRequest(
-        messageInput,
-        language,
-        mcp,
-        preferences,
-        customPrompt,
-        personalInfo
-      );
+      const prompt = createPromptFromAction(action, code, lang);
+      if (!prompt) {
+        toast.error("The selected action is not supported.");
+        return;
+      }
 
-      const response = await fetch(`${API_ENDPOINT}/process`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(request),
+      if (action === "no-comments") {
+        setMemoryState((prev) => ({
+          ...prev,
+          noComments: !prev.noComments,
+        }));
+        toast.success(
+          memoryState.noComments
+            ? "Comments will now be included"
+            : "Comments will be removed"
+        );
+        return;
+      }
+
+      const actionMap: Record<string, string> = {
+        "explain-code": "Explaining the code",
+        "debug-code": "Fixing the code",
+        "optimize-code": "Optimizing the code",
+        "refactor-code": "Refactoring the code",
+        "format-code": "Formatting the code",
+        "add-comments": "Adding comments to the code",
+        "convert-code": "Converting the code",
+        "generate-tests": "Generating tests for the code",
+        "complete-code": "Completing the code",
+        "run-sast": "Run static analysis on the code and provide feedback",
+        "no-comments": "Removing comments from the code",
+      };
+
+      const userMessage = actionMap[action] || `Performing ${action} on the code`;
+
+      append({
+        role: "user",
+        content: userMessage,
       });
 
-      if (!response.ok) {
-        if (response.status === 429) {
-          toast.error("Rate limit exceeded. Please try again later.");
-          return;
-        }
-        if (response.status === 500) {
-          toast.error("Internal server error. Please try again later.");
-          return;
-        }
-        if (response.status === 503) {
-          toast.error("Service unavailable. Please try again later.");
-          return;
-        }
-        if (response.status === 499) {
-          return;
-        }
-      }
+      setIsProcessing(true);
 
-      const data = await response.json();
-      if (data.image_url) {
+      try {
+        const request = prepareApiRequest(
+          prompt,
+          language,
+          mcp,
+          providerName,
+          freeModel,
+          preferences,
+          chatId,
+          modelType,
+          customPrompt,
+          personalInfo,
+          pinnedFiles
+        );
+
+        const response = await fetch(`${API_ENDPOINT}/process`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(request),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to process code action");
+        }
+
+        const data = await response.json();
         append({
           role: "assistant",
           content: data.result,
-          dataImage: data.image_url
         });
-      } else {
-        append({
-          role: "assistant",
-          content: data.result,
-        });
+      } catch (error: any) {
+        console.error("Failed to process code action:", error);
+        toast.error(
+          error.message || "Failed to process your code. Please try again."
+        );
+      } finally {
+        setIsProcessing(false);
       }
-      setMcp("auto");
-    } catch (error: any) {
-      console.error("Failed to process message:", error);
-      setError(error.message || "An unknown error occurred");
-      toast.error(
-        error.message || "Failed to process your message. Please try again."
-      );
-    } finally {
-      setIsProcessing(false);
-    }
-  };
+    },
+    [
+      append,
+      chatId,
+      customPrompt,
+      freeModel,
+      language,
+      mcp,
+      memoryState.noComments,
+      modelType,
+      personalInfo,
+      pinnedFiles,
+      preferences,
+      providerName,
+    ]
+  );
 
- 
+  const addPinnedFile = useCallback(
+    async (path: string, name: string) => {
+      if (pinnedFiles.some((file) => file.path === path)) {
+        toast.info(`File "${name}" is already in context`);
+        return;
+      }
 
-  const handleCodeAction = (
-    action: string,
-    code: string,
-    lang: string = language
-  ) => {
-    if (!code.trim()) {
-      toast.error("Please provide code to perform this action on.");
-      return;
-    }
-    if (code.length > 100000) {
-      toast.error("The code is too long. Please provide a shorter snippet.");
-      return;
-    }
+      if (pinnedFiles.length >= MAX_PINNED_FILES) {
+        toast.warning(`Maximum number of pinned files (${MAX_PINNED_FILES}) reached.`);
+        return;
+      }
 
-    const prompt = createPromptFromAction(action, code, lang);
-    if (!prompt) {
-      toast.error("The selected action is not supported.");
-      return;
-    }
+      const normalizedPath =
+        path.includes("/") && !path.startsWith("/") ? path : path;
 
-    if (action === "no-comments") {
-      setMemoryState((prev) => ({
-        ...prev,
-        noComments: !prev.noComments,
-      }));
-      toast.success(
-        memoryState.noComments
-          ? "Comments will now be included"
-          : "Comments will be removed"
-      );
-    }
+      try {
+        const response = await fetch(
+          `${API_ENDPOINT}/file_content/?file_path=${encodeURIComponent(
+            normalizedPath
+          )}`
+        );
 
-    const actionMap: Record<string, string> = {
-      "explain-code": "Explaining the code",
-      "debug-code": "Fixing the code",
-      "optimize-code": "Optimizing the code",
-      "refactor-code": "Refactoring the code",
-      "format-code": "Formatting the code",
-      "add-comments": "Adding comments to the code",
-      "convert-code": "Converting the code",
-      "generate-tests": "Generating tests for the code",
-      "complete-code": "Completing the code",
-      "run-sast": "Run static analysis on the code and provide feedback",
-      "no-comments": "Removing comments from the code",
-    };
+        if (!response.ok) {
+          throw new Error(`Failed to fetch file content: ${response.statusText}`);
+        }
 
-    const userMessage = actionMap[action] || `Performing ${action} on the code`;
+        const data = await response.json();
+        const content = data.content;
+        const charCount = content ? content.length : 0;
 
-    append({
-      role: "user",
-      content: userMessage,
-    });
+        const totalChars =
+          pinnedFiles.reduce((total, file) => total + (file.charCount || 0), 0) +
+          charCount;
 
-    setIsProcessing(true);
-
-    try {
-      const request = prepareApiRequest(
-        prompt,
-        language,
-        preferences,
-        customPrompt,
-        personalInfo
-      );
-      fetch(`${API_ENDPOINT}/process`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(request),
-      })
-        .then((response) => {
-          if (!response.ok) {
-            throw new Error("Failed to process code action");
-          }
-          return response.json();
-        })
-        .then((data) => {
-          append({
-            role: "assistant",
-            content: data.result,
-          });
-        })
-        .catch((error) => {
-          console.error("Failed to process code action:", error);
-          toast.error(
-            error.message || "Failed to process your code. Please try again."
+        if (totalChars > MAX_PINNED_CHARS) {
+          toast.warning(
+            `Adding this file would exceed the ${MAX_PINNED_CHARS} character limit. Remove some files first.`
           );
-        })
-        .finally(() => {
-          setIsProcessing(false);
+          return;
+        }
+
+        const newFile = { path: normalizedPath, name, charCount };
+        setPinnedFiles((current) => {
+          const updated = [...current, newFile];
+          return updated;
         });
-    } catch (error: any) {
-      console.error("Failed to process code action:", error);
-      setIsProcessing(false);
-      toast.error(
-        error.message || "Failed to process your code. Please try again."
-      );
-    }
-  };
+      } catch (error) {
+        console.error("Error fetching file content:", error);
+        toast.error(
+          `Error adding file: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    },
+    [pinnedFiles]
+  );
 
-  const value: ChatContextType = {
-    messages,
-    input,
-    handleInputChange,
-    append,
-    reload,
-    setMessages,
-    isLoading,
-    language,
-    setLanguage,
-    preferences,
-    setPreferences,
-    memoryState,
-    setMemoryState,
-    handleSubmit,
-    handleLoad,
-    handleCodeAction,
-    activeView,
-    setActiveView,
-    customPrompt,
-    setCustomPrompt,
-    personalInfo,
-    setPersonalInfo,
-    error,
-    currentChatId,
-    lastAutoSave,
-    setMcp,
-    mcp,
-  };
+  const removePinnedFile = useCallback((path: string) => {
+    setPinnedFiles((prev) => prev.filter((file) => file.path !== path));
+  }, []);
 
-  return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
+  const clearPinnedFiles = useCallback(() => {
+    setPinnedFiles([]);
+    toast.info("Cleared all context files");
+  }, []);
+
+  const getTotalPinnedChars = useCallback(() => {
+    return pinnedFiles.reduce((total, file) => total + (file.charCount || 0), 0);
+  }, [pinnedFiles]);
+
+  const value = useMemo(
+    () => ({
+      messages,
+      input,
+      handleInputChange,
+      append,
+      reload,
+      setMessages,
+      isLoading,
+      language,
+      setLanguage,
+      preferences,
+      setPreferences,
+      memoryState,
+      setMemoryState,
+      handleSubmit,
+      handleLoad,
+      handleCodeAction,
+      activeView,
+      setActiveView,
+      customPrompt,
+      setCustomPrompt,
+      personalInfo,
+      setPersonalInfo,
+      error,
+      chatId,
+      setChatId,
+      lastAutoSave,
+      mcp,
+      setMcp,
+      modelType,
+      setModelType,
+      providerName,
+      setProviderName,
+      freeModel,
+      setFreeModel,
+      pinnedFiles,
+      addPinnedFile,
+      removePinnedFile,
+      clearPinnedFiles,
+      getTotalPinnedChars,
+    }),
+    [
+      messages,
+      input,
+      handleInputChange,
+      append,
+      reload,
+      setMessages,
+      isLoading,
+      language,
+      setLanguage,
+      preferences,
+      setPreferences,
+      memoryState,
+      setMemoryState,
+      handleSubmit,
+      handleLoad,
+      handleCodeAction,
+      activeView,
+      setActiveView,
+      customPrompt,
+      setCustomPrompt,
+      personalInfo,
+      setPersonalInfo,
+      error,
+      chatId,
+      setChatId,
+      lastAutoSave,
+      mcp,
+      setMcp,
+      modelType,
+      setModelType,
+      providerName,
+      setProviderName,
+      freeModel,
+      setFreeModel,
+      pinnedFiles,
+      addPinnedFile,
+      removePinnedFile,
+      clearPinnedFiles,
+      getTotalPinnedChars,
+    ]
+  );
+
+  return (
+    <ChatContext.Provider value={value}>
+      {children}
+    </ChatContext.Provider>
+  );
 }
 
 export function useChat() {

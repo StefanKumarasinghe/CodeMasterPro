@@ -1,8 +1,3 @@
-/**
- * Ultra-simple toast utility that directly manipulates the DOM
- * This bypasses React's rendering cycle completely
- */
-
 type ToastType = "default" | "success" | "error" | "warning"
 
 interface ToastOptions {
@@ -11,7 +6,6 @@ interface ToastOptions {
   duration?: number
 }
 
-// Create a container for toasts if it doesn't exist
 function getOrCreateToastContainer(): HTMLElement {
   let container = document.getElementById("simple-toast-container")
 
@@ -31,7 +25,6 @@ function getOrCreateToastContainer(): HTMLElement {
   return container
 }
 
-// Get background color based on toast type
 function getBackgroundColor(type: ToastType): string {
   switch (type) {
     case "success":
@@ -45,11 +38,9 @@ function getBackgroundColor(type: ToastType): string {
   }
 }
 
-// Show a toast notification
 export function showToast({ message, type = "default", duration = 3000 }: ToastOptions): void {
   const container = getOrCreateToastContainer()
 
-  // Create toast element
   const toast = document.createElement("div")
   toast.style.backgroundColor = getBackgroundColor(type)
   toast.style.color = "white"
@@ -64,7 +55,6 @@ export function showToast({ message, type = "default", duration = 3000 }: ToastO
   toast.style.transition = "opacity 0.3s, transform 0.3s"
   toast.textContent = message
 
-  // Add close button
   const closeButton = document.createElement("button")
   closeButton.textContent = "×"
   closeButton.style.marginLeft = "8px"
@@ -77,16 +67,13 @@ export function showToast({ message, type = "default", duration = 3000 }: ToastO
   closeButton.onclick = () => removeToast(toast)
   toast.appendChild(closeButton)
 
-  // Add to container
   container.appendChild(toast)
 
-  // Trigger animation
   setTimeout(() => {
     toast.style.opacity = "1"
     toast.style.transform = "translateY(0)"
   }, 10)
 
-  // Auto-remove after duration
   if (duration !== Number.POSITIVE_INFINITY) {
     setTimeout(() => {
       removeToast(toast)
@@ -94,12 +81,11 @@ export function showToast({ message, type = "default", duration = 3000 }: ToastO
   }
 }
 
-// Remove a toast element with animation
+
 function removeToast(toast: HTMLElement): void {
   toast.style.opacity = "0"
   toast.style.transform = "translateY(10px)"
 
-  // Remove from DOM after animation completes
   setTimeout(() => {
     if (toast.parentNode) {
       toast.parentNode.removeChild(toast)
@@ -107,7 +93,6 @@ function removeToast(toast: HTMLElement): void {
   }, 300)
 }
 
-// Convenience methods
 export const toast = {
   show: (message: string, options?: Omit<ToastOptions, "message">) => showToast({ message, ...options }),
 
@@ -116,4 +101,6 @@ export const toast = {
   error: (message: string, duration?: number) => showToast({ message, type: "error", duration }),
 
   warning: (message: string, duration?: number) => showToast({ message, type: "warning", duration }),
+  
+  info: (message: string, duration?: number) => showToast({ message, type: "default", duration }),
 }

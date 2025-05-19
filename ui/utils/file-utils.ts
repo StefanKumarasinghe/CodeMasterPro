@@ -6,9 +6,7 @@ import parserMarkdown from "prettier/parser-markdown"
 import parserTypescript from "prettier/parser-typescript"
 import hljs from "highlight.js"
 
-/**
- * Supported file types for drag and drop
- */
+
 export const SUPPORTED_FILE_TYPES = [
   ".js",
   ".jsx",
@@ -46,7 +44,6 @@ export const SUPPORTED_FILE_TYPES = [
 
 export const MAX_FILE_SIZE = 5 * 1024 * 1024
 
-/** No‐op sanitizer (you can hook in DOMPurify or similar if you like) */
 export const sanitizeInput = (code: string): string => code
 
 export const readFileAsText = (file: File): Promise<string> =>
@@ -167,7 +164,6 @@ export const formatCode = async (code: string, language: string): Promise<string
   }
 }
 
-/** Heuristic: is this text even code? */
 export const isLikelyCode = (text: string): boolean => {
   const pats = [
     /function\s+\w+\s*\(/i,
@@ -199,7 +195,6 @@ export const isLikelyCode = (text: string): boolean => {
   return (hasP && (hasB || hasI || multi)) || (hasI && hasB)
 }
 
-/** Process a dropped file */
 export const processDroppedFile = async (
   file: File,
 ): Promise<{ content: string; language: string; fileName: string }> => {
@@ -209,14 +204,12 @@ export const processDroppedFile = async (
   return { content, language, fileName: file.name }
 }
 
-/** Build a Markdown‐style code block (for export/download) */
 export const createCodeBlockFromFile = async (file: File): Promise<string> => {
   const { content, language, fileName } = await processDroppedFile(file)
   const formatted = await formatCode(content, language).catch(() => content)
   return `File: ${fileName}\n\n\`\`\`${language}\n${formatted}\n\`\`\``
 }
 
-/** Format a pasted snippet & detect its language */
 export const formatPastedCode = async (code: string): Promise<{ formattedCode: string; language: string }> => {
   const language = detectCodeLanguage(code)
   const formattedCode = await formatCode(code, language)

@@ -205,7 +205,7 @@ Please use the relevant tags, for best performance, there is amd64, arm64 and la
 ```shell
 docker run -e GOOGLE_API_KEY=YOUR_GEMINI_API_KEY -p 8000:8000 stefankumarasinghe/codemasterpro
 ```
-While you can also have the BRAVE_API_KEY and TOGETHER_AI_API_KEY using -e, CodeMasterPro allows you to set via the UI
+While you can also have the BRAVE_API_KEY and TOGETHER_AI_API_KEY using -e and other Integrations, CodeMasterPro allows you to set via the UI
 
 - Replace `YOUR_GEMINI_API_KEY` with your actual Gemini API key.
 - Replace `YOUR_BRAVE_API_KEY` with your Brave API key (if you have one).
@@ -213,17 +213,17 @@ While you can also have the BRAVE_API_KEY and TOGETHER_AI_API_KEY using -e, Code
 
 - Make sure to create an .env, if you are doing it via the terminal (root-level)
 - Make sure to have the port 8000 ready as well
+- New update no longer requires you to put these variables as it can be set via the UI
 
 3. **Access CodeMasterPro:**
 
 Open your web browser and navigate to `[CodeMasterPro](https://dwr4zchmi6x24.cloudfront.net/)`.
 You need to run the docker container, you can stop when you don't need it and start it without entering the token again
-## Configuration
 
 ### Environment Variables
 
 - `GOOGLE_API_KEY`: Your Gemini API key. This is **required**.
-- `BRAVE_API_KEY`: Your Brave Search API key. This is **optional** but recommended for enhanced search functionality.
+-  Other tokens and intergrations can be added when you load the app
 
 ### Customization
 
@@ -257,11 +257,11 @@ We welcome contributions to CodeMasterPro! Please follow these guidelines:
 1. Fork the repository.
 2. Create a new branch for your feature or bug fix.
 3. Submit a pull request with a clear description of your changes.
-4. If you were to fork this REPO, while this project is licensed under MIT, you must credit me
+4. If you were to fork this REPO, while this project is licensed under Non-commercial, you must credit me
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details. However, you must credit me, if you are using the app
+This project is licensed under the Non Commercial License - see the [LICENSE](LICENSE) file for details. However, you must credit me, if you are using the app
 
 ## Support
 

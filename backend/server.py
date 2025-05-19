@@ -1,5 +1,7 @@
 # Developed by Stefan Ralph Kumarasinghe
+
 from utils.faiss import build_index
+from rich.console import Console
 from ai.process import process_message
 from utils.updates import event_generator
 from fastapi import FastAPI, Request, HTTPException, UploadFile, File, Form, Body
@@ -10,45 +12,58 @@ from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 from fastapi import UploadFile, File, Form, HTTPException
-from langchain_google_genai import ChatGoogleGenerativeAI
 from ai.task import TaskManager
 from Model.ApiKeyData import ApiKeyData
 from Model.ApiKeyRequest import ApiKeyRequest
+from Model.ReposNames import RepoNamesBody
 from pathlib import Path
 from Model.SessionPayload import SessionPayload
-from Model.TogglePayload import TogglePayload
-from Model.ModelRequest import ModelRequest
 from Model.CodePayload import CodePayload
 from Model.MemoryPayload import MemoryRequest
 from Model.DeleteResponse import DeletionResponse
 from Model.ExistingDocument import ExistingDocument
+from Model.SaveFileRequest import SaveFileRequest
 import asyncio
 import config.tars as gemini
+from utils.background import periodic_assessment_task, run_memory_task
 from utils.shell import run_python_code, init_python_session, close_python_session
 import os
 import langchain
-from ai.memory import reset_chat_memory, give_memory, erase_long_term_memory
+from ai.memory import ChatMemoryManager
 from utils.documentation import add_documentation, get_documentation, delete_document
 from sse_starlette.sse import EventSourceResponse
 from contextlib import asynccontextmanager
 from utils.env_change import get_api_key, save_api_key
+from utils.autocomplete import get_code_completion
+from Model.CompletionRequest import CompletionRequest
+from Model.CompletionResponse import CompletionResponse
+from utils.context import CODESPACE_DIR, upload_project, clear_project, get_project_status, index_status, reindex_project, clone_personal_github_repo, get_project_files_and_folders, get_content_of_file
+from utils.github import delete_all_cloned_repos, list_cloned_repos, delete_cloned_repo, reindex_all_github_projects
 
 RESOURCES_DIR = Path("resources")
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 langchain.llm_cache = gemini.langchain.llm_cache
 task_manager = TaskManager()
 
+memory_manager = ChatMemoryManager(gemini)
+CODESPACE_DIR.mkdir(exist_ok=True)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
         await build_index()
-        yield
+        task1 = asyncio.create_task(periodic_assessment_task())
+        task2 = asyncio.create_task(run_memory_task())
+        yield 
+        task1.cancel()
+        task2.cancel()
+        await asyncio.gather(task1, task2, return_exceptions=True)
     except Exception as e:
         gemini.logger.error(f"Error during startup: {e}")
         raise RuntimeError("Failed to initialize application during startup.")
     finally:
         pass
-    
+
 app = FastAPI(title="Developed by Stefan Ralph Kumarasinghe", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"],)
 limiter = Limiter(key_func=get_remote_address)
@@ -59,13 +74,16 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
     gemini.logger.warning(f"Rate limit exceeded for {request.client.host}")
     return JSONResponse({"detail": "Rate limit exceeded"}, status_code=429)
 
-
 @app.get("/chat/stream")
 async def stream_endpoint():
-    return EventSourceResponse(event_generator())
+    try:
+        return EventSourceResponse(event_generator())
+    except Exception as e:
+        gemini.logger.error(f"Error in stream_endpoint: {e}")
+        raise HTTPException(status_code=500, detail="Failed to stream events.")
 
 @app.post("/process/")
-@limiter.limit("5/minute")
+@limiter.limit("30/minute")
 async def handle_chat(request: Request):
     try:
         async def task_wrapper():
@@ -79,7 +97,6 @@ async def handle_chat(request: Request):
     except asyncio.CancelledError:
         gemini.logger.warning("Request was cancelled.")
         return JSONResponse({"detail": "Request cancelled"}, status_code=499)
-    
     
 @app.post("/add_resource/")
 @limiter.limit("3/minute")
@@ -106,22 +123,46 @@ async def flag_bad_input_endpoint(request: Request):
 
 @app.delete("/memory/clear")
 @limiter.limit("10/minute")
-async def clear_memory(request: Request):
+async def clear_memory(request: Request, chat_id: Optional[str] = None):
     try:
-        reset_chat_memory("default")
-        return {"message": "Cleared all chat memories."}
+        if chat_id:
+            memory_manager.reset_chat_memory(chat_id)
+            return {"message": f"Cleared memory for chat {chat_id}"}
+        else:
+            memory_manager.reset_chat_memory()
+            return {"message": "Cleared all chat memories"}
     except Exception as e:
         gemini.logger.error(f"Error in clear_memory: {e}")
         raise HTTPException(status_code=500, detail="Failed to clear chat memories.")
+
+@app.get("/memory/active-chats")
+@limiter.limit("10/minute")
+async def get_active_chats(request: Request):
+    try:
+        active_chats = memory_manager.get_active_chats()
+        chat_metadata = {
+            chat_id: memory_manager.get_chat_metadata(chat_id)
+            for chat_id in active_chats
+        }
+        return {
+            "active_chats": active_chats,
+            "metadata": chat_metadata
+        }
+    except Exception as e:
+        gemini.logger.error(f"Error in get_active_chats: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get active chats.")
 
 @app.post("/give_memory/")
 @limiter.limit("10/minute")
 async def give_memory_endpoint(request: Request, payload: MemoryRequest):
    try:
-       await give_memory(payload)
-       return {"message": "Memory updated successfully."}
+       if not payload.chatId:
+           raise HTTPException(status_code=400, detail="Chat ID is required")
+           
+       await memory_manager.give_memory(payload)
+       return {"message": f"Memory updated successfully for chat {payload.chatId}"}
    except Exception as e:
-       gemini.logger.error(f"Error in give_memory: {e}")
+       gemini.logger.error(f"Error in give_memory for chat {payload.chatId if hasattr(payload, 'chatId') else 'N/A'}: {e}")
        raise HTTPException(status_code=500, detail="Failed to update memory.")
     
 @app.post("/reindex/")
@@ -129,6 +170,7 @@ async def give_memory_endpoint(request: Request, payload: MemoryRequest):
 async def reindex(request: Request):
     try:
         await build_index()
+        await reindex_all_github_projects()
         return {"message": "Resources reindexed successfully."}
     except Exception as e:
         gemini.logger.error(f"Error in reindex: {e}")
@@ -143,52 +185,9 @@ async def root(request: Request):
         gemini.logger.error(f"Error in root endpoint: {e}")
         raise HTTPException(status_code=500, detail="Failed to load root endpoint.")
 
-@app.post("/change_model/")
-@limiter.limit("10/minute")
-async def change_model(request: Request, req: ModelRequest):
-    try:
-        if req.model.lower() == "fast":
-            gemini.gemini_llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0.6)
-            gemini.RETRY_CHAIN = 1
-            gemini.quick_think = False
-            return {"message": "Switched to fast model (gemini-2.0-flash)"}
-        elif req.model.lower() == "advanced":
-            gemini.gemini_llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash-preview-04-17", temperature=0.8)
-            gemini.RETRY_CHAIN = 100
-            gemini.quick_think = False
-            return {"message": "Switched to advanced model (gemini-2.5-flash-preview-04-17)"}
-        elif req.model.lower() == "pro":
-            gemini.gemini_llm = ChatGoogleGenerativeAI(model="gemini-2.5-pro-exp-03-25", temperature=0.6)
-            gemini.RETRY_CHAIN = 1
-            gemini.quick_think = False
-            return {"message": "Switched to pro model (gemini-2.5-pro-exp-03-25)"}
-        elif req.model.lower() == "quick-think":
-            gemini.gemini_llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash-preview-04-17", temperature=0.8)
-            gemini.RETRY_CHAIN = 100
-            gemini.quick_think = True
-            return {"message": "Switched to Quick Reasoner mode. (1.5x)"}
-        else:
-            gemini.logger.error(f"Invalid model specified: {req.model}")
-            raise HTTPException(status_code=400, detail="Invalid model specified. Use 'fast' or 'advanced'.")
-    except Exception as e:
-        gemini.logger.error(f"Error in change_model: {e}")
-        raise HTTPException(status_code=500, detail="Failed to change model.")
-
-@app.get("/current_model")
-@limiter.limit("10/minute")
-async def get_current_model(request: Request):
-    try:
-        if not gemini.quick_think:
-            model_name = gemini.gemini_llm.model
-            return {"current_model": model_name}
-        else:
-            return {"current_model": "Quick Reasoner mode (1.5x)"}
-    except Exception as e:
-        gemini.logger.error(f"Error in get_current_model: {e}")
-        raise HTTPException(status_code=500, detail=f"Could not retrieve current model: {e}")
 
 @app.post("/run_python_code")
-@limiter.limit("60/minute")
+@limiter.limit("10/minute")
 async def run_code(request: Request, payload: CodePayload):
     try:
         return await run_python_code(payload)
@@ -197,7 +196,7 @@ async def run_code(request: Request, payload: CodePayload):
         raise HTTPException(status_code=500, detail="Failed to execute Python code.")
 
 @app.post("/init_python_session")
-@limiter.limit("60/minute")
+@limiter.limit("10/minute")
 async def init_session(request: Request):
     try:
         return await init_python_session(request)
@@ -206,7 +205,7 @@ async def init_session(request: Request):
         raise HTTPException(status_code=500, detail="Failed to initialize Python session.")
 
 @app.post("/close_python_session")
-@limiter.limit("60/minute")
+@limiter.limit("10/minute")
 async def close_session(request: Request, payload: SessionPayload):
     try:
         return await close_python_session(payload)
@@ -214,63 +213,6 @@ async def close_session(request: Request, payload: SessionPayload):
         gemini.logger.error(f"Error in close_session: {e}")
         raise HTTPException(status_code=500, detail="Failed to close Python session.")
     
-@app.get("/check_web")
-@limiter.limit("10/minute")
-async def check_web(request: Request):
-    try:
-        return {"enabled": gemini.web_flag_state["enabled"]}
-    except Exception as e:
-        gemini.logger.error(f"Error in check_flag: {e}")
-        raise HTTPException(status_code=500, detail="Failed to check web flag state.")
-    
-@app.get("/check_internal")
-@limiter.limit("10/minute")
-async def check_internal(request: Request):
-    try:
-        return {"enabled": gemini.internal_stack_state["enabled"]}
-    except Exception as e:
-        gemini.logger.error(f"Error in check_internal: {e}")
-        raise HTTPException(status_code=500, detail="Failed to check internal flag state.")
-    
-@app.get("/check_stack_flow")
-@limiter.limit("10/minute")
-async def check_stack(request: Request):
-    try:
-        return {"enabled": gemini.web_stack_state["enabled"]}
-    except Exception as e:
-        gemini.logger.error(f"Error in stack_flag: {e}")
-        raise HTTPException(status_code=500, detail="Failed to check stack flag state.")
-
-@app.post("/change_stack_flow")
-@limiter.limit("10/minute")
-async def change_web(request: Request, payload: TogglePayload):
-    try:
-        gemini.web_stack_state["enabled"] = payload.enabled
-        return {"status": "success", "enabled": gemini.web_stack_state["enabled"]}
-    except Exception as e:
-        gemini.logger.error(f"Error in change_web: {e}")
-        raise HTTPException(status_code=500, detail="Failed to change web stack state.")
-
-@app.post("/change_web")
-@limiter.limit("10/minute")
-async def change_web(request: Request, payload: TogglePayload):
-    try:
-        gemini.web_flag_state["enabled"] = payload.enabled
-        return {"status": "success", "enabled": gemini.web_flag_state["enabled"]}
-    except Exception as e:
-        gemini.logger.error(f"Error in change_web: {e}")
-        raise HTTPException(status_code=500, detail="Failed to change web flag state.")
-
-@app.post("/change_internal")
-@limiter.limit("10/minute")
-async def change_internal(request: Request, payload: TogglePayload):
-    try:
-        gemini.internal_stack_state["enabled"] = payload.enabled
-        return {"status": "success", "enabled": gemini.internal_stack_state["enabled"]}
-    except Exception as e:
-        gemini.logger.error(f"Error in change_internal: {e}")
-        raise HTTPException(status_code=500, detail="Failed to change internal stack state.")
-
 @app.post("/cancel_message")
 @limiter.limit("10/minute")
 async def cancel_all_tasks(request: Request):
@@ -290,7 +232,7 @@ async def cancel_all_tasks(request: Request):
 @limiter.limit("10/minute")
 async def erase_long_term_memory_endpoint(request: Request):
     try:
-        await erase_long_term_memory()
+        await memory_manager.erase_long_term_memory()
         return {"message": "Long-term memory erased successfully."}
     except Exception as e:
         gemini.logger.error(f"Error in erase_long_term_memory: {e}")
@@ -352,9 +294,195 @@ async def save_api_keys(request: Request, data: ApiKeyData):
         gemini.logger.error(f"Error in save_api_keys: {e}")
         raise HTTPException(status_code=500, detail="Failed to save API key.")
     
+@app.post("/complete", response_model=CompletionResponse)
+async def get_code_completion_endpoint(request: CompletionRequest):
+    try:
+        return await get_code_completion(request)
+    except Exception as e:
+        gemini.logger.error(f"Error in get_code_completion: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get code completion.")   
+    
+@app.post("/upload_project/")
+@limiter.limit("5/minute")
+async def upload_project_endpoint(request: Request, file: UploadFile = File(...)):
+    try:
+        return await upload_project(request, file)
+    except Exception as e:
+        gemini.logger.error(f"Error in upload_project: {e}")
+        raise HTTPException(status_code=500, detail="Failed to upload project.")
+   
+@app.post("/upload_folder/")
+@limiter.limit("5/minute")
+async def upload_folder_endpoint(
+    request: Request, 
+    files: List[UploadFile] = File(...), 
+    folder_structure: str = Form(...)
+):
+    try:
+        return await upload_folder(request, files, folder_structure)
+    except Exception as e:
+        gemini.logger.error(f"Error in upload_folder: {e}")
+        raise HTTPException(status_code=500, detail="Failed to upload folder.")
+   
+@app.delete("/clear_project/")
+@limiter.limit("5/minute")
+async def clear_project_endpoint(request: Request):
+    try:
+        return await clear_project(request)
+    except Exception as e:
+        gemini.logger.error(f"Error in clear_project: {e}")
+        raise HTTPException(status_code=500, detail="Failed to clear project.")
+
+@app.get("/project_status/")
+@limiter.limit("60/minute")
+async def get_project_status_endpoint(request: Request):
+    try:
+        return await get_project_status(request)
+    except Exception as e:
+        gemini.logger.error(f"Error in get_project_status: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get project status.")
+    
+@app.get("/index_status/")
+@limiter.limit("10/minute")
+async def index_status_endpoint(request: Request):
+    try:
+        return await index_status()
+    except Exception as e:
+        gemini.logger.error(f"Error in index_status: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get index status.")
+
+@app.post("/reindex_project/")
+@limiter.limit("10/minute")
+async def reindex_project_endpoint(request: Request):
+    try:
+        return await reindex_project()
+    except Exception as e:
+        gemini.logger.error(f"Error in reindex_project: {e}")
+        raise HTTPException(status_code=500, detail="Failed to reindex project.")
+    
+@app.get("/get_github_projects")
+@limiter.limit("10/minute")
+async def list_cloned_repos_endpoint(request: Request):
+    try:
+        return await list_cloned_repos()
+    except Exception as e:
+        gemini.logger.error(f"Error in list_cloned_repos: {e}")
+        raise HTTPException(status_code=500, detail="Failed to list cloned repos.")
+    
+@app.delete("/remove_github_project")
+@limiter.limit("10/minute")
+async def delete_cloned_repos_endpoint(request: Request, repo_names_body: RepoNamesBody):
+    results = []
+    for repo_name in repo_names_body.ids:
+        try:
+            success = await delete_cloned_repo(repo_name)
+            results.append({"repo_name": repo_name, "success": success, "message": "Operation attempted"})
+        except Exception as e:
+            gemini.logger.error(f"Error deleting repo '{repo_name}': {e}")
+            results.append({"repo_name": repo_name, "success": False, "message": f"Error: {e}"})
+
+@app.post("/clone_personal_github_repo")
+@limiter.limit("10/minute")
+async def clone_personal_github_repo_endpoint(request: Request, repo_full_name: str, use_token: bool = True):
+    try:
+        result = await clone_personal_github_repo(repo_full_name, use_token=use_token)
+        if not result:
+            raise HTTPException(status_code=500, detail="Failed to clone repository")
+        
+        if not result.get("success", False):
+            raise HTTPException(status_code=400, detail=result.get("error", "Failed to clone repository"))
+            
+        return result
+    except Exception as e:
+        gemini.logger.error(f"Error in clone_personal_github_repo: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/erase_all_github_projects")
+@limiter.limit("10/minute")
+async def delete_all_cloned_repos_endpoint(request: Request):
+    try:
+        return await delete_all_cloned_repos()
+    except Exception as e:
+        gemini.logger.error(f"Error in delete_all_cloned_repos: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete all cloned repos.")
+    
+@app.post("/reindex_github_projects")
+@limiter.limit("10/minute")
+async def reindex_github_projects_endpoint(request: Request):
+    try:
+        return await reindex_all_github_projects()
+    except Exception as e:
+        gemini.logger.error(f"Error in reindex_github_projects: {e}")
+        raise HTTPException(status_code=500, detail="Failed to reindex github projects.")
+    
+@app.get("/project_files/")
+@limiter.limit("20/minute")
+async def get_project_files_endpoint(request: Request, path: Optional[str] = None, recursive: bool = True):
+    try:
+        gemini.logger.info(f"Getting project files. Path: {path}, Recursive: {recursive}")
+        items = get_project_files_and_folders(path=path, recursive=recursive)
+        
+        if not items:
+            return []
+            
+        return items
+    except Exception as e:
+        gemini.logger.error(f"Error getting project files: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get project files: {str(e)}")
+
+@app.get("/file_content/")
+@limiter.limit("30/minute")
+async def get_file_content_endpoint(request: Request, file_path: str):
+    try:
+        gemini.logger.info(f"Getting content for file: {file_path}")
+        content = get_content_of_file(file_path)
+        
+        if isinstance(content, dict) and not content.get("success", True):
+            # Handle error case
+            gemini.logger.warning(f"Error getting file content: {content.get('error')}")
+            raise HTTPException(status_code=404, detail=content.get("error", "File not found"))
+            
+        return {"content": content, "file_path": file_path}
+    except HTTPException:
+        raise
+    except Exception as e:
+        gemini.logger.error(f"Error getting file content: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get file content: {str(e)}")
+
+@app.post("/save_file_content/")
+@limiter.limit("30/minute")
+async def save_file_content(request: Request, data: SaveFileRequest):
+    try:
+        gemini.logger.info(f"Saving content to file: {data.file_path}")
+        
+        if not data.file_path or not data.content:
+            raise HTTPException(status_code=400, detail="File path and content are required")
+            
+        file_path = data.file_path
+        if not file_path.startswith('/'):
+            file_path = str(CODESPACE_DIR / file_path)
+        else:
+            if not Path(file_path).is_relative_to(CODESPACE_DIR):
+                file_path = str(CODESPACE_DIR / file_path.lstrip('/'))
+                
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(data.content)
+            
+        gemini.logger.info(f"Successfully saved content to file: {file_path}")
+        return {"success": True, "message": f"Content saved to {data.file_path}"}
+    except Exception as e:
+        gemini.logger.error(f"Error saving file content: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to save file content: {str(e)}")
+
 if __name__ == "__main__":
     import uvicorn
-    print("Use https://dwr4zchmi6x24.cloudfront.net/ to use the UI interface")
-    print("This project is actively being improved, to make the app better at what it is doing. So you may have to get the latest updates by pulling the latest images")
-    print("CodeMasterPro was designed and developed by Stefan Kumarasinghe. All rights reserved. Please visit the license https://github.com/StefanKumarasinghe/CodeMasterPro/blob/main/LICENSE if you would like to use it")
+    console = Console(force_terminal=True, color_system="truecolor")
+    print("\n")
+    console.print("[bold green]✅ Use [underline blue]https://dwr4zchmi6x24.cloudfront.net[/] to access the UI interface[/]")
+    console.print("[yellow]⚠️  This project is actively being improved. Pull the latest image for updates.[/]")
+    console.print("[magenta]💡 CodeMasterPro was designed and developed by Stefan Kumarasinghe.[/]")
+    console.print("[cyan]🔗 License: [underline]https://github.com/StefanKumarasinghe/CodeMasterPro/blob/main/LICENSE[/]")
+    print("\n")
     uvicorn.run("server:app", host="0.0.0.0", port=int(os.getenv("PORT", 8000)))

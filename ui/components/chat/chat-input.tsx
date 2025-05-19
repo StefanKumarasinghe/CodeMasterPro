@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { API_ENDPOINT } from "@/config/constants"
-import {Lightbulb,Send,FileUp,Upload,Code,Zap,Bug,RefreshCw,Braces,FileCode,Wand2,Mic,Square,X,AlertTriangle,Shield} from "lucide-react"
+import {Send,FileUp,Upload,Code,Zap,Bug,RefreshCw,Braces,FileCode,Wand2,Mic,Square,X,AlertTriangle,Shield,FastForward, Github} from "lucide-react"
 import { OutputFormatToggle } from "./output-format-toggle"
 import { useState, useRef, useEffect, useCallback } from "react"
 import { useChat } from "@/context/chat-context"
@@ -19,6 +19,10 @@ import { cn } from "@/lib/utils"
 import { motion, AnimatePresence } from "framer-motion"
 import { FileAttachment } from "./file-attachment"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { ProjectModal } from "./project-modal"
+import { v4 as uuidv4 } from "uuid"
+
+
 export function ChatInput() {
   const [showTemplates, setShowTemplates] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -28,7 +32,6 @@ export function ChatInput() {
   const [charCount, setCharCount] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
   const [processingFile, setProcessingFile] = useState(false)
-  const [showPromptButtons, setShowPromptButtons] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
   const [recordingError, setRecordingError] = useState<string | null>(null)
   const [securityWarning, setSecurityWarning] = useState<string | null>(null)
@@ -62,6 +65,10 @@ export function ChatInput() {
     handleCodeAction,
     handleInputChange: handleChatContextInputChange,
   } = useChat()
+
+  const [showProjectModal, setShowProjectModal] = useState(false)
+  const [projectStatus, setProjectStatus] = useState({ has_project: false, has_index: false })
+  const [useContext, setUseContext] = useState(false)
 
   const cancelMessage = useCallback(() => {
     fetch(`${API_ENDPOINT}/cancel_message`, {
@@ -200,6 +207,22 @@ export function ChatInput() {
     return () => window.removeEventListener("use-code", handleUseCode as EventListener)
   }, [toast])
 
+  useEffect(() => {
+    const fetchProjectStatus = async () => {
+      try {
+        const response = await fetch(`${API_ENDPOINT}/project_status/`)
+        if (response.ok) {
+          const data = await response.json()
+          setProjectStatus(data)
+        }
+      } catch (error) {
+        console.error("Failed to fetch project status:", error)
+      }
+    }
+
+    fetchProjectStatus()
+  }, [])
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
@@ -219,7 +242,7 @@ export function ChatInput() {
         .map((code) => `File: ${code.fileName}\n\n\`\`\`${code.language}\n${code.content}\n\`\`\``)
         .join("\n\n")
       const fullMessage = [messageInput, fileContent, codeContent].filter(Boolean).join("\n\n")
-      handleSubmit(fullMessage)
+      handleSubmit(fullMessage, useContext)
       setMessageInput("")
       setFileAttachments([])
       setCodeAttachments([])
@@ -232,7 +255,7 @@ export function ChatInput() {
         variant: "destructive",
       })
     }
-  }, [messageInput, fileAttachments, codeAttachments, handleSubmit, toast])
+  }, [messageInput, fileAttachments, codeAttachments, handleSubmit, toast, useContext])
 
   const handleInputChange = useCallback(
     async (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -477,7 +500,7 @@ export function ChatInput() {
     [messageInput, handleCodeAction, language, toast],
   )
 
-  const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0
+  const isMac = typeof navigator !== "undefined" && navigator.platform.toUpperCase().indexOf("MAC") >= 0
   const removeFileAttachment = useCallback((index: number) => {
     setFileAttachments((prev) => prev.filter((_, i) => i !== index))
   }, [])
@@ -486,13 +509,19 @@ export function ChatInput() {
     setCodeAttachments((prev) => prev.filter((_, i) => i !== index))
   }, [])
 
+  useEffect(() => {
+    if (mcp === "context") {
+      window.dispatchEvent(new CustomEvent("mcp-github-selected"));
+    }
+  }, [mcp]);
+
   return (
-    <div className="p-2 sm:p-4 border-t">
+    <div className="p-2 sm:p-4 border-t relative">
       <div className="flex flex-col gap-1 mx-auto">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1">
             <Select value={mcp} onValueChange={setMcp}>
-                <SelectTrigger className="w-[120px] sm:w-[140px] h-8">
+                <SelectTrigger className="w-[6px] sm:w-[60px] h-8">
                 <SelectValue placeholder="✨ MCP ✨" />
                 </SelectTrigger>
                 <SelectContent>
@@ -513,36 +542,41 @@ export function ChatInput() {
                     className="h-8 px-2 text-xs gap-1"
                     onClick={() => setShowTemplates(!showTemplates)}
                   >
-                    <Lightbulb className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Saved Snippets</span>
+                    <Code className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Snippets</span>
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
                   <p>Browse code templates</p>
                 </TooltipContent>
               </Tooltip>
+            </TooltipProvider>
+            <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     variant="ghost"
                     size="sm"
                     className="h-8 px-2 text-xs gap-1"
-                    onClick={() => setShowPromptButtons(!showPromptButtons)}
+                    onClick={() => setShowProjectModal(true)}
                   >
-                    <Braces className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Quick Actions</span>
+                    <Github className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Project</span>
                   </Button>
                 </TooltipTrigger>
+                <TooltipContent>
+                  <p>Manage project files</p>
+                </TooltipContent>
               </Tooltip>
             </TooltipProvider>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 ">
             {charCount > 0 && (
               <Badge
-                variant={charCount > 25000 ? "destructive" : "outline"}
+                variant={charCount > 50000 ? "destructive" : "outline"}
                 className={cn(
-                  "h-6 text-xs transition-colors",
-                  charCount > 15000 &&
+                  "h-10 transition-colors",
+                  charCount > 25000 &&
                     charCount <= 5000 &&
                     "bg-amber-500/20 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20",
                 )}
@@ -690,8 +724,8 @@ export function ChatInput() {
             </TooltipProvider>
             <Textarea
               ref={textareaRef}
-              placeholder={`How can I help you... Press ${isMac ? "⌘" : "Ctrl"}+Enter to send`}
-              className="min-h-[44px] max-h-10 md:max-h-32 flex-1 resize-none"
+              placeholder={`How can I help you to code today`}
+              className="min-h-[20x] max-h-9 md:max-h-12  flex-1 resize-none"
               value={messageInput}
               onChange={handleInputChange}
               autoFocus={true}
@@ -749,32 +783,7 @@ export function ChatInput() {
             </div>
           </div>
         </div>
-        <AnimatePresence>
-          {showPromptButtons && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="overflow-hidden"
-            >
-              <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {quickActionButtons.map((button, index) => (
-                  <Button
-                    key={index}
-                    variant="outline"
-                    size="sm"
-                    className="flex items-center justify-start gap-2 h-auto py-2 transition-all hover:bg-primary hover:text-primary-foreground"
-                    onClick={() => applyCodeAction(button.action)}
-                  >
-                    <div className="bg-primary/10 p-1.5 rounded-md">{button.icon}</div>
-                    <span className="truncate">{button.text}</span>
-                  </Button>
-                ))}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+        
         <AnimatePresence>
           {showTemplates && (
             <motion.div
@@ -789,6 +798,11 @@ export function ChatInput() {
           )}
         </AnimatePresence>
       </div>
+      <ProjectModal
+        isOpen={showProjectModal}
+        onClose={() => setShowProjectModal(false)}
+        projectStatus={projectStatus}
+      />
     </div>
   )
 }

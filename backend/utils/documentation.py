@@ -9,8 +9,10 @@ from utils.local_save import save_resource
 from utils.search import extract_article_data
 import config.tars as gemini
 import langchain
-from ai.memory import reset_chat_memory
+from ai.memory import ChatMemoryManager
 from Model.ExistingDocument import ExistingDocument
+
+memory_manager = ChatMemoryManager(gemini)
 
 RESOURCES_DIR = Path("resources")
 
@@ -23,7 +25,7 @@ async def add_documentation(
 ):
     try:
         if eraseLongTermMemory:
-            reset_chat_memory("default")
+            memory_manager.reset_chat_memory()
             resources_dir = Path("resources")
             if resources_dir.exists() and resources_dir.is_dir():
                 for entry in resources_dir.iterdir():
@@ -47,6 +49,7 @@ async def add_documentation(
             try:
                 links = json.loads(documentation_links)
                 if not isinstance(links, list):
+                    print(links) 
                     raise ValueError("documentation_links must be a list of URLs.")
                 for link in links:
                     try:
@@ -99,8 +102,6 @@ async def get_documentation():
         raise HTTPException(status_code=500, detail="Could not retrieve documentation list.")
 
     return documents
-
-
 
 async def delete_document(document_id: str):
     if not document_id:
