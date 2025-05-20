@@ -1,4 +1,4 @@
-# The Search For A Refined Coding ChatGPT for Software Engineers
+# Your GPT for coding. Contextualize your codebase with a powerfully chained AI
 
 [![Docker Pulls](https://img.shields.io/docker/pulls/stefankumarasinghe/codemasterpro)](https://hub.docker.com/r/stefankumarasinghe/codemasterpro)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -17,6 +17,8 @@ CodeMasterPro is an advanced AI-powered coding assistant designed to elevate the
 - **Memory, Internet and other tools** - Has support for many tools including internal docuemntation, web scraping of websites for effective RAG
 - **Previous Chats and Snippets** - You can now choose to save chats and snippets for later use and CodeMasterPro will always save your last unsaved chat
 - **Highly Customized** - You can customize the prompt and the preferences as you like that suits you
+- **Project Context** - We allow you to upload your projects either via Zip, folder or a github repo to be index and use it as context when asking questions
+- **Github Search** - Use GitHub to get tools online that will provide examples for the llm to use and make better responses
 
 ## Getting Started
 
@@ -55,6 +57,10 @@ CodeMasterPro is an advanced AI-powered coding assistant designed to elevate the
   
 - **DEEP ANALYSIS** - Analyses the large codes in detail, mostly 50000+ character codes
   Can you give me a deep anaysis of the code
+
+- **GITHUB** - Uses GitHub API to fetch examples and learn from them more effectively
+
+- **CONTEXT** - Allows you to upload your codebase and provide context to your queries
   
 
 ## Main Chain of Thought
