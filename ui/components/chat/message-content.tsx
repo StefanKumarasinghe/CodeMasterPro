@@ -17,6 +17,7 @@ import { PythonShell } from "./python-shell";
 import { CodeSast } from "./code-sast";
 import Markdown from "react-markdown";
 import { CodeEditorCanvas } from "@/components/canvas/code-editor-canvas";
+import { NodeTestRunner } from "./node-test-runner";
 
 
 type TextBlockProps = {
@@ -81,7 +82,7 @@ const PreformattedCode = ({
         showLineNumbers={false}
         wrapLines={true}
         PreTag="div"
-        className="overflow-x-auto m-0 max-w-prose"
+        className="overflow-x-auto m-0 max-w-prose scrollbar-hide"
         customStyle={{
           margin: 0,
           border: darkMode ? "1px solid #374151" : "1px solid rgb(105, 105, 105)",
@@ -165,73 +166,104 @@ const TextBlock = memo(({ content, imageData }: TextBlockProps) => {
     setHasError(false);
   }, [content]);
 
-  // Effect to measure the parent container width
+  // Effect to measure the parent container width (message container)
   useEffect(() => {
     if (textBlockRef.current) {
-      // First try to find the scroll viewport which is the chat-message-list container
-      let scrollViewport = textBlockRef.current.closest('[data-radix-scroll-area-viewport]');
+      // First try to find scroll viewport directly which is the chat-message-list
+      const scrollViewport = textBlockRef.current.closest('[data-radix-scroll-area-viewport]');
       if (scrollViewport instanceof HTMLElement && scrollViewport.offsetWidth > 0) {
-        // Use the scroll viewport width with padding adjustment
-        setContainerWidth(Math.max(scrollViewport.offsetWidth - 48, 300));
+        // Set width based on the scroll viewport with some padding adjustment
+        setContainerWidth(Math.max(scrollViewport.offsetWidth - 40, 300));
       } else {
-        // Find the closest message container by checking common classes or parents
+        // Otherwise look for message containers by class or traversing up
         let messageContainer = textBlockRef.current.closest('.message-container') || 
-                               textBlockRef.current.closest('.chat-message-list') ||
-                               textBlockRef.current.parentElement;
-                             
+                              textBlockRef.current.closest('.chat-message-list') ||
+                              textBlockRef.current.parentElement;
+                            
         // If found a container with width, use that
         if (messageContainer && messageContainer instanceof HTMLElement && messageContainer.offsetWidth > 0) {
-          setContainerWidth(Math.max(messageContainer.offsetWidth - 32, 300));
+          setContainerWidth(messageContainer.offsetWidth);
         }
       }
       
-      // Set up a resize observer to handle dynamic width changes
-      const resizeObserver = new ResizeObserver(entries => {
-        // First check for the scroll viewport
-        const scrollViewport = textBlockRef.current?.closest('[data-radix-scroll-area-viewport]');
-        if (scrollViewport instanceof HTMLElement && scrollViewport.offsetWidth > 0) {
-          setContainerWidth(Math.max(scrollViewport.offsetWidth - 48, 300));
+      // Function to update width when layout changes
+      const updateWidth = () => {
+        if (!textBlockRef.current) return;
+        
+        // First check the scroll viewport
+        const viewport = textBlockRef.current.closest('[data-radix-scroll-area-viewport]');
+        if (viewport instanceof HTMLElement && viewport.offsetWidth > 0) {
+          const newWidth = Math.max(viewport.offsetWidth - 40, 300);
+          // Only update if width has changed significantly to prevent recursive updates
+          if (Math.abs(newWidth - containerWidth) > 10) {
+            setContainerWidth(newWidth);
+          }
           return;
         }
         
-        // Otherwise look for other containers with width
-        let bestContainer: HTMLElement | null = null;
+        // Then check other container elements
+        let parent = textBlockRef.current.parentElement;
         let bestWidth = 0;
         
-        // Look for parent elements with width
-        let parent = textBlockRef.current?.parentElement;
         while (parent) {
           if (parent instanceof HTMLElement && parent.offsetWidth > bestWidth) {
-            bestContainer = parent;
             bestWidth = parent.offsetWidth;
           }
           parent = parent.parentElement;
         }
         
-        if (bestContainer && bestWidth > 0) {
-          setContainerWidth(Math.max(bestWidth - 32, 300));
+        if (bestWidth > 0) {
+          const newWidth = Math.max(bestWidth - 24, 300);
+          // Only update if width has changed significantly
+          if (Math.abs(newWidth - containerWidth) > 10) {
+            setContainerWidth(newWidth);
+          }
         }
+      };
+      
+      // Use debounce to prevent too many updates
+      let resizeTimeout: NodeJS.Timeout;
+      const debouncedUpdateWidth = () => {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(updateWidth, 100);
+      };
+      
+      // Set up a resize observer to handle dynamic width changes
+      const resizeObserver = new ResizeObserver(() => {
+        debouncedUpdateWidth();
       });
 
       if (textBlockRef.current) {
         resizeObserver.observe(textBlockRef.current);
         
-        // Also observe parents for better responsiveness
+        // Also try to observe parent elements for better responsiveness
         let parent = textBlockRef.current.parentElement;
         if (parent) {
           resizeObserver.observe(parent);
         }
         
-        // Observe the scroll viewport if available
-        const scrollViewport = textBlockRef.current.closest('[data-radix-scroll-area-viewport]');
+        // Observe the scroll viewport for best results
         if (scrollViewport) {
           resizeObserver.observe(scrollViewport);
         }
       }
       
-      return () => resizeObserver.disconnect();
+      // Listen for sidebar resize events and component state changes
+      window.addEventListener('resize', debouncedUpdateWidth);
+      window.addEventListener('sidebar-resize', debouncedUpdateWidth);
+      window.addEventListener('node-test-runner-state', debouncedUpdateWidth as EventListener);
+      window.addEventListener('code-editor-state', debouncedUpdateWidth as EventListener);
+      
+      return () => {
+        clearTimeout(resizeTimeout);
+        resizeObserver.disconnect();
+        window.removeEventListener('resize', debouncedUpdateWidth);
+        window.removeEventListener('sidebar-resize', debouncedUpdateWidth);
+        window.removeEventListener('node-test-runner-state', debouncedUpdateWidth as EventListener);
+        window.removeEventListener('code-editor-state', debouncedUpdateWidth as EventListener);
+      };
     }
-  }, []);
+  }, [containerWidth]); // Add containerWidth as dependency to track changes
 
   const handleError = () => {
     setHasError(true);
@@ -423,6 +455,7 @@ const CodeBlock = memo(
     const [showHtmlPreview, setShowHtmlPreview] = useState(false);
     const [showPythonShell, setShowPythonShell] = useState(false);
     const [showSastAnalysis, setShowSastAnalysis] = useState(false);
+    const [showTestRunner, setShowTestRunner] = useState(false);
     const [showEditor, setShowEditor] = useState(false);
     const codeBlockRef = useRef<HTMLDivElement>(null);
     const [blockWidth, setBlockWidth] = useState<number | null>(null);
@@ -462,30 +495,51 @@ const CodeBlock = memo(
           parentElement = parentElement.parentElement;
         }
         
-        // Set up a resize observer to reactively update width
-        const resizeObserver = new ResizeObserver(entries => {
+        // Function to update width when layout changes
+        const updateWidth = () => {
+          if (!codeBlockRef.current) return;
+          
           // Try to find the parent chat container element first
-          let parent = codeBlockRef.current?.closest('[data-radix-scroll-area-viewport]');
+          let parent = codeBlockRef.current.closest('[data-radix-scroll-area-viewport]');
           
           if (parent instanceof HTMLElement && parent.offsetWidth > 100) {
-            setContainerWidth(Math.max(parent.offsetWidth - 48, 300));
+            const newWidth = Math.max(parent.offsetWidth - 48, 300);
+            // Only update if width has changed significantly
+            if (Math.abs(newWidth - containerWidth) > 10) {
+              setContainerWidth(newWidth);
+            }
             return;
           }
           
           // Fallback to checking other parents
-          parent = codeBlockRef.current?.parentElement;
+          parent = codeBlockRef.current.parentElement;
           while (parent) {
             if (parent instanceof HTMLElement && parent.offsetWidth > 100) {
-              setContainerWidth(Math.max(parent.offsetWidth - 32, 300));
+              const newWidth = Math.max(parent.offsetWidth * 1.0, 300); 
+              if (Math.abs(newWidth - containerWidth) > 10) {
+                setContainerWidth(newWidth);
+              }
               break;
             }
             parent = parent.parentElement;
           }
           
           // Also set block width based on the code block itself
-          if (entries[0] && codeBlockRef.current) {
-            setBlockWidth(entries[0].contentRect.width);
+          if (codeBlockRef.current) {
+            setBlockWidth(codeBlockRef.current.offsetWidth);
           }
+        };
+        
+        // Use debounce to prevent too many updates
+        let resizeTimeout: NodeJS.Timeout;
+        const debouncedUpdateWidth = () => {
+          clearTimeout(resizeTimeout);
+          resizeTimeout = setTimeout(updateWidth, 100);
+        };
+        
+        // Set up a resize observer to reactively update width
+        const resizeObserver = new ResizeObserver(() => {
+          debouncedUpdateWidth();
         });
 
         if (codeBlockRef.current) {
@@ -504,15 +558,27 @@ const CodeBlock = memo(
           }
         }
         
-        return () => resizeObserver.disconnect();
+        // Listen for sidebar resize events
+        window.addEventListener('sidebar-resize', debouncedUpdateWidth);
+        window.addEventListener('node-test-runner-state', debouncedUpdateWidth as EventListener);
+        window.addEventListener('code-editor-state', debouncedUpdateWidth as EventListener);
+        
+        return () => {
+          clearTimeout(resizeTimeout);
+          resizeObserver.disconnect();
+          window.removeEventListener('sidebar-resize', debouncedUpdateWidth);
+          window.removeEventListener('node-test-runner-state', debouncedUpdateWidth as EventListener);
+          window.removeEventListener('code-editor-state', debouncedUpdateWidth as EventListener);
+        }
       }
-    }, []);
+    }, [containerWidth]); // Add containerWidth as dependency to track changes
 
     const { theme } = useTheme();
     const isSystemDark = typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches;
     const actualDarkMode = theme === "dark" || (theme === "system" && isSystemDark);
 
     const isHtml = isHtmlCode(code, lang);
+    const isJavaScript = lang === "javascript" || lang === "typescript" || lang === "jsx" || lang === "tsx" || lang === "js" || lang === "ts";
     const languageExtensions = {
       javascript: "js",
       python: "py",
@@ -568,6 +634,10 @@ const CodeBlock = memo(
     const runSastAnalysis = () => {
       setShowSastAnalysis(true);
     };
+    
+    const runTests = () => {
+      setShowTestRunner(true);
+    };
 
     const handleCodeSave = (newCode: string) => {
       setCode(newCode);
@@ -578,7 +648,27 @@ const CodeBlock = memo(
     };
 
     const handleEditorOpen = () => {
-      setShowEditor(true);
+      // Close any existing components first
+      window.dispatchEvent(
+        new CustomEvent("python-shell-close", {
+          detail: { forced: true },
+        }),
+      );
+      window.dispatchEvent(
+        new CustomEvent("node-test-runner-close", {
+          detail: { forced: true },
+        }),
+      );
+      window.dispatchEvent(
+        new CustomEvent("html-preview-close", {
+          detail: { forced: true },
+        }),
+      );
+      
+      // Wait a moment for the components to close
+      setTimeout(() => {
+        setShowEditor(true);
+      }, 100);
     };
 
     // Calculate the optimal width for the code block
@@ -631,7 +721,7 @@ const CodeBlock = memo(
           </div>
         )}
 
-        <div className="bg-zinc-800  text-zinc-300 text-xs px-4 py-2 flex justify-between items-center font-mono">
+        <div className="bg-zinc-800  text-zinc-300 text-xs px-4 py-2 flex justify-between items-center font-mono overflow-x-auto scrollbar-hide">
           <div className="flex bg-zinc-800 border-2 border-zinc-700  items-center gap-2">
             {fileName ? (
               <span className="px-2 font-scale-sm">
@@ -670,6 +760,11 @@ const CodeBlock = memo(
                       detail: { forced: true },
                     }),
                   )
+                  window.dispatchEvent(
+                    new CustomEvent("node-test-runner-close", {
+                      detail: { forced: true },
+                    }),
+                  )
                 }}
               >
                 <Play className="h-3.5 w-3.5 mr-1" />
@@ -688,6 +783,16 @@ const CodeBlock = memo(
                       detail: { forced: true },
                     }),
                   );
+                  window.dispatchEvent(
+                    new CustomEvent("node-test-runner-close", {
+                      detail: { forced: true },
+                    }),
+                  );
+                  window.dispatchEvent(
+                    new CustomEvent("html-preview-close", {
+                      detail: { forced: true },
+                    }),
+                  );
                   // Allow time for the previous shell to close if it was open
                   setTimeout(() => {
                     setShowPythonShell(true);
@@ -696,6 +801,32 @@ const CodeBlock = memo(
               >
                 <Play className="h-3.5 w-3.5 mr-1" />
                 Run
+              </Button>
+            )}
+            
+            {isJavaScript && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-amber-400 text-xs"
+                onClick={() => {
+                  window.dispatchEvent(
+                    new CustomEvent("python-shell-close", {
+                      detail: { forced: true },
+                    }),
+                  );
+                  window.dispatchEvent(
+                    new CustomEvent("code-editor-close", {
+                      detail: { forced: true },
+                    }),
+                  );
+                  setTimeout(() => {
+                    runTests();
+                  }, 100);
+                }}
+              >
+                <Play className="h-3.5 w-3.5 mr-1" />
+                Test
               </Button>
             )}
             
@@ -709,7 +840,6 @@ const CodeBlock = memo(
                 className="h-6 px-2 text-purple-400  text-xs"
                 onClick={() => {
                   runSastAnalysis();
-                  // Close any existing Python shell or code editor
                   window.dispatchEvent(
                     new CustomEvent("python-shell-close", {
                       detail: { forced: true },
@@ -717,6 +847,11 @@ const CodeBlock = memo(
                   );
                   window.dispatchEvent(
                     new CustomEvent("code-editor-close", {
+                      detail: { forced: true },
+                    }),
+                  );
+                  window.dispatchEvent(
+                    new CustomEvent("node-test-runner-close", {
                       detail: { forced: true },
                     }),
                   );
@@ -732,13 +867,22 @@ const CodeBlock = memo(
               size="sm"
               className="h-6 px-2 text-zinc-400 text-xs"
               onClick={() => {
-                handleEditorOpen();
-                // Close any existing Python shell
+                // Close any existing Python shell or node test runner
                 window.dispatchEvent(
                   new CustomEvent("python-shell-close", {
                     detail: { forced: true },
                   }),
                 );
+                window.dispatchEvent(
+                  new CustomEvent("node-test-runner-close", {
+                    detail: { forced: true },
+                  }),
+                );
+                
+                // Allow time for the test runner to close if it was open
+                setTimeout(() => {
+                  handleEditorOpen();
+                }, 100);
               }}
             >
               <Edit className="h-3.5 w-3.5 mr-1" />
@@ -830,6 +974,13 @@ const CodeBlock = memo(
             onClose={() => setShowSastAnalysis(false)}
           />
         )}
+        {showTestRunner && (
+          <NodeTestRunner
+            isOpen={showTestRunner}
+            onClose={() => setShowTestRunner(false)}
+            codeSnippet={code}
+          />
+        )}
         {showEditor && (
           <CodeEditorCanvas
            
@@ -858,18 +1009,26 @@ function MessageContent({
   onContentUpdate,
   editorInfo
 }: MessageContentProps) {
-  const [content, setContent] = useState("")
-  const [safeMode, setSafeMode] = useState(false)
-  const [showLongContentWarning, setShowLongContentWarning] = useState(false)
-  const [isExpanded, setIsExpanded] = useState(false)
-  const codeBlocksRef = useRef<CodeBlockInfo[]>([])
-  const textRef = useRef<HTMLDivElement>(null)
-  const [safeModeContent, setSafeModeContent] = useState("")
-  const [containerWidth, setContainerWidth] = useState(0)
+  const [content, setContent] = useState(initialContent);
+  const { resolvedTheme } = useTheme();
+  const isDarkTheme = resolvedTheme === "dark";
+  const [selectedCodeBlock, setSelectedCodeBlock] = useState<CodeBlockInfo | null>(null);
+  const [showHtmlPreview, setShowHtmlPreview] = useState(false);
+  const [showPythonShell, setShowPythonShell] = useState(false);
+  const [showSastAnalysis, setShowSastAnalysis] = useState(false);
+  const [showEditor, setShowEditor] = useState(false);
+  const [showTestRunner, setShowTestRunner] = useState(false);
+  const [selectedDirectory, setSelectedDirectory] = useState("");
+  const textRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const [safeMode, setSafeMode] = useState(false);
+  const [safeModeContent, setSafeModeContent] = useState("");
+  const [showLongContentWarning, setShowLongContentWarning] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   
   // Error handling state
-  const [hasRenderError, setHasRenderError] = useState(false)
-  const [errorDetails, setErrorDetails] = useState<string | null>(null)
+  const [hasRenderError, setHasRenderError] = useState(false);
+  const [errorDetails, setErrorDetails] = useState<string | null>(null);
   
   // Custom sanitize function to handle broken markdown
   const sanitizeContent = useCallback((rawContent: string): string => {
@@ -980,71 +1139,6 @@ function MessageContent({
   }, [initialContent]);
 
   const [copiedBlockIndex, setCopiedBlockIndex] = useState<number | null>(null);
-
-  // Effect to measure the parent container width (message container)
-  useEffect(() => {
-    if (textRef.current) {
-      // First try to find scroll viewport directly which is the chat-message-list
-      const scrollViewport = textRef.current.closest('[data-radix-scroll-area-viewport]');
-      if (scrollViewport instanceof HTMLElement && scrollViewport.offsetWidth > 0) {
-        // Set width based on the scroll viewport with some padding adjustment
-        setContainerWidth(Math.max(scrollViewport.offsetWidth - 40, 300));
-        return;
-      }
-      
-      // Otherwise look for message containers by class or traversing up
-      let messageContainer = textRef.current.closest('.message-container') || 
-                             textRef.current.closest('.chat-message-list') ||
-                             textRef.current.parentElement;
-                           
-      // If found a container with width, use that
-      if (messageContainer && messageContainer instanceof HTMLElement && messageContainer.offsetWidth > 0) {
-        setContainerWidth(messageContainer.offsetWidth);
-      }
-      
-      // Set up a resize observer to handle dynamic width changes
-      const resizeObserver = new ResizeObserver(entries => {
-        // First check the scroll viewport
-        const viewport = textRef.current?.closest('[data-radix-scroll-area-viewport]');
-        if (viewport instanceof HTMLElement && viewport.offsetWidth > 0) {
-          setContainerWidth(Math.max(viewport.offsetWidth - 40, 300));
-          return;
-        }
-        
-        // Then check other container elements
-        let parent = textRef.current?.parentElement;
-        let bestWidth = 0;
-        
-        while (parent) {
-          if (parent instanceof HTMLElement && parent.offsetWidth > bestWidth) {
-            bestWidth = parent.offsetWidth;
-          }
-          parent = parent.parentElement;
-        }
-        
-        if (bestWidth > 0) {
-          setContainerWidth(Math.max(bestWidth - 24, 300));
-        }
-      });
-
-      if (textRef.current) {
-        resizeObserver.observe(textRef.current);
-        
-        // Also try to observe parent elements for better responsiveness
-        let parent = textRef.current.parentElement;
-        if (parent) {
-          resizeObserver.observe(parent);
-        }
-        
-        // Observe the scroll viewport for best results
-        if (scrollViewport) {
-          resizeObserver.observe(scrollViewport);
-        }
-      }
-      
-      return () => resizeObserver.disconnect();
-    }
-  }, []);
 
   // Calculate font scale based on container width
   const calculateFontScale = useCallback(() => {

@@ -289,6 +289,11 @@ export const CodeEditorCanvas: React.FC<CodeEditorCanvasProps> = ({
         detail: { forced: true },
       }),
     )
+    window.dispatchEvent(
+      new CustomEvent("node-test-runner-close", {
+        detail: { forced: true },
+      }),
+    )
 
     setTimeout(() => {
       let width
@@ -306,8 +311,6 @@ export const CodeEditorCanvas: React.FC<CodeEditorCanvasProps> = ({
           detail: { isOpen: true, width, instanceId: instanceId.current },
         }),
       )
-
-      // Dispatch a resize event to update the layout
       window.dispatchEvent(new CustomEvent("sidebar-resize"))
     }, 100)
   }, [isOpen, filename])
@@ -616,9 +619,14 @@ export const CodeEditorCanvas: React.FC<CodeEditorCanvasProps> = ({
                   className={cn("inline-block h-5 w-5", actualTheme === "dark" ? "text-blue-400" : "text-blue-600")}
                 />
               )}{" "}
-              {safeView ? "Safe View" : "Code Editor"}
+              {safeView ? "SafeView" : "Editor"}
             </h2>
-            {filename && <span className={filenameClasses}>{filename}</span>}
+            {filename && (
+              <span className={`${filenameClasses} truncate overflow-hidden px-3 mt-1 whitespace-nowrap max-w-[300px]`}>
+                {filename}
+              </span>
+            )}
+
           </div>
           <div className="flex items-center gap-1">
             <Button variant="ghost" size="sm" onClick={handleClose} className={buttonClasses()}>

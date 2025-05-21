@@ -12,7 +12,7 @@ interface SidebarStateDetail {
   width: number
 }
 
-type ActiveSidebar = "python" | "code" | null
+type ActiveSidebar = "python" | "code" | "test-runner" | null
 
 export function ChatLayout() {
   const { language, isLoading } = useChat()
@@ -73,6 +73,18 @@ export function ChatLayout() {
             }),
           )
 
+          window.dispatchEvent(
+            new CustomEvent("html-preview-close", {
+              detail: { forced: true },
+            }),
+          )
+
+          window.dispatchEvent(
+            new CustomEvent("node-test-runner-close", {
+              detail: { forced: true },
+            }),
+          )
+
           setTimeout(() => {
             setActiveSidebar("python")
             setSidebarWidth(width)
@@ -101,6 +113,8 @@ export function ChatLayout() {
         const { isOpen, width } = event.detail || {}
         if (isOpen) {
           window.dispatchEvent(new CustomEvent("python-shell-close", { detail: { forced: true } }))
+          window.dispatchEvent(new CustomEvent("node-test-runner-close", { detail: { forced: true } }))
+          window.dispatchEvent(new CustomEvent("html-preview-close", { detail: { forced: true } }))
           setTimeout(() => {
             setActiveSidebar("code")
             setSidebarWidth(width)
@@ -151,11 +165,58 @@ export function ChatLayout() {
       setMainContentWidth(calculateMainContentWidth())
     }
 
+    const handleNodeTestRunnerState = (event: CustomEvent<SidebarStateDetail>) => {
+      if (event.detail && typeof event.detail.isOpen === "boolean" && typeof event.detail.width === "number") {
+        const { isOpen, width } = event.detail
+
+        if (isOpen) {
+          window.dispatchEvent(
+            new CustomEvent("code-editor-close", {
+              detail: { forced: true },
+            }),
+          )
+          
+          window.dispatchEvent(
+            new CustomEvent("python-shell-close", {
+              detail: { forced: true },
+            }),
+          )
+          
+          window.dispatchEvent(
+            new CustomEvent("html-preview-close", {
+              detail: { forced: true },
+            }),
+          )
+
+          setTimeout(() => {
+            setActiveSidebar("test-runner")
+            setSidebarWidth(width)
+            setMainContentWidth(calculateMainContentWidth())
+
+            if (layoutRef.current) {
+              layoutRef.current.style.paddingRight = `${width}px`
+              document.documentElement.style.setProperty("--right-sidebar-width", `${width}px`)
+            }
+          }, 50)
+        } else if (activeSidebar === "test-runner") {
+          setActiveSidebar(null)
+          setSidebarWidth(0)
+          setMainContentWidth(calculateMainContentWidth())
+
+          if (layoutRef.current) {
+            layoutRef.current.style.paddingRight = "0px"
+            document.documentElement.style.setProperty("--right-sidebar-width", "0px")
+          }
+        }
+      }
+    }
+
     window.addEventListener("python-shell-state", handlePythonShellState as EventListener)
     window.addEventListener("code-editor-state", handleCodeEditorState as EventListener)
     window.addEventListener("memory-cleared", handleMemoryCleared)
     window.addEventListener("sidebar-resize", handleSidebarResize)
     window.addEventListener("resize", handleWindowResize)
+    window.addEventListener("node-test-runner-state", handleNodeTestRunnerState as EventListener)
 
     setMainContentWidth(calculateMainContentWidth())
 
@@ -173,6 +234,7 @@ export function ChatLayout() {
       window.removeEventListener("memory-cleared", handleMemoryCleared)
       window.removeEventListener("sidebar-resize", handleSidebarResize)
       window.removeEventListener("resize", handleWindowResize)
+      window.removeEventListener("node-test-runner-state", handleNodeTestRunnerState as EventListener)
       resizeObserver.disconnect()
     }
   }, [activeSidebar, sidebarWidth, leftSidebarWidth])

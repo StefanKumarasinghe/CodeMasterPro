@@ -14,6 +14,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import MessageContent from "./message-content"
 import { CodeEditorCanvas } from "../canvas/code-editor-canvas"
 import { SaveToFileDialog } from "./save-to-file-dialog"
+import { NodeTestRunner } from "./node-test-runner"
 
 interface ChatMessageProps {
   message: Message
@@ -42,6 +43,8 @@ const ChatMessage = memo(function ChatMessage({
   const messageContentRef = useRef<HTMLDivElement>(null)
   const [mainContentWidth, setMainContentWidth] = useState(0)
   const [showSaveDialog, setShowSaveDialog] = useState(false)
+  const [showTestRunner, setShowTestRunner] = useState(false)
+  const [testDirectory, setTestDirectory] = useState("")
 
   useEffect(() => {
     contentRef.current = typeof message.content === "string" ? message.content : ""
@@ -167,6 +170,18 @@ const ChatMessage = memo(function ChatMessage({
     setShowSaveDialog(true);
   }, []);
 
+  const handleRunTests = useCallback(() => {
+    setShowTestRunner(true)
+  }, [])
+
+  const handleCodeAction = useCallback((action: string, code: string, lang: string) => {
+    if (action === "run-tests") {
+      setShowTestRunner(true);
+    } else {
+      onCodeAction(action, code, lang);
+    }
+  }, [onCodeAction]);
+
   const isUser = message.role === "user"
   const messageContent = typeof message.content === "string" ? message.content : ""
   const messageImage = typeof message.dataImage === "string" ? message.dataImage : ""
@@ -289,7 +304,7 @@ const ChatMessage = memo(function ChatMessage({
               imageData={messageImage}
               syntaxHighlighting={syntaxHighlighting}
               showLineNumbers={showLineNumbers}
-              onCodeAction={onCodeAction}
+              onCodeAction={handleCodeAction}
               isInteractive={!isUser}
               editorInfo={showEditor ? editorPosition : undefined}
             />
@@ -450,7 +465,14 @@ const ChatMessage = memo(function ChatMessage({
                 onSave={() => {}}
                 safeView={true}
               />
-              
+                    
+              {showTestRunner && (
+                <NodeTestRunner
+                  isOpen={showTestRunner}
+                  onClose={() => setShowTestRunner(false)}
+                />
+              )}
+                      
               {/* Save to File Dialog */}
               <SaveToFileDialog
                 isOpen={showSaveDialog}

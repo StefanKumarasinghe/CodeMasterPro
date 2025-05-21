@@ -14,6 +14,24 @@ import { DocumentationModal } from "@/components/documentation/documentation-mod
 import { ChatProvider } from "@/context/chat-context"
 import "./globals.css"
 
+// Add event types for custom events
+declare global {
+  interface WindowEventMap {
+    'node-test-runner-state': CustomEvent<SidebarStateDetail>;
+    'code-editor-state': CustomEvent<SidebarStateDetail>;
+    'code-editor-close': CustomEvent<{ forced: boolean }>;
+    'python-shell-close': CustomEvent<{ forced: boolean }>;
+    'html-preview-close': CustomEvent<{ forced: boolean }>;
+    'node-test-runner-close': CustomEvent<{ forced: boolean }>;
+  }
+}
+
+interface SidebarStateDetail {
+  isOpen: boolean;
+  width: number;
+  instanceId?: string;
+}
+
 const quicksand = Roboto_Mono({
   subsets: ["latin"],
   variable: "--font-quicksand",

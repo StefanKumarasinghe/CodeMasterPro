@@ -27,6 +27,7 @@ import asyncio
 import config.tars as gemini
 from utils.background import periodic_assessment_task, run_memory_task
 from utils.shell import run_python_code, init_python_session, close_python_session
+from utils.node import run_node_tests, test_javascript_code, run_node_app_with_streaming, get_process_output, terminate_process
 import os
 import langchain
 from ai.memory import ChatMemoryManager
@@ -39,6 +40,8 @@ from Model.CompletionRequest import CompletionRequest
 from Model.CompletionResponse import CompletionResponse
 from utils.context import CODESPACE_DIR, upload_project, clear_project, get_project_status, index_status, reindex_project, clone_personal_github_repo, get_project_files_and_folders, get_content_of_file
 from utils.github import delete_all_cloned_repos, list_cloned_repos, delete_cloned_repo, reindex_all_github_projects
+from pydantic import BaseModel
+import time
 
 RESOURCES_DIR = Path("resources")
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -47,6 +50,21 @@ task_manager = TaskManager()
 
 memory_manager = ChatMemoryManager(gemini)
 CODESPACE_DIR.mkdir(exist_ok=True)
+
+# Add a new model for JavaScript code testing
+class JavaScriptTestRequest(BaseModel):
+    code: str
+    test_code: Optional[str] = None
+    framework: Optional[str] = "jest"
+
+# Add a new model for Node.js application running
+class NodeAppRequest(BaseModel):
+    directory: Optional[str] = None
+    run_command: str = "start"
+
+# Add a new model for process termination
+class ProcessTerminateRequest(BaseModel):
+    process_id: str
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -475,6 +493,61 @@ async def save_file_content(request: Request, data: SaveFileRequest):
     except Exception as e:
         gemini.logger.error(f"Error saving file content: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to save file content: {str(e)}")
+
+@app.post("/run_node_tests")
+@limiter.limit("10/minute")
+async def run_node_tests_endpoint(request: Request, directory: str = None, test_command: str = "test"):
+    try:
+        return await run_node_tests(directory, test_command)
+    except Exception as e:
+        gemini.logger.error(f"Error in run_node_tests: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to run Node.js tests: {str(e)}")
+
+@app.post("/test_javascript_code")
+@limiter.limit("10/minute")
+async def test_javascript_code_endpoint(request: Request, test_request: JavaScriptTestRequest):
+    try:
+        return await test_javascript_code(
+            test_request.code,
+            test_request.test_code,
+            test_request.framework
+        )
+    except Exception as e:
+        gemini.logger.error(f"Error in test_javascript_code: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to test JavaScript code: {str(e)}")
+
+@app.post("/run_node_app")
+@limiter.limit("10/minute")
+async def run_node_app_endpoint(request: Request, app_request: NodeAppRequest):
+    try:
+        # Generate a unique process ID
+        process_id = f"node-app-{int(time.time())}"
+        
+        return await run_node_app_with_streaming(
+            process_id,
+            app_request.directory,
+            app_request.run_command
+        )
+    except Exception as e:
+        gemini.logger.error(f"Error in run_node_app: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to run Node.js application: {str(e)}")
+
+@app.get("/node_app_output/{process_id}")
+async def stream_node_app_output(request: Request, process_id: str):
+    try:
+        return EventSourceResponse(get_process_output(process_id))
+    except Exception as e:
+        gemini.logger.error(f"Error in stream_node_app_output: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to stream output: {str(e)}")
+
+@app.post("/terminate_node_app")
+@limiter.limit("10/minute")
+async def terminate_node_app_endpoint(request: Request, terminate_request: ProcessTerminateRequest):
+    try:
+        return terminate_process(terminate_request.process_id)
+    except Exception as e:
+        gemini.logger.error(f"Error in terminate_node_app: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to terminate process: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

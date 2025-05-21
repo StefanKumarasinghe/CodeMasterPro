@@ -53,7 +53,7 @@ const BinaryCodeBrainEffect: React.FC = () => {
                         times: AURORA_TIMES,
                     }
                 }}
-                className="rounded-full border-2 dark:border-white border-black flex items-center justify-center z-10 p-4 bg-white/10 backdrop-blur-sm bg-gradient-to-r from-green-400 to-blue-500 "
+                className="rounded-full border-2 dark:border-white border-black flex items-center justify-center p-4 bg-white/10 backdrop-blur-sm bg-gradient-to-r from-green-400 to-blue-500 "
             >
                 <BrainIcon  className="h-20 w-20 text-white dark:text-white" />
             </motion.div>

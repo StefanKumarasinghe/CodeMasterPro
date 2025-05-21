@@ -1,11 +1,11 @@
 "use client";
 
 import type React from "react";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { API_ENDPOINT } from "@/config/constants";
-import { ChevronRight, ChevronDown, Folder, FolderOpen, FileIcon, RefreshCw, AlertTriangle, Bookmark, BookmarkCheck, Filter, AlertCircle, X, Trash, Save } from "lucide-react";
+import { ChevronRight, ChevronDown, Folder, FolderOpen, FileIcon, RefreshCw, AlertTriangle, Bookmark, BookmarkCheck, Filter, AlertCircle, X, Trash, Save, Play } from "lucide-react";
 import { toast } from "@/utils/toast-util";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -18,6 +18,13 @@ import {
   TooltipTrigger 
 } from "@/components/ui/tooltip";
 import { Progress } from "@/components/ui/progress";
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
+import { NodeTestRunner } from "@/components/chat/node-test-runner";
 
 interface FileItem {
   name: string;
@@ -40,6 +47,8 @@ export function FileExplorer({ onFileSelect, saveMode = false, onFileSaveSelect,
   const [error, setError] = useState<string | null>(null);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [showOnlyPinned, setShowOnlyPinned] = useState(false);
+  const [showTestRunner, setShowTestRunner] = useState(false);
+  const [selectedDirectory, setSelectedDirectory] = useState("");
   const { mcp, pinnedFiles, addPinnedFile, removePinnedFile, clearPinnedFiles, getTotalPinnedChars } = useChat();
 
   const MAX_PINNED_FILES = 5;
@@ -166,11 +175,36 @@ export function FileExplorer({ onFileSelect, saveMode = false, onFileSaveSelect,
     }, [] as FileItem[]);
   };
 
+  const runTests = (directory: string) => {
+    // Close other components
+    window.dispatchEvent(
+      new CustomEvent("code-editor-close", {
+        detail: { forced: true },
+      }),
+    )
+    
+    window.dispatchEvent(
+      new CustomEvent("python-shell-close", {
+        detail: { forced: true },
+      }),
+    )
+    
+    window.dispatchEvent(
+      new CustomEvent("html-preview-close", {
+        detail: { forced: true },
+      }),
+    )
+    
+    setSelectedDirectory(directory);
+    setShowTestRunner(true);
+  };
+
   const renderFileItem = (file: FileItem, level = 0) => {
     const isExpanded = expandedFolders.has(file.path);
     const isDirectory = file.type === "directory";
     const hasChildren = isDirectory && file.children && file.children.length > 0;
     const isPinned = file.type === "file" && pinnedFiles.some(pinnedFile => pinnedFile.path === file.path);
+    const hasPackageJson = isDirectory && file.children && file.children.some(child => child.name === "package.json");
     
     const pinnedFileData = isPinned 
       ? pinnedFiles.find(pinnedFile => pinnedFile.path === file.path) 
@@ -228,6 +262,26 @@ export function FileExplorer({ onFileSelect, saveMode = false, onFileSaveSelect,
                   <Bookmark className="h-3 w-3" />
                 )}
               </Button>
+            </div>
+          )}
+          
+          {isDirectory && hasPackageJson && !saveMode && (
+            <div className="ml-auto flex items-center gap-1 flex-shrink-0">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-5 w-5 px-1 opacity-0 group-hover:opacity-100"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        runTests(file.path);
+                      }}
+                  >
+                    <Play className="h-3 w-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+              </DropdownMenu>
             </div>
           )}
           
@@ -400,6 +454,14 @@ export function FileExplorer({ onFileSelect, saveMode = false, onFileSaveSelect,
           </div>
         )}
       </ScrollArea>
+      
+      {showTestRunner && (
+        <NodeTestRunner
+          isOpen={showTestRunner}
+          onClose={() => setShowTestRunner(false)}
+          directory={selectedDirectory}
+        />
+      )}
     </div>
   );
 }
