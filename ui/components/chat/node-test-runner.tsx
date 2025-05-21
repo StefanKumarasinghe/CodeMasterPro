@@ -157,20 +157,12 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
       }
     }
 
-    const handleCodeEditorState = (event: CustomEvent) => {
-      if (event.detail?.isOpen) {
-        handleClose()
-      }
-    }
-
     window.addEventListener("node-test-runner-close", handleForcedClose as EventListener)
     window.addEventListener("node-test-runner-state", handleNewRunner as EventListener)
-    window.addEventListener("code-editor-state", handleCodeEditorState as EventListener)
 
     return () => {
       window.removeEventListener("node-test-runner-close", handleForcedClose as EventListener)
       window.removeEventListener("node-test-runner-state", handleNewRunner as EventListener)
-      window.removeEventListener("code-editor-state", handleCodeEditorState as EventListener)
     }
   }, [isOpen, isMaximized, onClose, handleClose])
 

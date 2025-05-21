@@ -68,6 +68,16 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
           detail: { forced: true },
         }),
       )
+      window.dispatchEvent(
+        new CustomEvent("node-test-runner-close", {
+          detail: { forced: true },
+        }),
+      )
+      window.dispatchEvent(
+        new CustomEvent("html-preview-close", {
+          detail: { forced: true },
+        }),
+      )
 
       setTimeout(() => {
         window.dispatchEvent(

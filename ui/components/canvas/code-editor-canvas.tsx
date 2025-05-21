@@ -284,13 +284,18 @@ export const CodeEditorCanvas: React.FC<CodeEditorCanvasProps> = ({
       }),
     )
 
+    // window.dispatchEvent(
+    //   new CustomEvent("code-editor-close", {
+    //     detail: { forced: true },
+    //   }),
+    // )
     window.dispatchEvent(
-      new CustomEvent("code-editor-close", {
+      new CustomEvent("node-test-runner-close", {
         detail: { forced: true },
       }),
     )
     window.dispatchEvent(
-      new CustomEvent("node-test-runner-close", {
+      new CustomEvent("html-preview-close", {
         detail: { forced: true },
       }),
     )
