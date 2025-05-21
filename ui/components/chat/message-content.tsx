@@ -636,7 +636,27 @@ const CodeBlock = memo(
     };
     
     const runTests = () => {
-      setShowTestRunner(true);
+      // Close any existing components more reliably
+      window.dispatchEvent(
+        new CustomEvent("python-shell-close", {
+          detail: { forced: true },
+        }),
+      );
+      window.dispatchEvent(
+        new CustomEvent("code-editor-close", {
+          detail: { forced: true },
+        }),
+      );
+      window.dispatchEvent(
+        new CustomEvent("html-preview-close", {
+          detail: { forced: true },
+        }),
+      );
+      
+      // Wait longer for components to fully close
+      setTimeout(() => {
+        setShowTestRunner(true);
+      }, 250);
     };
 
     const handleCodeSave = (newCode: string) => {
@@ -810,6 +830,7 @@ const CodeBlock = memo(
                 size="sm"
                 className="h-6 px-2 text-amber-400 text-xs"
                 onClick={() => {
+                  // Close ALL components first before opening test runner
                   window.dispatchEvent(
                     new CustomEvent("python-shell-close", {
                       detail: { forced: true },
@@ -820,9 +841,23 @@ const CodeBlock = memo(
                       detail: { forced: true },
                     }),
                   );
+                  window.dispatchEvent(
+                    new CustomEvent("html-preview-close", {
+                      detail: { forced: true },
+                    }),
+                  );
+                  
+                  // Force any existing node-test-runner to close before opening a new one
+                  window.dispatchEvent(
+                    new CustomEvent("node-test-runner-close", {
+                      detail: { forced: true },
+                    }),
+                  );
+                  
+                  // Wait for all components to fully close
                   setTimeout(() => {
-                    runTests();
-                  }, 100);
+                    setShowTestRunner(true);
+                  }, 250);
                 }}
               >
                 <Play className="h-3.5 w-3.5 mr-1" />

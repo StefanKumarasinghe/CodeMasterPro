@@ -108,41 +108,48 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
       
       resizingRef.current = true;
       
-      // Close other components
-      window.dispatchEvent(
-        new CustomEvent("code-editor-close", {
-          detail: { forced: true },
-        }),
-      )
-
-      window.dispatchEvent(
-        new CustomEvent("python-shell-close", {
-          detail: { forced: true },
-        })
-      )
-
-      window.dispatchEvent(
-        new CustomEvent("html-preview-close", {
-          detail: { forced: true },
-        })
-      )
-
-      // Wait for other components to close before updating our state
-      setTimeout(() => {
+      // First properly close all other components
+      const closeOtherComponents = async () => {
+        // Dispatch close events for all components
+        window.dispatchEvent(
+          new CustomEvent("code-editor-close", {
+            detail: { forced: true },
+          }),
+        );
+        
+        window.dispatchEvent(
+          new CustomEvent("python-shell-close", {
+            detail: { forced: true },
+          })
+        );
+        
+        window.dispatchEvent(
+          new CustomEvent("html-preview-close", {
+            detail: { forced: true },
+          })
+        );
+        
+        // Wait for components to close
+        await new Promise(resolve => setTimeout(resolve, 150));
+        
+        // Now update our state
         window.dispatchEvent(
           new CustomEvent("node-test-runner-state", {
             detail: { isOpen: true, width: isMaximized ? window.innerWidth : 400, instanceId: instanceId.current },
           }),
-        )
+        );
         
         // Trigger a resize event to update the layout
-        window.dispatchEvent(new CustomEvent("sidebar-resize"))
+        window.dispatchEvent(new CustomEvent("sidebar-resize"));
         
         // Reset resizing flag after a delay
         setTimeout(() => {
           resizingRef.current = false;
         }, 300);
-      }, 100)
+      };
+      
+      // Execute the async function
+      closeOtherComponents();
     }
 
     const handleForcedClose = (event: CustomEvent) => {
@@ -163,6 +170,13 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
     return () => {
       window.removeEventListener("node-test-runner-close", handleForcedClose as EventListener)
       window.removeEventListener("node-test-runner-state", handleNewRunner as EventListener)
+      
+      // Ensure we clean up any flags or timeouts when unmounting
+      resizingRef.current = false;
+      if (resizeTimeoutRef.current) {
+        clearTimeout(resizeTimeoutRef.current);
+        resizeTimeoutRef.current = null;
+      }
     }
   }, [isOpen, isMaximized, onClose, handleClose])
 
@@ -282,63 +296,84 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
   }
 
   const setupEventSource = (processId: string) => {
-    // Close any existing event source
+    // Clean up any existing event source first
     if (eventSource) {
-      eventSource.close()
+      try {
+        eventSource.close();
+      } catch (error) {
+        console.error("Error closing existing event source:", error);
+      }
     }
 
-    const newEventSource = new EventSource(`${API_ENDPOINT}/node_app_output/${processId}`)
-    
-    // Add event listeners for each event type
-    const eventTypes = ["stdout", "stderr", "error", "system", "command", "complete", "heartbeat"];
-    
-    eventTypes.forEach(eventType => {
-      newEventSource.addEventListener(eventType, (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          
-          if (eventType === "heartbeat") {
-            // Ignore heartbeat messages
-            return;
+    try {
+      const newEventSource = new EventSource(`${API_ENDPOINT}/node_app_output/${processId}`);
+      
+      // Add event listeners for each event type
+      const eventTypes = ["stdout", "stderr", "error", "system", "command", "complete", "heartbeat"];
+      
+      eventTypes.forEach(eventType => {
+        newEventSource.addEventListener(eventType, (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            
+            if (eventType === "heartbeat") {
+              // Ignore heartbeat messages
+              return;
+            }
+            
+            if (eventType === "complete") {
+              setOutput(prev => [...prev, { type: "system", content: data.content }]);
+              try {
+                newEventSource.close();
+              } catch (error) {
+                console.error("Error closing event source on complete:", error);
+              }
+              setEventSource(null);
+              setActiveProcessId(null);
+              setIsRunning(false);
+              return;
+            }
+            
+            setOutput(prev => [...prev, { 
+              type: eventType as "stdout" | "stderr" | "error" | "system" | "command" | "heartbeat" | "complete", 
+              content: data.content 
+            }]);
+            
+            // Auto-scroll to bottom
+            if (outputRef.current) {
+              outputRef.current.scrollTop = outputRef.current.scrollHeight;
+            }
+          } catch (error) {
+            console.error(`Error parsing ${eventType} event data:`, error);
           }
-          
-          if (eventType === "complete") {
-            setOutput(prev => [...prev, { type: "system", content: data.content }]);
-            newEventSource.close();
-            setEventSource(null);
-            setActiveProcessId(null);
-            setIsRunning(false);
-            return;
-          }
-          
-          setOutput(prev => [...prev, { 
-            type: eventType as "stdout" | "stderr" | "error" | "system" | "command" | "heartbeat" | "complete", 
-            content: data.content 
-          }]);
-          
-          // Auto-scroll to bottom
-          if (outputRef.current) {
-            outputRef.current.scrollTop = outputRef.current.scrollHeight;
-          }
-        } catch (error) {
-          console.error(`Error parsing ${eventType} event data:`, error);
-        }
+        });
       });
-    });
-    
-    newEventSource.onerror = (error) => {
-      console.error("EventSource error:", error);
+      
+      newEventSource.onerror = (error) => {
+        console.error("EventSource error:", error);
+        setOutput(prev => [...prev, { 
+          type: "error", 
+          content: "Connection error. Output streaming stopped." 
+        }]);
+        try {
+          newEventSource.close();
+        } catch (innerError) {
+          console.error("Error closing event source on error:", innerError);
+        }
+        setEventSource(null);
+        setActiveProcessId(null);
+        setIsRunning(false);
+      };
+      
+      setEventSource(newEventSource);
+    } catch (error) {
+      console.error("Error setting up event source:", error);
       setOutput(prev => [...prev, { 
         type: "error", 
-        content: "Connection error. Output streaming stopped." 
+        content: `Error setting up connection: ${error instanceof Error ? error.message : String(error)}` 
       }]);
-      newEventSource.close();
-      setEventSource(null);
-      setActiveProcessId(null);
       setIsRunning(false);
-    };
-    
-    setEventSource(newEventSource);
+    }
   }
 
   const stopRunningProcess = async () => {
@@ -383,31 +418,56 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
   // Clean up event source when component unmounts
   useEffect(() => {
     return () => {
+      // Clear any flags
+      resizingRef.current = false;
+      
+      // Clear any timeouts
+      if (resizeTimeoutRef.current) {
+        clearTimeout(resizeTimeoutRef.current);
+        resizeTimeoutRef.current = null;
+      }
+      
+      // Close event source
       if (eventSource) {
-        eventSource.close()
+        try {
+          eventSource.close();
+        } catch (error) {
+          console.error("Error closing event source on unmount:", error);
+        }
+        setEventSource(null);
       }
       
       // Attempt to terminate any active process when closing
       if (activeProcessId) {
-        fetch(`${API_ENDPOINT}/terminate_node_app`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            process_id: activeProcessId
-          })
-        }).catch(error => {
-          console.error("Error terminating process on unmount:", error)
-        })
+        try {
+          fetch(`${API_ENDPOINT}/terminate_node_app`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              process_id: activeProcessId
+            })
+          }).catch(error => {
+            console.error("Error terminating process on unmount:", error);
+          });
+        } catch (error) {
+          console.error("Error sending termination request:", error);
+        }
+        
+        // Reset the state
+        setActiveProcessId(null);
       }
       
-      // Clear any pending timeouts
-      if (resizeTimeoutRef.current) {
-        clearTimeout(resizeTimeoutRef.current);
-      }
+      // Notify the layout system
+      window.dispatchEvent(
+        new CustomEvent("node-test-runner-state", {
+          detail: { isOpen: false, width: 0, instanceId: instanceId.current },
+        }),
+      );
+      window.dispatchEvent(new CustomEvent("sidebar-resize"));
     }
-  }, [eventSource, activeProcessId])
+  }, [eventSource, activeProcessId, instanceId]);
 
   const runAppTests = () => {
     const params = new URLSearchParams()
@@ -498,27 +558,34 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
       clearTimeout(resizeTimeoutRef.current);
     }
     
-    // Update state
-    setIsMaximized(!isMaximized);
+    // First update local state
+    const newMaximizedState = !isMaximized;
+    setIsMaximized(newMaximizedState);
     
     // Batch the resize operations
-    setTimeout(() => {
-      window.dispatchEvent(
-        new CustomEvent("node-test-runner-state", {
-          detail: { 
-            isOpen: true, 
-            width: !isMaximized ? window.innerWidth : 400, 
-            instanceId: instanceId.current 
-          },
-        }),
-      );
-      
-      window.dispatchEvent(new CustomEvent("sidebar-resize"));
-      
-      // Reset resizing flag after operations complete
-      setTimeout(() => {
-        resizingRef.current = false;
-      }, 300);
+    resizeTimeoutRef.current = setTimeout(() => {
+      try {
+        // Dispatch state change event
+        window.dispatchEvent(
+          new CustomEvent("node-test-runner-state", {
+            detail: { 
+              isOpen: true, 
+              width: newMaximizedState ? window.innerWidth : 400, 
+              instanceId: instanceId.current 
+            },
+          }),
+        );
+        
+        // Then trigger layout update
+        window.dispatchEvent(new CustomEvent("sidebar-resize"));
+      } catch (error) {
+        console.error("Error during maximize toggle:", error);
+      } finally {
+        // Reset resizing flag after operations complete
+        setTimeout(() => {
+          resizingRef.current = false;
+        }, 300);
+      }
     }, 50);
   };
 
