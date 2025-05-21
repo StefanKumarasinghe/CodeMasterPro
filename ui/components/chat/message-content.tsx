@@ -503,7 +503,7 @@ const CodeBlock = memo(
           let parent = codeBlockRef.current.closest('[data-radix-scroll-area-viewport]');
           
           if (parent instanceof HTMLElement && parent.offsetWidth > 100) {
-            const newWidth = Math.max(parent.offsetWidth - 48, 300);
+            const newWidth = Math.max(parent.offsetWidth * 1.0, 300);
             // Only update if width has changed significantly
             if (Math.abs(newWidth - containerWidth) > 10) {
               setContainerWidth(newWidth);

@@ -54,29 +54,40 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
   const resizingRef = useRef(false)
 
   const handleClose = useCallback(() => {
-    // Cancel any pending resize timeouts
-    if (resizeTimeoutRef.current) {
-      clearTimeout(resizeTimeoutRef.current);
-      resizeTimeoutRef.current = null;
-    }
+    if (resizingRef.current) return;
+    resizingRef.current = true;
     
-    // Set resizing flag to false
-    resizingRef.current = false;
+    // Add a class to prevent transitions during resize
+    document.body.classList.add('resizing');
     
-    // Only dispatch state update to restore layout
     window.dispatchEvent(
       new CustomEvent("node-test-runner-state", {
         detail: { isOpen: false, width: 0, instanceId: instanceId.current },
       }),
-    )
+    );
     
-    // Trigger a resize event to update the layout
-    window.dispatchEvent(new CustomEvent("sidebar-resize"))
+    window.dispatchEvent(new CustomEvent("sidebar-resize"));
     
-    setTimeout(() => {
-      onClose()
-    }, 50)
-  }, [onClose])
+    onClose();
+    
+    const resizeSequence = () => {
+      window.dispatchEvent(new CustomEvent("sidebar-resize"));
+      
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent("sidebar-resize"));
+        
+        // Force a layout reflow
+        document.body.classList.add('sidebar-resize-complete');
+        setTimeout(() => {
+          document.body.classList.remove('sidebar-resize-complete');
+          document.body.classList.remove('resizing');
+          resizingRef.current = false;
+        }, 50);
+      }, 150);
+    };
+    
+    setTimeout(resizeSequence, 100);
+  }, [onClose, instanceId]);
 
   useEffect(() => {
     if (directory) {
@@ -94,23 +105,13 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
 
   useEffect(() => {
     if (!isOpen) {
-      // When closing, dispatch event to restore layout
-      window.dispatchEvent(
-        new CustomEvent("node-test-runner-state", {
-          detail: { isOpen: false, width: 0, instanceId: instanceId.current },
-        }),
-      )
-      window.dispatchEvent(new CustomEvent("sidebar-resize"))
-      return
+      return;
     } else {
-      // Prevent closing other components if this component is already in the process of opening
       if (resizingRef.current) return;
       
       resizingRef.current = true;
       
-      // First properly close all other components
       const closeOtherComponents = async () => {
-        // Dispatch close events for all components
         window.dispatchEvent(
           new CustomEvent("code-editor-close", {
             detail: { forced: true },
@@ -129,56 +130,59 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
           })
         );
         
-        // Wait for components to close
-        await new Promise(resolve => setTimeout(resolve, 150));
+        // Add a small delay for other components to close
+        await new Promise(resolve => setTimeout(resolve, 50));
         
-        // Now update our state
+        // Now update our state with appropriate width
         window.dispatchEvent(
           new CustomEvent("node-test-runner-state", {
-            detail: { isOpen: true, width: isMaximized ? window.innerWidth : 400, instanceId: instanceId.current },
+            detail: { 
+              isOpen: true, 
+              width: isMaximized ? 9999 : 400,
+              instanceId: instanceId.current,
+              isFullscreen: isMaximized
+            },
           }),
         );
         
-        // Trigger a resize event to update the layout
+        // Notify layout system
         window.dispatchEvent(new CustomEvent("sidebar-resize"));
         
         // Reset resizing flag after a delay
         setTimeout(() => {
           resizingRef.current = false;
-        }, 300);
+        }, 200);
       };
       
-      // Execute the async function
       closeOtherComponents();
     }
 
     const handleForcedClose = (event: CustomEvent) => {
-      if (event.detail?.forced) {
-        handleClose()
+      if (event.detail?.forced && !resizingRef.current) {
+        onClose();
       }
     }
 
     const handleNewRunner = (event: CustomEvent) => {
       if (event.detail?.isOpen && event.detail?.instanceId !== instanceId.current) {
-        onClose()
+        onClose();
       }
     }
 
-    window.addEventListener("node-test-runner-close", handleForcedClose as EventListener)
-    window.addEventListener("node-test-runner-state", handleNewRunner as EventListener)
+    window.addEventListener("node-test-runner-close", handleForcedClose as EventListener);
+    window.addEventListener("node-test-runner-state", handleNewRunner as EventListener);
 
     return () => {
-      window.removeEventListener("node-test-runner-close", handleForcedClose as EventListener)
-      window.removeEventListener("node-test-runner-state", handleNewRunner as EventListener)
+      window.removeEventListener("node-test-runner-close", handleForcedClose as EventListener);
+      window.removeEventListener("node-test-runner-state", handleNewRunner as EventListener);
       
-      // Ensure we clean up any flags or timeouts when unmounting
       resizingRef.current = false;
       if (resizeTimeoutRef.current) {
         clearTimeout(resizeTimeoutRef.current);
         resizeTimeoutRef.current = null;
       }
     }
-  }, [isOpen, isMaximized, onClose, handleClose])
+  }, [isOpen, isMaximized, onClose]);
 
   useEffect(() => {
     if (outputRef.current) {
@@ -186,58 +190,6 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
     }
   }, [output])
 
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        handleClose()
-      }
-    }
-
-    window.addEventListener("keydown", handleEscape)
-    return () => window.removeEventListener("keydown", handleEscape)
-  }, [handleClose])
-
-  useEffect(() => {
-    const handleResize = () => {
-      // Debounce resize handling
-      if (resizeTimeoutRef.current) {
-        clearTimeout(resizeTimeoutRef.current);
-      }
-      
-      // Set a flag to prevent concurrent resize operations
-      if (resizingRef.current) return;
-      resizingRef.current = true;
-      
-      resizeTimeoutRef.current = setTimeout(() => {
-        if (isOpen) {
-          window.dispatchEvent(
-            new CustomEvent("node-test-runner-state", {
-              detail: { 
-                isOpen: isOpen, 
-                width: isMaximized ? window.innerWidth : 400, 
-                instanceId: instanceId.current 
-              },
-            }),
-          );
-          
-          // Trigger a resize event to update the layout
-          window.dispatchEvent(new CustomEvent("sidebar-resize"));
-        }
-        
-        // Clear resizing flag
-        resizingRef.current = false;
-        resizeTimeoutRef.current = null;
-      }, 200);
-    };
-
-    window.addEventListener("resize", handleResize);
-    return () => {
-      window.removeEventListener("resize", handleResize);
-      if (resizeTimeoutRef.current) {
-        clearTimeout(resizeTimeoutRef.current);
-      }
-    };
-  }, [isOpen, isMaximized]);
 
   const runOperation = async (operationType: "test" | "run", command: string, params: URLSearchParams, endpoint: string, description: string) => {
      if (isRunning) return
@@ -270,7 +222,6 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
 
        const result = await response.json()
        
-       // For streaming endpoints, set up event source
        if (endpoint === "/run_node_app" && result.process_id) {
          setActiveProcessId(result.process_id)
          setupEventSource(result.process_id)
@@ -279,24 +230,42 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
            content: `Started process ${result.process_id}. Streaming output...` 
          }])
        } else {
-         setOutput(prev => [...prev, { type: "result", content: result }])
+         setOutput(prev => {
+           const maxOutputItems = 500;
+           const newOutput = [...prev, { type: "result" as const, content: result }];
+           
+           if (newOutput.length > maxOutputItems) {
+             return newOutput.slice(newOutput.length - maxOutputItems);
+           }
+           
+           return newOutput;
+         });
          setIsRunning(false)
        }
      } catch (error) {
        console.error(`Error running ${operationType}:`, error)
-       setOutput(prev => [
-         ...prev.filter(item => item.type !== "loading"),
-         {
-           type: "system",
-           content: `Operation failed: ${error instanceof Error ? error.message : String(error)}`
+       setOutput(prev => {
+         const maxOutputItems = 500;
+         const filteredOutput = prev.filter(item => item.type !== "loading");
+         const newOutput = [
+           ...filteredOutput,
+           {
+             type: "system" as const,
+             content: `Operation failed: ${error instanceof Error ? error.message : String(error)}`
+           }
+         ];
+         
+         if (newOutput.length > maxOutputItems) {
+           return newOutput.slice(newOutput.length - maxOutputItems);
          }
-       ])
+         
+         return newOutput;
+       });
        setIsRunning(false)
      }
   }
 
   const setupEventSource = (processId: string) => {
-    // Clean up any existing event source first
     if (eventSource) {
       try {
         eventSource.close();
@@ -308,7 +277,6 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
     try {
       const newEventSource = new EventSource(`${API_ENDPOINT}/node_app_output/${processId}`);
       
-      // Add event listeners for each event type
       const eventTypes = ["stdout", "stderr", "error", "system", "command", "complete", "heartbeat"];
       
       eventTypes.forEach(eventType => {
@@ -317,7 +285,6 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
             const data = JSON.parse(event.data);
             
             if (eventType === "heartbeat") {
-              // Ignore heartbeat messages
               return;
             }
             
@@ -334,15 +301,25 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
               return;
             }
             
-            setOutput(prev => [...prev, { 
-              type: eventType as "stdout" | "stderr" | "error" | "system" | "command" | "heartbeat" | "complete", 
-              content: data.content 
-            }]);
+            setOutput(prev => {
+              const maxOutputItems = 500;
+              const newOutput = [...prev, { 
+                type: eventType as "stdout" | "stderr" | "error" | "system" | "command" | "heartbeat" | "complete", 
+                content: data.content 
+              }];
+              
+              if (newOutput.length > maxOutputItems) {
+                return [...newOutput.slice(newOutput.length - maxOutputItems)];
+              }
+              
+              return newOutput;
+            });
             
-            // Auto-scroll to bottom
-            if (outputRef.current) {
-              outputRef.current.scrollTop = outputRef.current.scrollHeight;
-            }
+            setTimeout(() => {
+              if (outputRef.current) {
+                outputRef.current.scrollTop = outputRef.current.scrollHeight;
+              }
+            }, 10);
           } catch (error) {
             console.error(`Error parsing ${eventType} event data:`, error);
           }
@@ -350,7 +327,6 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
       });
       
       newEventSource.onerror = (error) => {
-        console.error("EventSource error:", error);
         setOutput(prev => [...prev, { 
           type: "error", 
           content: "Connection error. Output streaming stopped." 
@@ -398,7 +374,6 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
       const result = await response.json()
       setOutput(prev => [...prev, { type: "system", content: result.message || "Process terminated" }])
       
-      // Clean up
       if (eventSource) {
         eventSource.close()
         setEventSource(null)
@@ -415,17 +390,21 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
     }
   }
 
-  // Clean up event source when component unmounts
   useEffect(() => {
     return () => {
-      // Clear any flags
+      // This cleanup runs when component unmounts
       resizingRef.current = false;
       
-      // Clear any timeouts
       if (resizeTimeoutRef.current) {
         clearTimeout(resizeTimeoutRef.current);
         resizeTimeoutRef.current = null;
       }
+      
+      // Remove any classes we might have added
+      document.body.classList.remove('resizing');
+      document.body.classList.remove('sidebar-resize-complete');
+      document.body.classList.remove('node-runner-fullscreen');
+      document.documentElement.style.removeProperty('--node-runner-fullscreen');
       
       // Close event source
       if (eventSource) {
@@ -437,7 +416,6 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
         setEventSource(null);
       }
       
-      // Attempt to terminate any active process when closing
       if (activeProcessId) {
         try {
           fetch(`${API_ENDPOINT}/terminate_node_app`, {
@@ -455,17 +433,24 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
           console.error("Error sending termination request:", error);
         }
         
-        // Reset the state
         setActiveProcessId(null);
       }
       
-      // Notify the layout system
       window.dispatchEvent(
         new CustomEvent("node-test-runner-state", {
           detail: { isOpen: false, width: 0, instanceId: instanceId.current },
         }),
       );
+      
       window.dispatchEvent(new CustomEvent("sidebar-resize"));
+      
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent("sidebar-resize"));
+      }, 200);
+      
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent("sidebar-resize"));
+      }, 400);
     }
   }, [eventSource, activeProcessId, instanceId]);
 
@@ -538,7 +523,7 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
     }
 
     if (lastErrorItem && typeof lastErrorItem.content === 'string') {
-        if (lastOutputItem) query += "\n---\n"; // Separator if both exist
+        if (lastOutputItem) query += "\n---\n";
         query += `System Message:\n\`\`\`\n${lastErrorItem.content}\n\`\`\`\n`;
     }
 
@@ -549,61 +534,117 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
   }
 
   const handleMaximizeToggle = () => {
-    // Set resizing flag to prevent other resize operations
     if (resizingRef.current) return;
     resizingRef.current = true;
     
-    // Cancel any pending resize operations
+    // Add a class to prevent transitions during resize
+    document.body.classList.add('resizing');
+    
     if (resizeTimeoutRef.current) {
       clearTimeout(resizeTimeoutRef.current);
     }
     
-    // First update local state
     const newMaximizedState = !isMaximized;
     setIsMaximized(newMaximizedState);
     
-    // Batch the resize operations
+    const newWidth = newMaximizedState ? 9999 : 400;
+    
     resizeTimeoutRef.current = setTimeout(() => {
       try {
-        // Dispatch state change event
+        if (newMaximizedState) {
+          document.body.classList.add('node-runner-fullscreen');
+          document.documentElement.style.setProperty('--node-runner-fullscreen', 'true');
+        } else {
+          document.body.classList.remove('node-runner-fullscreen');
+          document.documentElement.style.removeProperty('--node-runner-fullscreen');
+        }
+        
         window.dispatchEvent(
           new CustomEvent("node-test-runner-state", {
             detail: { 
               isOpen: true, 
-              width: newMaximizedState ? window.innerWidth : 400, 
-              instanceId: instanceId.current 
+              width: newWidth, 
+              instanceId: instanceId.current,
+              isFullscreen: newMaximizedState
             },
           }),
         );
         
-        // Then trigger layout update
         window.dispatchEvent(new CustomEvent("sidebar-resize"));
+        
+        // Dispatch a second resize event after a delay to ensure layout is updated
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent("sidebar-resize"));
+          
+          // Force a layout reflow
+          document.body.classList.add('sidebar-resize-complete');
+          setTimeout(() => {
+            document.body.classList.remove('sidebar-resize-complete');
+            document.body.classList.remove('resizing');
+          }, 50);
+        }, 200);
       } catch (error) {
         console.error("Error during maximize toggle:", error);
       } finally {
-        // Reset resizing flag after operations complete
         setTimeout(() => {
           resizingRef.current = false;
         }, 300);
       }
-    }, 50);
+    }, 100);
   };
+
+  // Add a window resize handler back for proper dimensions
+  useEffect(() => {
+    const handleWindowResize = () => {
+      if (!isOpen || resizingRef.current) return;
+      
+      if (isMaximized) {
+        // For fullscreen mode, we need to update on window resize
+        window.dispatchEvent(
+          new CustomEvent("node-test-runner-state", {
+            detail: { 
+              isOpen: true, 
+              width: 9999, 
+              instanceId: instanceId.current,
+              isFullscreen: true
+            },
+          }),
+        );
+        
+        // Ensure the layout updates
+        window.dispatchEvent(new CustomEvent("sidebar-resize"));
+      }
+    };
+    
+    window.addEventListener("resize", handleWindowResize);
+    return () => {
+      window.removeEventListener("resize", handleWindowResize);
+    };
+  }, [isOpen, isMaximized, instanceId]);
 
   if (!isOpen) return null
 
   return (
     <div
       className={cn(
-        "fixed bg-background border z-50 rounded-lg shadow-xl flex flex-col text-foreground",
+        "fixed bg-background border z-[100] rounded-lg shadow-xl flex flex-col text-foreground",
         isMaximized
-          ? "top-0 right-0 w-full h-full"
+          ? "inset-0 m-0 rounded-none border-0"
           : "top-0 right-0 w-full md:w-[400px] h-full"
       )}
+      style={{
+        position: "fixed",
+        zIndex: isMaximized ? 1000 : 100,
+        height: isMaximized ? '100vh' : undefined,
+        width: isMaximized ? '100vw' : undefined,
+        minHeight: isMaximized ? '100vh' : undefined,
+        transition: 'width 0.2s ease, height 0.2s ease, min-height 0.2s ease'
+      }}
     >
       <div className="flex items-center justify-between p-3 border-b bg-muted/30">
         <h3 className="text-sm font-medium flex items-center">
           <Package className="h-4 w-4 mr-2 text-primary" />
-          Node.js Runner
+          Node.js Runner {isMaximized ? "(Fullscreen Mode)" : ""}
         </h3>
         <div className="flex items-center gap-1">
           <Button
@@ -619,14 +660,32 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
               <Maximize2 className="h-4 w-4" />
             )}
           </Button>
-          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={handleClose} title="Close">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-7 w-7 text-muted-foreground hover:text-foreground" 
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!resizingRef.current) {
+                handleClose();
+              }
+            }} 
+            title="Close"
+          >
             <Square className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
-      <Tabs value={testMode} className="flex-1 flex flex-col" onValueChange={(value) => setTestMode(value as "app" | "snippet")}>
-        <div className="px-3 py-2 border-b bg-background">
+      <Tabs 
+        value={testMode} 
+        className="flex-1 flex flex-col" 
+        onValueChange={(value) => setTestMode(value as "app" | "snippet")}
+      >
+        <div className={cn(
+          "px-3 py-2 border-b bg-background",
+          isMaximized && "sticky top-0 z-10"
+        )}>
           <TabsList className="w-full grid grid-cols-2">
             <TabsTrigger value="app">
               Application Tests
@@ -637,7 +696,13 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
           </TabsList>
         </div>
 
-        <TabsContent value="app" className="flex-1 flex flex-col p-4 space-y-4 overflow-hidden data-[state=inactive]:hidden">
+        <TabsContent 
+          value="app" 
+          className={cn(
+            "flex-1 flex flex-col p-4 space-y-4 overflow-hidden data-[state=inactive]:hidden",
+            isMaximized && "max-w-6xl mx-auto w-full"
+          )}
+        >
           <div className="flex flex-col gap-3">
              <Input
                placeholder="Directory path (leave empty for current)"
@@ -669,23 +734,33 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
                 </div>
              </div>
           </div>
-          <div className="flex-1 border rounded-md bg-black text-gray-200 font-mono text-sm min-h-[40vh] max-h-[80vh] overflow-x-auto">
+          <div className={cn(
+            "flex-1 border rounded-md bg-black text-gray-200 font-mono text-sm overflow-x-auto",
+            isMaximized ? "min-h-[40vh] max-h-[50vh]" : "min-h-[30vh] max-h-[50vh]"
+          )}>
             <ScrollArea className="flex-1 h-full">
                <div
                  ref={outputRef}
                  className="p-3 whitespace-pre-wrap break-words overflow-x-hidden"
-                 style={{ maxWidth: "100%", width: "100%" }}
+                 style={{ 
+                   maxWidth: "100%", 
+                   width: "100%",
+                   minHeight: isMaximized ? "40vh" : "30vh",
+                   position: "relative"
+                 }}
                >
                  {output.length === 0 && !isRunning ? (
                    <div className="text-gray-500 italic">
                      Output will appear here. Run tests or application.
                    </div>
                  ) : (
-                   output.map((item, index) => (
-                     <div key={`app-output-${index}`} className="mb-2 last:mb-0 break-words">
-                       {renderOutputContent(item, index)}
-                     </div>
-                   ))
+                   <div className="output-container" style={{ maxWidth: "100%" }}>
+                     {output.map((item, index) => (
+                       <div key={`app-output-${index}`} className="mb-2 last:mb-0 break-words">
+                         {renderOutputContent(item, index)}
+                       </div>
+                     ))}
+                   </div>
                  )}
                 {isRunning && !activeProcessId && (
                   <div className="flex items-center text-blue-400 italic">
@@ -771,7 +846,13 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
             </div>
         </TabsContent>
 
-        <TabsContent value="snippet" className="flex-1 flex flex-col p-4 space-y-4 overflow-hidden data-[state=inactive]:hidden">
+        <TabsContent 
+          value="snippet" 
+          className={cn(
+            "flex-1 flex flex-col p-4 space-y-4 overflow-hidden data-[state=inactive]:hidden",
+            isMaximized && "max-w-6xl mx-auto w-full"
+          )}
+        >
           <div className="flex flex-col space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="flex flex-col">
@@ -809,23 +890,32 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
               </select>
             </div>
           </div>
-          <div className="flex-1 border rounded-md bg-black text-gray-200 font-mono text-sm min-h-[30vh] max-h-[35vh] overflow-x-auto">
+          <div className={cn(
+            "flex-1 border rounded-md bg-black text-gray-200 font-mono text-sm overflow-x-auto",
+            isMaximized ? "min-h-[30vh] max-h-[40vh]" : "min-h-[40vh] max-h-[80vh]"
+          )}>
             <ScrollArea className="flex-1 h-full">
               <div
                 ref={outputRef}
-                className="p-3 whitespace-pre-wrap break-words overflow-y-auto"
-                style={{ maxWidth: "100%", width: "100%" }}
+                className="p-3 whitespace-pre-wrap break-words overflow-x-hidden"
+                style={{ 
+                  maxWidth: "100%", 
+                  width: "100%",
+                  minHeight: isMaximized ? "30vh" : "40vh"
+                }}
               >
                 {output.length === 0 && !isRunning ? (
                   <div className="text-gray-500 italic">
                     Output will appear here. Run tests to see results.
                   </div>
                 ) : (
-                  output.map((item, index) => (
-                    <div key={`snippet-output-${index}`} className="mb-2 last:mb-0 break-words">
-                      {renderOutputContent(item, index)}
-                    </div>
-                  ))
+                  <div className="output-container" style={{ maxWidth: "100%" }}>
+                    {output.map((item, index) => (
+                      <div key={`snippet-output-${index}`} className="mb-2 last:mb-0 break-words">
+                        {renderOutputContent(item, index)}
+                      </div>
+                    ))}
+                  </div>
                 )}
                 {isRunning && !activeProcessId && (
                   <div className="flex items-center text-blue-400 italic">
@@ -904,14 +994,24 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
 }
 
 function renderOutputContent(item: OutputItem, index: number) {
-  // Helper function to format content with proper overflow handling
   const formatContent = (content: string | TestOutput): React.ReactElement => {
     if (typeof content !== 'string') {
-      return <span className="break-words overflow-hidden" style={{ maxWidth: "100%", display: "inline-block" }}>{JSON.stringify(content)}</span>;
+      return (
+        <span className="break-words overflow-hidden overflow-ellipsis" style={{ 
+          maxWidth: "100%", 
+          display: "inline-block",
+          whiteSpace: "pre-wrap"
+        }}>
+          {JSON.stringify(content, null, 2)}
+        </span>
+      );
     }
     
     return (
-      <div className="break-words overflow-hidden" style={{ maxWidth: "100%" }}>
+      <div className="break-words overflow-hidden overflow-ellipsis" style={{ 
+        maxWidth: "100%",
+        whiteSpace: "pre-wrap"
+      }}>
         {content}
       </div>
     );
@@ -926,28 +1026,28 @@ function renderOutputContent(item: OutputItem, index: number) {
   }
 
   if (item.type === "loading") {
-    return null; // Loading indicator is handled outside the map
+    return null;
   }
 
   if (item.type === "stdout") {
-    return <div className="text-green-300 text-sm overflow-x-auto break-words">stdout: {formatContent(item.content)}</div>
+    return <div className="text-green-300 text-sm overflow-x-auto break-words max-w-full">stdout: {formatContent(item.content)}</div>
   }
 
   if (item.type === "stderr") {
-    return <div className="text-red-300 text-sm overflow-x-auto break-words">stderr: {formatContent(item.content)}</div>
+    return <div className="text-red-300 text-sm overflow-x-auto break-words max-w-full">stderr: {formatContent(item.content)}</div>
   }
 
   if (item.type === "error") {
-    return <div className="text-red-400 text-sm font-bold overflow-x-auto break-words">Error: {formatContent(item.content)}</div>
+    return <div className="text-red-400 text-sm font-bold overflow-x-auto break-words max-w-full">Error: {formatContent(item.content)}</div>
   }
 
   if (item.type === "complete") {
-    return <div className="text-blue-300 text-sm font-bold overflow-x-auto break-words">{formatContent(item.content)}</div>
+    return <div className="text-blue-300 text-sm font-bold overflow-x-auto break-words max-w-full">{formatContent(item.content)}</div>
   }
 
   const result = item.content as TestOutput
   return (
-    <div className="space-y-2 border-t border-gray-700 pt-2 first:border-t-0 first:pt-0">
+    <div className="space-y-2 border-t border-gray-700 pt-2 first:border-t-0 first:pt-0 max-w-full">
       <div className="flex items-center gap-2">
         <Badge variant={result.success ? "default" : "destructive"} className={result.success ? "bg-green-600 hover:bg-green-700 text-white" : "bg-red-600 hover:bg-red-700 text-white"}>
            {result.success ? (
@@ -967,19 +1067,19 @@ function renderOutputContent(item: OutputItem, index: number) {
       {result.stdout && (
         <div>
           <div className="text-xs text-gray-400 mb-1">Standard Output:</div>
-          <pre className="text-xs bg-gray-800 p-2 rounded overflow-x-auto text-gray-200 whitespace-pre-wrap break-words">{result.stdout}</pre>
+          <pre className="text-xs bg-gray-800 p-2 rounded overflow-x-auto text-gray-200 whitespace-pre-wrap break-words max-w-full">{result.stdout}</pre>
         </div>
       )}
       {result.stderr && (
         <div>
           <div className="text-xs text-gray-400 mb-1">Standard Error:</div>
-          <pre className="text-xs bg-gray-800 p-2 rounded overflow-x-auto text-red-400 whitespace-pre-wrap break-words">{result.stderr}</pre>
+          <pre className="text-xs bg-gray-800 p-2 rounded overflow-x-auto text-red-400 whitespace-pre-wrap break-words max-w-full">{result.stderr}</pre>
         </div>
       )}
       {result.error && (
         <div>
           <div className="text-xs text-gray-400 mb-1">Error:</div>
-          <pre className="text-xs bg-gray-800 p-2 rounded overflow-x-auto text-red-400 whitespace-pre-wrap break-words">{result.error}</pre>
+          <pre className="text-xs bg-gray-800 p-2 rounded overflow-x-auto text-red-400 whitespace-pre-wrap break-words max-w-full">{result.error}</pre>
         </div>
       )}
     </div>

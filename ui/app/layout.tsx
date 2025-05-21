@@ -19,6 +19,8 @@ declare global {
   interface WindowEventMap {
     'node-test-runner-state': CustomEvent<SidebarStateDetail>;
     'code-editor-state': CustomEvent<SidebarStateDetail>;
+    'sidebar-resize': CustomEvent<SidebarStateDetail>;
+    'python-shell-state': CustomEvent<SidebarStateDetail>;
     'code-editor-close': CustomEvent<{ forced: boolean }>;
     'python-shell-close': CustomEvent<{ forced: boolean }>;
     'html-preview-close': CustomEvent<{ forced: boolean }>;

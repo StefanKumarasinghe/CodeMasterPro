@@ -200,12 +200,14 @@ export function ChatLayout() {
           }, 50)
         } else if (activeSidebar === "test-runner") {
           setActiveSidebar(null)
+          console.log("test-runner closed")
           setSidebarWidth(0)
           setMainContentWidth(calculateMainContentWidth())
-
+          console.log("test-runner closed 2")
           if (layoutRef.current) {
             layoutRef.current.style.paddingRight = "0px"
             document.documentElement.style.setProperty("--right-sidebar-width", "0px")
+            console.log("test-runner closed 3")
           }
         }
       }
@@ -238,6 +240,12 @@ export function ChatLayout() {
       resizeObserver.disconnect()
     }
   }, [activeSidebar, sidebarWidth, leftSidebarWidth])
+
+  //update the main content width when the sidebar width changes
+  useEffect(() => {
+    setMainContentWidth(calculateMainContentWidth())
+  }, [sidebarWidth])
+
 
   return (
    <div

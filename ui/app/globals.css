@@ -286,4 +286,38 @@
       max-width: 100%;
     }
   }
+
+  /* Node test runner styles */
+  .node-runner-fullscreen {
+    overflow: hidden !important;
+  }
+  
+  html[style*="--node-runner-fullscreen:true"] .chat-container {
+    z-index: 0 !important;
+  }
+  
+  .output-container {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+    word-wrap: break-word;
+    word-break: break-word;
+  }
+  
+  .output-container pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    max-width: 100%;
+  }
+  
+  /* Prevent layout issues when components are being resized */
+  body.resizing * {
+    transition: none !important;
+  }
+  
+  /* Force resizes to be honored even during animations */
+  .sidebar-resize-complete * {
+    transition: none !important;
+  }
 }
