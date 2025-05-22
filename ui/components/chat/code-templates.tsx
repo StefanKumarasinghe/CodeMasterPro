@@ -15,7 +15,7 @@ interface CodeSnippet {
   name: string;
   description: string;
   code: string;
-  icon?: JSX.Element; 
+  icon?: React.ReactElement; 
 }
 
 export function CodeTemplates({ onSelectTemplate }: CodeTemplatesProps) {

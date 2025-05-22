@@ -1,11 +1,10 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { X, Maximize2, Minimize2, RefreshCw, Code, ExternalLink, AlertTriangle, Copy, Check } from "lucide-react";
+import { X, Maximize2, Minimize2, RefreshCw, Code, AlertTriangle, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { cn } from "@/lib/utils";
 import { useTheme } from "next-themes";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -26,7 +25,7 @@ export function HtmlPreview({
   const [isConfirmed, setIsConfirmed] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const { theme, setTheme } = useTheme();
+  const { theme } = useTheme();
   const [iframeHeight, setIframeHeight] = useState("calc(100% - 48px)");
   const headerRef = useRef<HTMLDivElement>(null);
   const [renderError, setRenderError] = useState<string | null>(null);
@@ -59,10 +58,8 @@ export function HtmlPreview({
     setIsFullscreen(!isFullscreen);
   };
 
-  // Safe exit from fullscreen - ensure we return to dialog mode properly
   const handleExitFullscreen = () => {
     setIsFullscreen(false);
-    // Allow time for state transition before header recalculation
     setTimeout(() => {
       if (headerRef.current) {
         const headerHeight = headerRef.current.offsetHeight;
@@ -94,12 +91,7 @@ export function HtmlPreview({
 
   const renderHtml = () => {
     try {
-      // Sanitize HTML content to prevent script injection and other issues
-      const sanitizedHtml = htmlContent.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '<!-- Scripts removed for security -->');
-      
-      // Determine if we should use dark mode styles
       const isDarkTheme = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-      
       const safeHtml = `
         <!DOCTYPE html>
         <html>
@@ -107,223 +99,10 @@ export function HtmlPreview({
             <base target="_blank">
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1">
-            <style>
-              :root {
-                color-scheme: ${isDarkTheme ? 'dark' : 'light'};
-              }
-              
-              body {
-                line-height: 1.6;
-                padding: 1rem;
-                max-width: 100%;
-                margin: 0;
-                font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-                ${isDarkTheme ? 'background-color: #171717; color: #f5f5f5;' : 'background-color: #ffffff; color: #171717;'}
-                overflow-x: hidden;
-              }
-              
-              * {
-                box-sizing: border-box;
-              }
-              
-              img, video, iframe {
-                max-width: 100%;
-                height: auto;
-                border-radius: 4px;
-                ${isDarkTheme ? 'filter: brightness(0.9);' : ''}
-              }
-              
-              a {
-                color: ${isDarkTheme ? '#60a5fa' : '#2563eb'};
-                text-decoration: none;
-              }
-              
-              a:hover {
-                text-decoration: underline;
-              }
-              
-              pre, code {
-                padding: 0.2em 0.4em;
-                background-color: ${isDarkTheme ? '#262626' : '#f5f5f5'};
-                border-radius: 3px;
-                font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-                overflow-x: auto;
-              }
-              
-              pre {
-                padding: 1em;
-                line-height: 1.5;
-                border-radius: 6px;
-                border: 1px solid ${isDarkTheme ? '#404040' : '#e5e5e5'};
-              }
-              
-              pre code {
-                background-color: transparent;
-                padding: 0;
-              }
-              
-              h1, h2, h3, h4, h5, h6 {
-                color: ${isDarkTheme ? '#f5f5f5' : '#171717'};
-                margin-top: 1.5em;
-                margin-bottom: 0.75em;
-                line-height: 1.2;
-              }
-              
-              h1 { font-size: 2em; }
-              h2 { font-size: 1.5em; }
-              h3 { font-size: 1.25em; }
-              
-              p {
-                margin: 1em 0;
-              }
-              
-              /* Responsive adjustments */
-              @media (min-width: 768px) {
-                body {
-                  padding: 1.5rem;
-                }
-              }
-              
-              /* Table styles */
-              table {
-                border-collapse: collapse;
-                width: 100%;
-                margin: 1rem 0;
-                overflow-x: auto;
-                display: block;
-              }
-              
-              table, th, td {
-                border: 1px solid ${isDarkTheme ? '#404040' : '#e5e5e5'};
-              }
-              
-              th, td {
-                padding: 8px 12px;
-                text-align: left;
-              }
-              
-              th {
-                background-color: ${isDarkTheme ? '#262626' : '#f5f5f5'};
-              }
-              
-              /* Alternating row colors */
-              tr:nth-child(even) {
-                background-color: ${isDarkTheme ? '#1e1e1e' : '#fafafa'};
-              }
-              
-              /* Error handling */
-              .html-error {
-                padding: 1rem;
-                background-color: ${isDarkTheme ? '#442c2d' : '#fff0f0'};
-                color: ${isDarkTheme ? '#f87171' : '#ef4444'};
-                border-left: 4px solid ${isDarkTheme ? '#f87171' : '#ef4444'};
-                margin: 1rem 0;
-                border-radius: 0 4px 4px 0;
-              }
-              
-              /* Prevent overflow issues */
-              html, body {
-                max-width: 100vw;
-                overflow-x: hidden;
-              }
-              
-              /* Fix for common markdown rendering issues */
-              ul, ol {
-                padding-left: 2rem;
-                margin: 1em 0;
-              }
-              
-              blockquote {
-                border-left: 4px solid ${isDarkTheme ? '#404040' : '#e5e5e5'};
-                margin: 1rem 0;
-                padding-left: 1rem;
-                color: ${isDarkTheme ? '#a3a3a3' : '#525252'};
-              }
-              
-              button {
-                background-color: ${isDarkTheme ? '#2563eb' : '#3b82f6'};
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 4px;
-                cursor: pointer;
-                font-size: 14px;
-                transition: background-color 0.2s;
-              }
-              
-              button:hover {
-                background-color: ${isDarkTheme ? '#1d4ed8' : '#2563eb'};
-              }
-              
-              input, select, textarea {
-                padding: 8px 12px;
-                border: 1px solid ${isDarkTheme ? '#525252' : '#d4d4d4'};
-                border-radius: 4px;
-                background-color: ${isDarkTheme ? '#262626' : '#ffffff'};
-                color: ${isDarkTheme ? '#f5f5f5' : '#171717'};
-                font-size: 14px;
-              }
-              
-              .container {
-                width: 100%;
-                max-width: 1200px;
-                margin: 0 auto;
-                padding: 0 1rem;
-              }
-              
-              .card {
-                background-color: ${isDarkTheme ? '#262626' : '#ffffff'};
-                border-radius: 8px;
-                padding: 1.5rem;
-                box-shadow: 0 1px 3px rgba(0,0,0,${isDarkTheme ? '0.2' : '0.1'});
-                border: 1px solid ${isDarkTheme ? '#404040' : '#e5e5e5'};
-                margin-bottom: 1.5rem;
-              }
-              
-              hr {
-                border: 0;
-                height: 1px;
-                background-color: ${isDarkTheme ? '#404040' : '#e5e5e5'};
-                margin: 1.5rem 0;
-              }
-            </style>
-            
-            <script>
-              // Handle rendering errors
-              window.onerror = function(msg, url, line, col, error) {
-                console.error('HTML Preview Error:', msg);
-                if (!document.querySelector('.html-error')) {
-                  var errorDiv = document.createElement('div');
-                  errorDiv.className = 'html-error';
-                  errorDiv.innerHTML = '<strong>Rendering Error:</strong> ' + msg;
-                  document.body.prepend(errorDiv);
-                }
-                return true;
-              };
-              
-              // Prevent infinite loops
-              (function() {
-                let iterationCount = 0;
-                const originalSetTimeout = window.setTimeout;
-                window.setTimeout = function(callback, delay, ...args) {
-                  iterationCount++;
-                  if (iterationCount > 1000) {
-                    console.error('Too many recursive calls detected, stopping execution');
-                    return 0;
-                  }
-                  return originalSetTimeout(callback, delay, ...args);
-                };
-              })();
-              
-              // Send loaded event to parent
-              window.addEventListener('load', function() {
-                window.parent.postMessage('iframe-loaded', '*');
-              });
-            </script>
           </head>
           <body>
             <div id="html-content-container">
-              ${sanitizedHtml}
+              ${htmlContent}
             </div>
           </body>
         </html>
@@ -347,7 +126,6 @@ export function HtmlPreview({
     }
   };
 
-  // Listen for iframe loaded message
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (event.data === 'iframe-loaded') {

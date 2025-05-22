@@ -5,7 +5,7 @@ import { FaDocker } from "react-icons/fa";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
 import { API_ENDPOINT } from "@/config/constants";
-import BinaryCodeBrainEffect from "./brain";
+import BinaryCodeBrainEffect from "@/components/ui/brain";
 import { useChat } from "@/context/chat-context";
 
 const containerVariants = {
@@ -87,10 +87,6 @@ export function ChatWelcome() {
     setAppropriateDockerCommand();
   }, []);
 
-  const handlePromptClick = (prompt: string) => {
-    usePrompt(prompt);
-  };
-
   return (
     <motion.div
       className="flex flex-col items-center justify-center min-h-[calc(90vh-200px)] text-center px-4 relative overflow-hidden  text-white p-8 "
@@ -99,21 +95,23 @@ export function ChatWelcome() {
       animate="visible"
     >
       <motion.div variants={itemVariants}>
-        <BinaryCodeBrainEffect
-          className="h-24 w-24 text-green-400 font-light"
-          animationDuration={0.8}
-          generationInterval={500}
-          particleLimit={70}
-          particleSize="text-lg"
-          codeColor="text-green-400 dark:text-green-300"
-        />
+        <BinaryCodeBrainEffect/>
       </motion.div>
       <motion.h1
         variants={itemVariants}
         style={{
+          WebkitTextStroke: '2px white',
+        }}
+        className="text-5xl hidden dark:block md:text-6xl font-extrabold my-4 text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-blue-500"
+      >
+        The CodeMaster Returns
+      </motion.h1>
+            <motion.h1
+        variants={itemVariants}
+        style={{
           WebkitTextStroke: '2px black',
         }}
-        className="text-5xl md:text-6xl font-extrabold my-4 text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-blue-500"
+        className="text-5xl block dark:hidden md:text-6xl font-extrabold my-4 text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-blue-500"
       >
         The CodeMaster Returns
       </motion.h1>
@@ -148,8 +146,8 @@ export function ChatWelcome() {
           >
             docker pull stefankumarasinghe/codemasterpro
           </a>
-          <div className="flex justify-center text-xs md:text-lg mt-6 font-mono p-3  rounded-md overflow-x-auto">
-            <code className="whitespace-pre-wrap text-black dark:text-white">{dockerRunCommand}</code>
+          <div className="flex justify-center text-xs md:text-lg mt-6  rounded-md overflow-x-auto">
+            <p className="whitespace-pre-wrap text-black dark:text-white">{dockerRunCommand}</p>
           </div>
         </motion.div>
       )}

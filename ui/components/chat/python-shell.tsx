@@ -87,7 +87,6 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
 
     const handleNewShell = (event: CustomEvent) => {
       if (event.detail?.isOpen && event.detail?.instanceId !== instanceId.current) {
-        // Instead of closing, just update the UI state
         onClose()
       }
     }
@@ -96,7 +95,6 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
     window.addEventListener("python-shell-state", handleNewShell as EventListener)
 
     return () => {
-      // Only terminate session if we're actually closing the shell
       if (!isOpen) {
         if (sessionId) {
           terminateSession()
@@ -300,17 +298,11 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
     }
   }
 
-  const toggleFullscreen = () => {
-    setIsFullscreen(!isFullscreen)
-  }
-
   const handleClose = () => {
-    // Only terminate session if we're actually closing the shell
     if (!isOpen) {
       terminateSession()
     }
-
-
+    
     window.dispatchEvent(
       new CustomEvent("python-shell-state", {
         detail: { isOpen: false, width: 0, instanceId: instanceId.current },

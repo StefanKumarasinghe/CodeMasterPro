@@ -6,32 +6,27 @@ interface WindowSize {
 }
 
 export function useWindowSize(): WindowSize {
-  const [windowSize, setWindowSize] = useState<WindowSize>({
-    width: typeof window !== 'undefined' ? window.innerWidth : 0,
-    height: typeof window !== 'undefined' ? window.innerHeight : 0,
+  const isClient = typeof window !== 'undefined';
+
+  const getSize = (): WindowSize => ({
+    width: isClient ? window.innerWidth : 0,
+    height: isClient ? window.innerHeight : 0,
   });
 
+  const [windowSize, setWindowSize] = useState<WindowSize>(getSize);
+
   useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
+    if (!isClient) return;
 
     const handleResize = () => {
-      setWindowSize({
-        width: window.innerWidth,
-        height: window.innerHeight,
-      });
+      setWindowSize(getSize());
     };
 
-    // Add event listener
     window.addEventListener('resize', handleResize);
-    
-    // Call handler right away so state gets updated with initial window size
     handleResize();
-    
-    // Remove event listener on cleanup
+
     return () => window.removeEventListener('resize', handleResize);
-  }, []); // Empty array ensures effect runs only on mount and unmount
+  }, [isClient]);
 
   return windowSize;
-} 
+}

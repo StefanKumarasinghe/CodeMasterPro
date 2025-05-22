@@ -87,7 +87,6 @@ const monacoLanguageToDisplayName: { [key: string]: string } = {
 
 const useFullscreen = () => {
   const [isFullScreen, setIsFullScreen] = useState(false)
-
   const toggleFullScreen = useCallback(() => {
     if (!document.fullscreenElement) {
       document.documentElement
@@ -159,7 +158,7 @@ export const CodeEditorCanvas: React.FC<CodeEditorCanvasProps> = ({
   const monacoRef = useRef<Monaco | null>(null)
   const editorContainerRef = useRef<HTMLDivElement>(null)
   const [isMonacoLoaded, setIsMonacoLoaded] = useState(false)
-  const { theme, setTheme } = useTheme()
+  const { theme } = useTheme()
   const { isFullScreen, toggleFullScreen } = useFullscreen()
   const actualTheme =
     theme === "system"
@@ -185,27 +184,24 @@ export const CodeEditorCanvas: React.FC<CodeEditorCanvasProps> = ({
     setCode(initialCode)
     let finalLanguage = "plaintext"
 
-    // Priority 1: Use the language passed in props
     const langFromProp = getLanguageFromProp(initialLanguageProp)
     if (langFromProp !== "plaintext") {
       finalLanguage = langFromProp
     }
-    // Priority 2: Get language from filename if available
+    
     else if (filename) {
       const langFromFile = getLanguageFromFilename(filename)
       if (langFromFile !== "plaintext") {
         finalLanguage = langFromFile
       }
     }
-    // Priority 3: Use saved language from localStorage
+    
     else {
       const savedLanguage = localStorage.getItem("editor-monaco-language")
       if (savedLanguage && monacoLanguageToDisplayName[savedLanguage]) {
         finalLanguage = savedLanguage
       }
     }
-
-    // Remove autodetection with hljs
 
     if (finalLanguage !== selectedLanguage) {
       setSelectedLanguage(finalLanguage)
@@ -232,26 +228,6 @@ export const CodeEditorCanvas: React.FC<CodeEditorCanvasProps> = ({
     { enableOnFormTags: true },
   )
 
-  useHotkeys(
-    "ctrl+b, cmd+b",
-    (e) => {
-      e.preventDefault()
-      toggleFullScreen()
-    },
-    { enableOnFormTags: true },
-  )
-
-  useHotkeys(
-    "ctrl+/, cmd+/",
-    (e) => {
-      e.preventDefault()
-      if (editorRef.current) {
-        editorRef.current.getAction("editor.action.commentLine").run()
-      }
-    },
-    { enableOnFormTags: true },
-  )
-
   const handleClose = useCallback(() => {
     if (isFullScreen) {
       toggleFullScreen()
@@ -265,13 +241,6 @@ export const CodeEditorCanvas: React.FC<CodeEditorCanvasProps> = ({
     onClose()
   }, [isFullScreen, toggleFullScreen, onClose])
 
-  useHotkeys(
-    "escape",
-    () => {
-      handleClose()
-    },
-    { enableOnFormTags: true },
-  )
 
   useEffect(() => {
     if (!isOpen) {
@@ -315,7 +284,7 @@ export const CodeEditorCanvas: React.FC<CodeEditorCanvasProps> = ({
     }, 100)
   }, [isOpen, filename])
 
-  // Add a resize observer to handle editor resizing
+  
   useEffect(() => {
     if (!editorContainerRef.current || !isOpen) return
 
@@ -332,10 +301,7 @@ export const CodeEditorCanvas: React.FC<CodeEditorCanvasProps> = ({
           }),
         )
 
-        // Update the right sidebar width CSS variable
         document.documentElement.style.setProperty("--right-sidebar-width", `${width}px`)
-
-        // Dispatch a resize event to update the layout
         window.dispatchEvent(new CustomEvent("sidebar-resize"))
       }
     })

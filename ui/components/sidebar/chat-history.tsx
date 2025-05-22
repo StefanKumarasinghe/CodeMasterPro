@@ -5,7 +5,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { API_ENDPOINT } from "@/config/constants";
-import {MessageSquare,Trash2,Download,AlertTriangle,Search,Clock,RefreshCw,HistoryIcon,Calendar,ArrowUpDown,CheckCircle2} from "lucide-react";
+import {MessageSquare, Trash2, Download, AlertTriangle, Search, Clock, RefreshCw, HistoryIcon, Calendar, ArrowUpDown, CheckCircle2} from "lucide-react";
 import { toast } from "@/utils/toast-util";
 import {Dialog,DialogContent,DialogDescription,DialogFooter,DialogHeader,DialogTitle} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
@@ -82,7 +82,7 @@ export function ChatHistory() {
     }
   }, [messages.length]);
 
-  const giveMemory = async (chatId, inputText, result) => {
+  const giveMemory = async (chatId: string, inputText: string, result: string) => {
     try {
       const response = await fetch(`${API_ENDPOINT}/give_memory/`, {
         method: "POST",
@@ -439,8 +439,6 @@ export function ChatHistory() {
                   <p className={cn("text-xs mt-2 line-clamp-2 text-muted-foreground")}>
                     {chat.preview}
                   </p>
-
-                  {/* Message count badge */}
                   <div className="flex justify-between items-center mt-2">
                     <Badge variant="secondary" className="text-xs">
                       {chat.messages.length}{" "}

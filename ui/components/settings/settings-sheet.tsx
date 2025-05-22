@@ -13,9 +13,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { toast } from "@/utils/toast-util";
 import { STORAGE_KEYS } from "@/config/constants";
-import PromptSettingsTab from "./Prompt";
-import ApiIntegrationContent from "./ApiIntegrationContent";
-import GeneralSettingsTab from "./Settings";
+import PromptSettingsTab from "./prompt-handler";
+import ApiIntegrationContent from "./api-intergration";
+import GeneralSettingsTab from "./setting";
 
 interface CodeQualityPreferences {
   linting?: boolean;
@@ -111,7 +111,7 @@ export default function SettingsSheet({
                 />
               </TabsContent>
             </Tabs>
-            <Button className="w-full mt-6" onClick={savePreferences}>
+            <Button className="m-3" onClick={savePreferences}>
               <Save className="mr-2 h-4 w-4" />
               Save Preferences
             </Button>

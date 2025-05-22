@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Loader2, Copy, Zap, Feather, Globe, Sparkle, BrainCircuitIcon, Github, Icon } from "lucide-react";
+import { Loader2, Copy, Zap, Feather, Globe, Sparkle, BrainCircuitIcon, Github, Icon, Save } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -9,12 +9,12 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "@/utils/toast-util";
 import { API_ENDPOINT } from "@/config/constants";
-import ServiceBox from "./ServiceBox";
+import ServiceBox from "./service-box";
 
 interface Service {
   id: string;
   name: string;
-  icon: Icon;
+  icon: typeof Icon;
   description: string;
   link: string;
 }
@@ -54,12 +54,10 @@ const ApiIntegrationContent = () => {
 
   const handleViewOldClick = async () => {
     if (!selectedService) return;
-
     setModalView("view");
     setIsLoading(true);
     setFetchedApiKey(null);
     setFetchError(null);
-
     try {
       const response = await fetch(`${API_ENDPOINT}/get_api_keys`, {
         method: 'POST',
@@ -319,7 +317,7 @@ const ApiIntegrationContent = () => {
                   className="w-full sm:w-auto"
                   disabled={isLoading}
                 >
-                   {isLoading && modalView === 'view' ? (
+                   {isLoading ? (
                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                    ) : (
                      <></>

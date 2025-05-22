@@ -188,25 +188,37 @@ export function ChatLayout() {
             }),
           )
 
-          setTimeout(() => {
-            setActiveSidebar("test-runner")
-            setSidebarWidth(width)
-            setMainContentWidth(calculateMainContentWidth())
-
-            if (layoutRef.current) {
-              layoutRef.current.style.paddingRight = `${width}px`
-              document.documentElement.style.setProperty("--right-sidebar-width", `${width}px`)
-            }
-          }, 50)
-        } else if (activeSidebar === "test-runner") {
-          setActiveSidebar(null)
-          setSidebarWidth(0)
+          if (layoutRef.current) {
+            layoutRef.current.style.paddingRight = `${width}px`
+            document.documentElement.style.setProperty("--right-sidebar-width", `${width}px`)
+          }
+          
+          setIsResizing(true)
+          setActiveSidebar("test-runner")
+          setSidebarWidth(width)
           setMainContentWidth(calculateMainContentWidth())
-
+          
+          setTimeout(() => {
+            window.dispatchEvent(new Event('resize'))
+            window.dispatchEvent(new CustomEvent("sidebar-resize"))
+            setIsResizing(false)
+          }, 150)
+        } else if (activeSidebar === "test-runner") {
           if (layoutRef.current) {
             layoutRef.current.style.paddingRight = "0px"
             document.documentElement.style.setProperty("--right-sidebar-width", "0px")
           }
+          
+          setIsResizing(true)
+          setActiveSidebar(null)
+          setSidebarWidth(0)
+          setMainContentWidth(calculateMainContentWidth())
+          
+          setTimeout(() => {
+            window.dispatchEvent(new Event('resize'))
+            window.dispatchEvent(new CustomEvent("sidebar-resize"))
+            setIsResizing(false)
+          }, 150)
         }
       }
     }

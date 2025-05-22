@@ -630,7 +630,7 @@ function calculateReliabilityScore(issues: SastIssue[]): number {
 }
 
 function calculateSecurityScore(issues: SastIssue[]): number {
-  const securityIssues = issues.filter((i) => i.ruleId.includes("security") || i.tags?.includes("security"))
+  const securityIssues = issues.filter((i) => i.ruleId.includes("security"))
 
   return Math.max(0, 100 - securityIssues.length * 20)
 }
@@ -638,7 +638,7 @@ function calculateSecurityScore(issues: SastIssue[]): number {
 function calculateMaintainabilityScore(issues: SastIssue[]): number {
   const maintainabilityIssues = issues.filter(
     (i) =>
-      i.tags?.includes("convention") || i.tags?.includes("unused") || i.severity === "minor" || i.severity === "info",
+      i.severity === "minor" || i.severity === "info",
   )
 
   return Math.max(0, 100 - maintainabilityIssues.length * 5)

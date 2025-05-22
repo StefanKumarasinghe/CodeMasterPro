@@ -42,7 +42,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [activeView, setActiveView] = useState<ActiveView>("chat");
   const [customPrompt, setCustomPrompt] = useState<string>("");
   const [personalInfo, setPersonalInfo] = useState<string>("");
-  const [error, setError] = useState<string | null>(null);
+  const [error] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [chatId, setChatId] = useState<string>(uuidv4());
@@ -50,11 +50,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [mcp, setMcp] = useState<string>("auto");
   const [modelType, setModelType] = useState<string>("fast");
   const [providerName, setProviderName] = useState<string>("gemini");
-  const [pinnedFiles, setPinnedFiles] = useState<{
+  const [pinnedFiles, setPinnedFiles] = useState<Array<{
     path: string;
     name: string;
     charCount?: number;
-  }>([]);
+  }>>([]);
 
   const isLoading = isProcessing;
 

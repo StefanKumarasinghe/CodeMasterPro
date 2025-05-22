@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { API_ENDPOINT } from "@/config/constants"
-import {Send,FileUp,Upload,Code,Zap,Bug,RefreshCw,Braces,FileCode,Wand2,Mic,Square,X,AlertTriangle,Shield,FastForward, Github} from "lucide-react"
+import { Send, FileUp, Upload, Code, Mic, Square, X, Github } from "lucide-react"
 import { OutputFormatToggle } from "./output-format-toggle"
 import { useState, useRef, useEffect, useCallback } from "react"
 import { useChat } from "@/context/chat-context"
@@ -14,14 +14,11 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast-message"
 import { CodeTemplates } from "./code-templates"
-import {SUPPORTED_FILE_TYPES,isLikelyCode,detectCodeLanguage,formatCode,readFileAsText,detectLanguage} from "@/utils/file-utils"
+import { SUPPORTED_FILE_TYPES, isLikelyCode, detectCodeLanguage, formatCode, readFileAsText, detectLanguage } from "@/utils/file-utils"
 import { cn } from "@/lib/utils"
 import { motion, AnimatePresence } from "framer-motion"
 import { FileAttachment } from "./file-attachment"
-import { Alert, AlertDescription } from "@/components/ui/alert"
 import { ProjectModal } from "./project-modal"
-import { v4 as uuidv4 } from "uuid"
-
 
 export function ChatInput() {
   const [showTemplates, setShowTemplates] = useState(false)
@@ -34,8 +31,8 @@ export function ChatInput() {
   const [processingFile, setProcessingFile] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
   const [recordingError, setRecordingError] = useState<string | null>(null)
-  const [securityWarning, setSecurityWarning] = useState<string | null>(null)
   const { toast } = useToast()
+
   const [fileAttachments, setFileAttachments] = useState<
     Array<{
       fileName: string
@@ -54,6 +51,7 @@ export function ChatInput() {
     }>
   >([])
 
+
   const {
     language,
     preferences,
@@ -63,13 +61,10 @@ export function ChatInput() {
     isLoading,
     handleSubmit,
     handleCodeAction,
-    handleInputChange: handleChatContextInputChange,
   } = useChat()
 
   const [showProjectModal, setShowProjectModal] = useState(false)
   const [projectStatus, setProjectStatus] = useState({ has_project: false, has_index: false })
-  const [useContext, setUseContext] = useState(false)
-
   const cancelMessage = useCallback(() => {
     fetch(`${API_ENDPOINT}/cancel_message`, {
       method: "POST",
@@ -88,6 +83,11 @@ export function ChatInput() {
       })
       .catch((error) => {
         console.error("Failed to cancel message:", error)
+        toast({
+          title: "Cancellation Failed",
+          description: "Could not cancel the message.",
+          variant: "destructive",
+        })
       })
   }, [toast])
 
@@ -109,7 +109,13 @@ export function ChatInput() {
 
       setProcessingFile(true)
       try {
-        const newAttachments = []
+        const newAttachments: Array<{
+          fileName: string
+          fileSize: number
+          content: string
+          contentLength: number
+          language: string
+        }> = []
         for (const file of supportedFiles) {
           try {
             const content = await readFileAsText(file)
@@ -155,15 +161,16 @@ export function ChatInput() {
 
   useEffect(() => {
     const fileContentLength = fileAttachments.reduce((total, file) => total + file.contentLength, 0)
-    setCharCount(messageInput.length + fileContentLength)
-  }, [messageInput, fileAttachments])
+    const codeContentLength = codeAttachments.reduce((total, code) => total + code.content.length, 0)
+    setCharCount(messageInput.length + fileContentLength + codeContentLength)
+  }, [messageInput, fileAttachments, codeAttachments])
 
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto"
       textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`
     }
-  }, [messageInput])
+  }, [messageInput, fileAttachments, codeAttachments])
 
   useEffect(() => {
     const handleKeyboardShortcut = (e: KeyboardEvent) => {
@@ -207,6 +214,7 @@ export function ChatInput() {
     return () => window.removeEventListener("use-code", handleUseCode as EventListener)
   }, [toast])
 
+
   useEffect(() => {
     const fetchProjectStatus = async () => {
       try {
@@ -227,12 +235,12 @@ export function ChatInput() {
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
         e.preventDefault()
-        if (messageInput.trim() || fileAttachments.length > 0) {
+        if (messageInput.trim() || fileAttachments.length > 0 || codeAttachments.length > 0) {
           submitMessage()
         }
       }
     },
-    [messageInput, fileAttachments],
+    [messageInput, fileAttachments, codeAttachments],
   )
 
   const submitMessage = useCallback(() => {
@@ -242,11 +250,10 @@ export function ChatInput() {
         .map((code) => `File: ${code.fileName}\n\n\`\`\`${code.language}\n${code.content}\n\`\`\``)
         .join("\n\n")
       const fullMessage = [messageInput, fileContent, codeContent].filter(Boolean).join("\n\n")
-      handleSubmit(fullMessage, useContext)
+      handleSubmit(fullMessage)
       setMessageInput("")
       setFileAttachments([])
       setCodeAttachments([])
-      setSecurityWarning(null)
       setShowTemplates(false)
     } else {
       toast({
@@ -255,50 +262,47 @@ export function ChatInput() {
         variant: "destructive",
       })
     }
-  }, [messageInput, fileAttachments, codeAttachments, handleSubmit, toast, useContext])
+  }, [messageInput, fileAttachments, codeAttachments, handleSubmit, toast])
 
   const handleInputChange = useCallback(
     async (e: React.ChangeEvent<HTMLTextAreaElement>) => {
       const value = e.target.value
-      if (value.length > messageInput.length + 30) {
-        const newContent = value.substring(messageInput.length)
-        if (isLikelyCode(newContent)) {
-          let detectedLanguage = "plaintext"
-          try {
-            detectedLanguage = detectCodeLanguage(newContent) || "plaintext"
-          } catch (err) {
-            console.warn("Language detection failed, defaulting to plaintext", err)
-          }
-          try {
-            if (preferences.inputPreference=="Autotag") {
-            const formattedCode = await formatCode(newContent, detectedLanguage)
-            const codeBlock = "\n" + "```" + detectedLanguage + "\n" + formattedCode + "\n```"
-            setMessageInput((prev) => prev + codeBlock)
-            toast({
-              title: "Code Detected",
-              description: `Formatted as ${detectedLanguage}`,
-              duration: 3000,
-            })
+      const newValue = value.substring(messageInput.length)
+      setMessageInput(value)
+      if (newValue.length > 30 && isLikelyCode(newValue)) {
+        let detectedLanguage = "plaintext"
+        try {
+          detectedLanguage = detectCodeLanguage(newValue) || "plaintext"
+        } catch (err) {
+          console.warn("Language detection failed, defaulting to plaintext", err)
+        }
+
+        let codeBlock = newValue; 
+        try {
+            if (preferences.inputPreference === "Autotag") {
+                const formattedCode = await formatCode(newValue, detectedLanguage);
+                codeBlock = "\n```" + detectedLanguage + "\n" + formattedCode + "\n```";
             } else {
-              const codeBlock = "\n" + newContent + "\n```"
-              setMessageInput((prev) => prev +codeBlock)
+                 codeBlock = "\n```" + detectedLanguage + "\n" + newValue + "\n```";
             }
-          } catch (err) {
-            console.warn("Formatting failed, inserting raw code:", err)
-            const codeBlock = ["```" + detectedLanguage, newContent, "```"].join("\n")
-            setMessageInput((prev) => prev + codeBlock)
+            setMessageInput((prev) => prev.substring(0, prev.length - newValue.length) + codeBlock);
             toast({
-              title: "Code Detected",
-              description: `Added as ${detectedLanguage} (formatting skipped)`,
-              variant: "warning",
-              duration: 3000,
-            })
-          }
-          return
+                title: "Code Detected",
+                description: `Formatted as ${detectedLanguage}`,
+                duration: 3000,
+            });
+        } catch (err) {
+            console.warn("Formatting failed, inserting raw code:", err);
+            codeBlock = "\n```" + detectedLanguage + "\n" + newValue + "\n```";
+            setMessageInput((prev) => prev.substring(0, prev.length - newValue.length) + codeBlock);
+            toast({
+                title: "Code Detected",
+                description: `Added as ${detectedLanguage} (formatting skipped)`,
+                variant: "warning",
+                duration: 3000,
+            });
         }
       }
-
-      setMessageInput(value)
 
       if (value.length > 8000 && charCount <= 8000) {
         toast({
@@ -309,44 +313,62 @@ export function ChatInput() {
         })
       }
     },
-    [messageInput, charCount, toast],
+    [messageInput, charCount, toast, preferences.inputPreference],
   )
+
 
   const handlePaste = useCallback(
     async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
       const pastedText = e.clipboardData.getData("text")
       if (isLikelyCode(pastedText)) {
-        e.preventDefault()
+        e.preventDefault() 
+
         let detectedLanguage = "plaintext"
         try {
           detectedLanguage = detectCodeLanguage(pastedText) || "plaintext"
         } catch (err) {
           console.warn("Language detection failed on paste, defaulting to plaintext", err)
         }
+
+        let codeBlock = pastedText;
         try {
-          if (preferences.inputPreference=="Autotag") {
-          const formattedCode = await formatCode(pastedText, detectedLanguage)
-          const codeBlock = "\n" + "```" + detectedLanguage + "\n" + formattedCode + "\n```"
-          const cursor = textareaRef.current?.selectionStart ?? 0
-          const before = messageInput.slice(0, cursor)
-          const after = messageInput.slice(cursor)
-          setMessageInput(before + codeBlock + after)
-        }else {
-          const codeBlock = "\n" + pastedText + "\n```"
-          setMessageInput((prev) => prev +codeBlock)
-        }
+            if (preferences.inputPreference === "Autotag") {
+                const formattedCode = await formatCode(pastedText, detectedLanguage);
+                codeBlock = "\n```" + detectedLanguage + "\n" + formattedCode + "\n```";
+            } else {
+                 codeBlock = "\n```" + detectedLanguage + "\n" + pastedText + "\n```";
+            }
+
+            const cursor = textareaRef.current?.selectionStart ?? messageInput.length;
+            const before = messageInput.slice(0, cursor);
+            const after = messageInput.slice(cursor);
+            setMessageInput(before + codeBlock + after);
+
+            toast({
+                title: "Code Detected",
+                description: `Formatted as ${detectedLanguage}`,
+                duration: 3000,
+            });
         } catch (err) {
-          console.warn("Formatting failed on paste, inserting raw code:", err)
-          const codeBlock = ["```" + detectedLanguage, pastedText, "```"].join("\n")
-          const cursor = textareaRef.current?.selectionStart ?? 0
-          const before = messageInput.slice(0, cursor)
-          const after = messageInput.slice(cursor)
-          setMessageInput(before + codeBlock + after)
+            console.warn("Formatting failed on paste, inserting raw code:", err);
+            codeBlock = "\n```" + detectedLanguage + "\n" + pastedText + "\n```";
+            const cursor = textareaRef.current?.selectionStart ?? messageInput.length;
+            const before = messageInput.slice(0, cursor);
+            const after = messageInput.slice(cursor);
+            setMessageInput(before + codeBlock + after);
+
+            toast({
+                title: "Code Detected",
+                description: `Added as ${detectedLanguage} (formatting skipped)`,
+                variant: "warning",
+                duration: 3000,
+            });
         }
       }
     },
-    [messageInput, toast],
+    [messageInput, toast, preferences.inputPreference],
   )
+
 
   const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault()
@@ -403,24 +425,28 @@ export function ChatInput() {
     }
     setIsRecording(true)
     setRecordingError(null)
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
     const recognition = new SpeechRecognition()
     recognition.continuous = true
     recognition.interimResults = true
     recognition.lang = "en-US"
     recognition.onresult = (event: any) => {
       let finalTranscript = ""
-      let interimTranscript = ""
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         if (event.results[i].isFinal) {
           finalTranscript += event.results[i][0].transcript
         } else {
-          interimTranscript += event.results[i][0].transcript
         }
       }
       if (finalTranscript) {
         setMessageInput((prev) => {
           const newValue = prev ? `${prev} ${finalTranscript}` : finalTranscript
+          setTimeout(() => {
+            if (textareaRef.current) {
+              textareaRef.current.selectionStart = textareaRef.current.value.length;
+              textareaRef.current.selectionEnd = textareaRef.current.value.length;
+            }
+          }, 0);
           return newValue
         })
       }
@@ -440,13 +466,14 @@ export function ChatInput() {
 
     try {
       recognition.start()
-      window.speechRecognition = recognition
+      ;(window as any).speechRecognition = recognition
       toast({
         title: "Recording Started",
         description: "Speak now. Your speech will be converted to text.",
         duration: 3000,
       })
     } catch (error) {
+      console.error("Failed to start recording:", error);
       setRecordingError("Failed to start recording")
       setIsRecording(false)
       toast({
@@ -458,9 +485,9 @@ export function ChatInput() {
   }, [toast])
 
   const stopRecording = useCallback(() => {
-    if (window.speechRecognition) {
+    if ((window as any).speechRecognition) {
       try {
-        window.speechRecognition.stop()
+        (window as any).speechRecognition.stop()
         toast({
           title: "Recording Stopped",
           description: "Speech recording has been stopped.",
@@ -468,21 +495,13 @@ export function ChatInput() {
         })
       } catch (error) {
         console.warn("Failed to stop recording:", error)
+      } finally {
+        ;(window as any).speechRecognition = null;
       }
     }
     setIsRecording(false)
   }, [toast])
 
-  const quickActionButtons = [
-    { icon: <Code className="h-4 w-4" />, text: "Explain Code", action: "explain-code" },
-    { icon: <Bug className="h-4 w-4" />, text: "Debug Code", action: "debug-code" },
-    { icon: <Zap className="h-4 w-4" />, text: "Optimize Code", action: "optimize-code" },
-    { icon: <RefreshCw className="h-4 w-4" />, text: "Refactor Code", action: "refactor-code" },
-    { icon: <Braces className="h-4 w-4" />, text: "Format Code", action: "format-code" },
-    { icon: <FileCode className="h-4 w-4" />, text: "Add Comments", action: "add-comments" },
-    { icon: <Wand2 className="h-4 w-4" />, text: "Generate Tests", action: "generate-tests" },
-    { icon: <Shield className="h-4 w-4" />, text: "Run SAST", action: "run-sast" },
-  ]
 
   const applyCodeAction = useCallback(
     (action: string) => {
@@ -509,31 +528,26 @@ export function ChatInput() {
     setCodeAttachments((prev) => prev.filter((_, i) => i !== index))
   }, [])
 
-  useEffect(() => {
-    if (mcp === "context") {
-      window.dispatchEvent(new CustomEvent("mcp-github-selected"));
-    }
-  }, [mcp]);
+
 
   return (
-    <div className="p-2 sm:p-4 border-t relative">
-      <div className="flex flex-col gap-1 mx-auto">
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-          <div className="flex flex-wrap items-center gap-1">
-            <Select value={mcp} onValueChange={setMcp}>
-                <SelectTrigger className="w-[6px] sm:w-[60px] h-8">
-                <SelectValue placeholder="✨ MCP ✨" />
+    <TooltipProvider> 
+      <div className="p-2 sm:p-4 border-t relative">
+        <div className="flex flex-col gap-1 mx-auto">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <div className="flex flex-wrap items-center gap-1">
+              <Select value={mcp} onValueChange={setMcp}>
+                <SelectTrigger className="w-[60px] h-8">
+                  <SelectValue placeholder="✨ MCP ✨" />
                 </SelectTrigger>
                 <SelectContent>
-                {MCP_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                  </SelectItem>
-                ))}
-                
+                  {MCP_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
-            </Select>
-            <TooltipProvider>
+              </Select>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -550,8 +564,6 @@ export function ChatInput() {
                   <p>Browse code templates</p>
                 </TooltipContent>
               </Tooltip>
-            </TooltipProvider>
-            <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -568,138 +580,126 @@ export function ChatInput() {
                   <p>Manage project files</p>
                 </TooltipContent>
               </Tooltip>
-            </TooltipProvider>
-          </div>
-          <div className="flex items-center gap-2 ">
-            {charCount > 0 && (
-              <Badge
-                variant={charCount > 50000 ? "destructive" : "outline"}
-                className={cn(
-                  "h-10 transition-colors",
-                  charCount > 25000 &&
-                    charCount <= 5000 &&
-                    "bg-amber-500/20 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20",
-                )}
-              >
-                {charCount} / 100000
-              </Badge>
-            )}
-
-            <OutputFormatToggle
-              value={preferences.outputFormat}
-              onChange={(value) => setPreferences({ ...preferences, outputFormat: value })}
-            />
-          </div>
-        </div>
-
-        {securityWarning && (
-          <Alert variant="destructive" className="mb-2">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>{securityWarning}</AlertDescription>
-          </Alert>
-        )}
-
-        <div
-          ref={dropZoneRef}
-          className={cn(
-            "relative flex flex-col gap-2",
-            isDragging && "ring-2 ring-primary rounded-md",
-            isRecording && "ring-2 ring-red-500 rounded-md",
-          )}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-        >
-          <AnimatePresence>
-            {isDragging && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center rounded-md z-10"
-              >
-                <div className="flex flex-col items-center gap-2 p-4 border-2 border-dashed border-primary rounded-md">
-                  <FileUp className="h-8 w-8 text-primary" />
-                  <p className="text-sm font-medium">Drop your file here</p>
-                  <p className="text-xs text-muted-foreground">
-                    Supported file types: code, text, and configuration files
-                  </p>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-          <AnimatePresence>
-            {processingFile && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center rounded-md z-10"
-              >
-                <div className="flex flex-col items-center gap-2">
-                  <div className="h-8 w-8 border-2 border-t-transparent border-primary rounded-full animate-spin" />
-                  <p className="text-sm font-medium">Processing file...</p>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-          <AnimatePresence>
-            {isRecording && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="absolute right-14 top-2 z-10 flex items-center gap-2 bg-red-500/10 px-3 py-1 rounded-full"
-              >
-                <motion.div
-                  animate={{ scale: [1, 1.2, 1] }}
-                  transition={{ repeat: Number.POSITIVE_INFINITY, duration: 1.5 }}
-                  className="h-2 w-2 rounded-full bg-red-500"
-                />
-                <span className="text-xs font-medium text-red-500">Recording...</span>
-                <Button variant="ghost" size="icon" className="h-5 w-5 rounded-full" onClick={stopRecording}>
-                  <X className="h-3 w-3" />
-                </Button>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          <input
-            type="file"
-            ref={fileInputRef}
-            className="hidden"
-            onChange={handleFileInputChange}
-            multiple
-            accept={SUPPORTED_FILE_TYPES.join(",")}
-          />
-          {(fileAttachments.length > 0 || codeAttachments.length > 0) && (
-            <div className="flex flex-wrap gap-2 p-2 bg-muted/30 rounded-md">
-              {fileAttachments.map((file, index) => (
-                <FileAttachment
-                  key={`file-${file.fileName}-${index}`}
-                  fileName={file.fileName}
-                  fileSize={file.fileSize}
-                  contentLength={file.contentLength}
-                  language={file.language}
-                  onRemove={() => removeFileAttachment(index)}
-                />
-              ))}
-
-              {codeAttachments.map((code, index) => (
-                <FileAttachment
-                  key={`code-${code.fileName}-${index}`}
-                  fileName={code.fileName}
-                  fileSize={code.content.length}
-                  contentLength={code.content.length}
-                  language={code.language}
-                  onRemove={() => removeCodeAttachment(index)}
-                />
-              ))}
             </div>
-          )}
-          <div className="flex gap-2">
-            <TooltipProvider>
-              <Tooltip>
+            <div className="flex items-center gap-2 ">
+              {charCount > 0 && (
+                <Badge
+                  variant={charCount > 50000 ? "destructive" : charCount > 25000 ? "secondary" : "outline"} 
+                  className={cn(
+                    "h-6 px-2 text-xs transition-colors",
+                    charCount > 25000 && charCount <= 50000 && "bg-amber-500/20 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20",
+                  )}
+                >
+                  {charCount} / 100000
+                </Badge>
+              )}
+
+              <OutputFormatToggle
+                value={preferences.outputFormat}
+                onChange={(value) => setPreferences({ ...preferences, outputFormat: value as typeof preferences.outputFormat })}
+              />
+            </div>
+          </div>
+          <div
+            ref={dropZoneRef}
+            className={cn(
+              "relative flex flex-col gap-2",
+              isDragging && "ring-2 ring-primary rounded-md",
+              isRecording && "ring-2 ring-red-500 rounded-md",
+            )}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
+            <AnimatePresence>
+              {isDragging && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center rounded-md z-10"
+                >
+                  <div className="flex flex-col items-center gap-2 p-4 border-2 border-dashed border-primary rounded-md">
+                    <FileUp className="h-8 w-8 text-primary" />
+                    <p className="text-sm font-medium">Drop your file here</p>
+                    <p className="text-xs text-muted-foreground text-center">
+                      Supported file types: code, text, and configuration files
+                    </p>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+            <AnimatePresence>
+              {processingFile && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center rounded-md z-10"
+                >
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="h-8 w-8 border-2 border-t-transparent border-primary rounded-full animate-spin" />
+                    <p className="text-sm font-medium">Processing file...</p>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+            <AnimatePresence>
+              {isRecording && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="absolute right-14 top-2 z-10 flex items-center gap-2 bg-red-500/10 px-3 py-1 rounded-full"
+                >
+                  <motion.div
+                    animate={{ scale: [1, 1.2, 1] }}
+                    transition={{ repeat: Number.POSITIVE_INFINITY, duration: 1.5 }}
+                    className="h-2 w-2 rounded-full bg-red-500"
+                  />
+                  <span className="text-xs font-medium text-red-500">Recording...</span>
+                  <Button variant="ghost" size="icon" className="h-5 w-5 rounded-full" onClick={stopRecording}>
+                    <X className="h-3 w-3" />
+                  </Button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <input
+              type="file"
+              ref={fileInputRef}
+              className="hidden"
+              onChange={handleFileInputChange}
+              multiple
+              accept={SUPPORTED_FILE_TYPES.join(",")}
+            />
+            {(fileAttachments.length > 0 || codeAttachments.length > 0) && (
+              <div className="flex flex-wrap gap-2 p-2 bg-muted/30 rounded-md">
+                {fileAttachments.map((file, index) => (
+                  <FileAttachment
+                    key={`file-${file.fileName}-${index}`}
+                    fileName={file.fileName}
+                    fileSize={file.fileSize}
+                    contentLength={file.contentLength}
+                    language={file.language}
+                    onRemove={() => removeFileAttachment(index)}
+                  />
+                ))}
+
+                {codeAttachments.map((code, index) => (
+                  <FileAttachment
+                    key={`code-${code.fileName}-${index}`}
+                    fileName={code.fileName}
+                    fileSize={code.content.length}
+                    contentLength={code.content.length}
+                    language={code.language}
+                    onRemove={() => removeCodeAttachment(index)}
+                  />
+                ))}
+              </div>
+            )}
+            <div className="flex gap-2 items-end"> 
+               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     type="button"
@@ -711,7 +711,7 @@ export function ChatInput() {
                   >
                     <Upload className="h-4 w-4" />
                     {(fileAttachments.length > 0 || codeAttachments.length > 0) && (
-                      <Badge className="absolute -top-2 -right-2 h-5 w-5 p-0 flex items-center justify-center bg-primary text-primary-foreground text-xs">
+                      <Badge className="absolute -top-2 -right-2 h-5 w-5 p-0 flex items-center justify-center bg-primary text-primary-foreground text-xs rounded-full"> {/* Made badge round */}
                         {fileAttachments.length + codeAttachments.length}
                       </Badge>
                     )}
@@ -721,49 +721,45 @@ export function ChatInput() {
                   <p>Upload code or text file</p>
                 </TooltipContent>
               </Tooltip>
-            </TooltipProvider>
-            <Textarea
-              ref={textareaRef}
-              placeholder={`How can I help you to code today`}
-              className="min-h-[20x] max-h-9 md:max-h-12  flex-1 resize-none"
-              value={messageInput}
-              onChange={handleInputChange}
-              autoFocus={true}
-              onPaste={handlePaste}
-              onKeyDown={handleKeyDown}
-              aria-label="Message input"
-              disabled={isRecording}
-            />
-            <div className="flex gap-1">
-              <TooltipProvider>
-                <Tooltip>
+              <Textarea
+                ref={textareaRef}
+                placeholder={`How can I help you to code today`}
+                className="min-h-[44px] max-h-[200px] flex-1 resize-none overflow-y-auto" 
+                value={messageInput}
+                onChange={handleInputChange}
+                autoFocus={true}
+                onPaste={handlePaste}
+                onKeyDown={handleKeyDown}
+                aria-label="Message input"
+                disabled={isRecording}
+              />
+              <div className="flex gap-1 flex-shrink-0"> 
+                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
                       type="button"
                       variant="outline"
                       size="icon"
                       className={cn(
-                        "h-[44px] w-10 flex-shrink-0",
+                        "h-[44px] w-10",
                         isRecording && "bg-red-500 text-white hover:bg-red-600",
                       )}
                       onClick={isRecording ? stopRecording : startRecording}
                       disabled={isLoading || processingFile}
                     >
-                      {isRecording ? <X className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                      {isRecording ? <Square className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="top">
                     <p>{isRecording ? "Stop recording" : "Voice input"}</p>
                   </TooltipContent>
                 </Tooltip>
-              </TooltipProvider>
-              <TooltipProvider>
-                <Tooltip>
+                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
                       type="button"
                       onClick={isLoading ? cancelMessage : submitMessage}
-                      className="px-4 h-[44px] flex-shrink-0"
+                      className="px-4 h-[44px]"
                       disabled={
                         (!isLoading &&
                           !messageInput.trim() &&
@@ -779,30 +775,29 @@ export function ChatInput() {
                     <p>Send message ({isMac ? "⌘" : "Ctrl"}+Enter)</p>
                   </TooltipContent>
                 </Tooltip>
-              </TooltipProvider>
+              </div>
             </div>
           </div>
+          <AnimatePresence>
+            {showTemplates && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="mt-2 overflow-hidden"
+              >
+                <CodeTemplates onSelectTemplate={handleTemplateSelect} />
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
-        
-        <AnimatePresence>
-          {showTemplates && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="mt-2 overflow-hidden"
-            >
-              <CodeTemplates onSelectTemplate={handleTemplateSelect} />
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <ProjectModal
+          isOpen={showProjectModal}
+          onClose={() => setShowProjectModal(false)}
+          projectStatus={projectStatus}
+        />
       </div>
-      <ProjectModal
-        isOpen={showProjectModal}
-        onClose={() => setShowProjectModal(false)}
-        projectStatus={projectStatus}
-      />
-    </div>
+    </TooltipProvider>
   )
 }

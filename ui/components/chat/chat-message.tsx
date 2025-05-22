@@ -26,6 +26,12 @@ interface ChatMessageProps {
   isResizing?: boolean
 }
 
+interface EditorPosition {
+  x: number
+  y: number
+  width: number
+}
+
 const ChatMessage = memo(function ChatMessage({
   message,
   language,
@@ -39,19 +45,23 @@ const ChatMessage = memo(function ChatMessage({
   const contentRef = useRef<string>("")
   const { handleSubmit, mcp } = useChat()
   const [showEditor, setShowEditor] = useState(false)
-  const [editorPosition, setEditorPosition] = useState({ x: 0, y: 0, width: 0 })
+  const [editorPosition, setEditorPosition] = useState<EditorPosition>({ x: 0, y: 0, width: 0 })
   const messageContentRef = useRef<HTMLDivElement>(null)
   const [mainContentWidth, setMainContentWidth] = useState(0)
   const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [showTestRunner, setShowTestRunner] = useState(false)
-  const [testDirectory, setTestDirectory] = useState("")
+  
+  const isUser = message.role === "user"
+  const messageContent = typeof message.content === "string" ? message.content : ""
+  const messageImage = typeof message.dataImage === "string" ? message.dataImage : ""
+  const hasCodeBlocks = extractCodeBlocks(messageContent).length > 0
 
   useEffect(() => {
     contentRef.current = typeof message.content === "string" ? message.content : ""
   }, [message.content])
 
   useEffect(() => {
-    const handleEditorPositionChange = (e: CustomEvent) => {
+    const handleEditorEvent = (e: CustomEvent) => {
       if (e.detail) {
         setEditorPosition({
           x: e.detail.x,
@@ -61,30 +71,90 @@ const ChatMessage = memo(function ChatMessage({
       }
     }
 
-    const handleEditorResize = (e: CustomEvent) => {
-      if (e.detail) {
-        setEditorPosition({
-          x: e.detail.x,
-          y: e.detail.y,
-          width: e.detail.width,
-        })
-      }
-    }
-
-    window.addEventListener("editor-position-change", handleEditorPositionChange as EventListener)
-    window.addEventListener("editor-resize", handleEditorResize as EventListener)
-    window.addEventListener("editor-interaction-end", handleEditorResize as EventListener)
+    window.addEventListener("editor-position-change", handleEditorEvent as EventListener)
+    window.addEventListener("editor-resize", handleEditorEvent as EventListener)
+    window.addEventListener("editor-interaction-end", handleEditorEvent as EventListener)
 
     return () => {
-      window.removeEventListener("editor-position-change", handleEditorPositionChange as EventListener)
-      window.removeEventListener("editor-resize", handleEditorResize as EventListener)
-      window.removeEventListener("editor-interaction-end", handleEditorResize as EventListener)
+      window.removeEventListener("editor-position-change", handleEditorEvent as EventListener)
+      window.removeEventListener("editor-resize", handleEditorEvent as EventListener)
+      window.removeEventListener("editor-interaction-end", handleEditorEvent as EventListener)
     }
   }, [])
+
+  useEffect(() => {
+    const resizeObserver = new ResizeObserver(() => {
+      let container: HTMLElement | null = messageContentRef.current
+      let messageListContainer: HTMLElement | null = null
+      
+      while (container) {
+        if (container.classList && 
+            (container.classList.contains('radix-scroll-area-viewport') || 
+             container.parentElement?.querySelector('[data-radix-scroll-area-viewport]'))) {
+          messageListContainer = container
+          break
+        }
+        container = container.parentElement
+      }
+      
+      if (messageListContainer) {
+        setMainContentWidth(messageListContainer.offsetWidth)
+      } else if (messageContentRef.current?.parentElement) {
+        setMainContentWidth(messageContentRef.current.parentElement.offsetWidth)
+      }
+    })
+
+    if (messageContentRef.current) {
+      resizeObserver.observe(messageContentRef.current)
+      
+      
+      let parent = messageContentRef.current.parentElement
+      while (parent) {
+        resizeObserver.observe(parent)
+        if (parent.classList && 
+            (parent.classList.contains('radix-scroll-area-viewport') || 
+             parent.querySelector('[data-radix-scroll-area-viewport]'))) {
+          break
+        }
+        parent = parent.parentElement
+      }
+    }
+
+    const handleResize = () => {
+      if (messageContentRef.current) {
+        
+        setMainContentWidth(messageContentRef.current.parentElement?.offsetWidth || 0)
+        
+        setTimeout(() => {
+          if (messageContentRef.current) {
+            setMainContentWidth(messageContentRef.current.parentElement?.offsetWidth || 0)
+          }
+        }, 150)
+      }
+    }
+    
+    
+    window.addEventListener('resize', handleResize)
+    window.addEventListener('sidebar-resize', handleResize)
+    window.addEventListener('node-test-runner-state', handleResize as EventListener)
+    window.addEventListener('code-editor-state', handleResize as EventListener)
+    window.addEventListener('python-shell-state', handleResize as EventListener)
+    
+    return () => {
+      resizeObserver.disconnect()
+      window.removeEventListener('resize', handleResize)
+      window.removeEventListener('sidebar-resize', handleResize)
+      window.removeEventListener('node-test-runner-state', handleResize as EventListener)
+      window.removeEventListener('code-editor-state', handleResize as EventListener)
+      window.removeEventListener('python-shell-state', handleResize as EventListener)
+    }
+  }, [])
+
 
   const copyToClipboard = useCallback(() => {
     const content = contentRef.current
     if (!content) return
+    
     const cleanedContent = content.replace(/^```[\w]*\n/, "").replace(/\n```$/, "")
     navigator.clipboard
       .writeText(cleanedContent)
@@ -106,15 +176,13 @@ const ChatMessage = memo(function ChatMessage({
     toast.success("Retrying submission...")
   }, [handleSubmit])
 
-  const handleViewRaw = useCallback(() => {
-    setShowEditor(true)
-  }, [])
-
   const downloadCodeBlocks = useCallback(() => {
     const content = contentRef.current
     if (!content) return
+    
     const blocks = extractCodeBlocks(content)
     if (!blocks.length) return
+    
     const blob = new Blob([blocks.map((b) => b.code).join("\n\n")], { type: "text/plain" })
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
@@ -133,139 +201,43 @@ const ChatMessage = memo(function ChatMessage({
     toast.success(type === "like" ? "Thanks for your positive feedback!" : "Thanks for your feedback. We'll improve.")
   }, [])
 
-  const handleGoodCodeActionClick = useCallback(async () => {
-    const content = contentRef.current
-    if (content) {
-      try {
-        await fetch(`${API_ENDPOINT}/add_resource/`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content }),
-        })
-      } catch (error) {
-        console.warn("Failed to reindex memory:", error)
-        toast.error("Failed to save content")
+  const sendApiRequest = useCallback(async (endpoint: string, content: string, successMessage?: string) => {
+    try {
+      await fetch(`${API_ENDPOINT}/${endpoint}/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content }),
+      })
+      if (successMessage) {
+        toast.success(successMessage)
       }
+      return true
+    } catch (error) {
+      console.warn(`Failed to ${endpoint}:`, error)
+      toast.error(`Failed to ${endpoint.replace("_", " ")}`)
+      return false
     }
   }, [])
+
+  const handleGoodCodeActionClick = useCallback(async () => {
+    if (contentRef.current) {
+      await sendApiRequest("add_resource", contentRef.current)
+    }
+  }, [sendApiRequest])
 
   const handleBadCodeActionClick = useCallback(async () => {
-    const content = contentRef.current
-    if (content) {
-      try {
-        await fetch(`${API_ENDPOINT}/flag_bad_input/`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content }),
-        })
-        toast.success("Content flagged for improvement")
-      } catch (error) {
-        console.warn("Failed toreindex memory:", error)
-        toast.error("Failed to flag content")
-      }
+    if (contentRef.current) {
+      await sendApiRequest("flag_bad_input", contentRef.current, "Content flagged for improvement")
     }
-  }, [])
-
-  const handleSaveToFile = useCallback(() => {
-    setShowSaveDialog(true);
-  }, []);
-
-  const handleRunTests = useCallback(() => {
-    setShowTestRunner(true)
-  }, [])
+  }, [sendApiRequest])
 
   const handleCodeAction = useCallback((action: string, code: string, lang: string) => {
     if (action === "run-tests") {
-      setShowTestRunner(true);
+      setShowTestRunner(true)
     } else {
-      onCodeAction(action, code, lang);
+      onCodeAction(action, code, lang)
     }
-  }, [onCodeAction]);
-
-  const isUser = message.role === "user"
-  const messageContent = typeof message.content === "string" ? message.content : ""
-  const messageImage = typeof message.dataImage === "string" ? message.dataImage : ""
-
-  const hasCodeBlocks = extractCodeBlocks(messageContent).length > 0
-
-  // Calculate maximum width for chat content based on editor position
-  const calculateMaxWidth = () => {
-    // If we have a parent element width, use that
-    if (mainContentWidth > 0) {
-      const availableWidth = mainContentWidth - 48;
-      // Set a minimum width to prevent content from becoming too narrow
-      const minWidth = Math.min(400, availableWidth * 0.8);
-      // Use the available width, but ensure it's not less than the minimum
-      return `${Math.max(minWidth, availableWidth)}px`;
-    }
-    
-    // Fallback to window-based calculation if we don't have parent dimensions yet
-    const windowWidth = typeof window !== "undefined" ? window.innerWidth : 0
-    const sidebarWidth = Number.parseInt(
-      document.documentElement.style.getPropertyValue("--sidebar-width") || "280",
-      10,
-    )
-    const rightSidebarWidth = Number.parseInt(
-      document.documentElement.style.getPropertyValue("--right-sidebar-width") || "0",
-      10,
-    )
-
-    // Calculate available space
-    const availableWidth = windowWidth - sidebarWidth - rightSidebarWidth
-
-    // Set a minimum width to prevent content from becoming too narrow
-    const minWidth = Math.min(400, availableWidth * 0.7)
-
-    // Use the available width, but ensure it's not less than the minimum
-    return `${Math.max(minWidth, availableWidth - 48)}px`
-  }
-
-  // Add useEffect to measure the parent container width
-  useEffect(() => {
-    const resizeObserver = new ResizeObserver(entries => {
-      // Look up the DOM tree to find the message list container
-      let container: HTMLElement | null = messageContentRef.current;
-      let messageListContainer: HTMLElement | null = null;
-      
-      // Find the chat-message-list container by traversing up the DOM
-      while (container) {
-        // Check for parent that's a scrollable container or chat message list
-        if (container.classList && 
-            (container.classList.contains('radix-scroll-area-viewport') || 
-             container.parentElement?.querySelector('[data-radix-scroll-area-viewport]'))) {
-          messageListContainer = container;
-          break;
-        }
-        container = container.parentElement;
-      }
-      
-      // If we found the message list container, set its width
-      if (messageListContainer) {
-        setMainContentWidth(messageListContainer.offsetWidth);
-      } else if (messageContentRef.current?.parentElement) {
-        // Fallback to the direct parent's width
-        setMainContentWidth(messageContentRef.current.parentElement.offsetWidth);
-      }
-    });
-
-    if (messageContentRef.current) {
-      resizeObserver.observe(messageContentRef.current);
-    }
-
-    // Also observe window resize events
-    const handleResize = () => {
-      if (messageContentRef.current) {
-        setMainContentWidth(messageContentRef.current.parentElement?.offsetWidth || 0);
-      }
-    };
-    
-    window.addEventListener('resize', handleResize);
-    
-    return () => {
-      resizeObserver.disconnect();
-      window.removeEventListener('resize', handleResize);
-    };
-  }, []);
+  }, [onCodeAction])
 
   return (
     <div className={cn("flex gap-3 w-full", isUser ? "ml-auto justify-end text-right" : "text-left")}>
@@ -293,9 +265,9 @@ const ChatMessage = memo(function ChatMessage({
           style={{
             transition: isResizing
               ? "none"
-              : "max-width 0.3s ease-in-out, font-size 0.3s ease-in-out, width 0.3s ease-in-out",
+              : "max-width w-full 0.3s ease-in-out, font-size 0.3s ease-in-out, width 0.3s ease-in-out",
             fontSize: `calc(1rem * var(--font-scale, 1))`,
-            maxWidth: calculateMaxWidth(),
+            minWidth: "500px",
           }}
         >
           <Suspense fallback={<div className="animate-pulse bg-muted h-24 max-w-3xl rounded-md"></div>}>
@@ -329,6 +301,7 @@ const ChatMessage = memo(function ChatMessage({
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
+          
           {hasCodeBlocks && (
             <TooltipProvider>
               <Tooltip>
@@ -349,6 +322,7 @@ const ChatMessage = memo(function ChatMessage({
               </Tooltip>
             </TooltipProvider>
           )}
+          
           {isUser && (
             <TooltipProvider>
               <Tooltip>
@@ -369,6 +343,7 @@ const ChatMessage = memo(function ChatMessage({
               </Tooltip>
             </TooltipProvider>
           )}
+          
           {!isUser && (
             <div className="flex items-center gap-1 ml-2">
               <TooltipProvider>
@@ -414,28 +389,27 @@ const ChatMessage = memo(function ChatMessage({
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
-              { mcp == "context" && (
               
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      aria-label="Save to file"
-                      onClick={handleSaveToFile}
-                    >
-                      <Save className="h-3.5 w-3.5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Save to file</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              )
-            }
+              {mcp === "context" && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        aria-label="Save to file"
+                        onClick={() => setShowSaveDialog(true)}
+                      >
+                        <Save className="h-3.5 w-3.5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Save to file</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
               
               <TooltipProvider>
                 <Tooltip>
@@ -444,10 +418,8 @@ const ChatMessage = memo(function ChatMessage({
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8"
-                      aria-label="Delete message"
-                      onClick={() => {
-                        handleViewRaw()
-                      }}
+                      aria-label="View raw"
+                      onClick={() => setShowEditor(true)}
                     >
                       <SparkleIcon className="h-4 w-4" />
                     </Button>
@@ -457,6 +429,7 @@ const ChatMessage = memo(function ChatMessage({
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
+              
               <CodeEditorCanvas
                 code={contentRef.current}
                 language={"Markdown"}
@@ -465,15 +438,14 @@ const ChatMessage = memo(function ChatMessage({
                 onSave={() => {}}
                 safeView={true}
               />
-                    
+              
               {showTestRunner && (
                 <NodeTestRunner
                   isOpen={showTestRunner}
                   onClose={() => setShowTestRunner(false)}
                 />
               )}
-                      
-              {/* Save to File Dialog */}
+              
               <SaveToFileDialog
                 isOpen={showSaveDialog}
                 onClose={() => setShowSaveDialog(false)}

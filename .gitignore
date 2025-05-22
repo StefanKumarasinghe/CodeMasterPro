@@ -14,3 +14,7 @@ env/
 **/node_modules
 **/.next
 **/.DS_Store
+**/cache
+**/embeddings_cache
+**/git_index
+**/git_tmp

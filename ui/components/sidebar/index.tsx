@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { ChatHistory } from "./chat-history";
 import { FileExplorer } from "./file-explorer";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -75,7 +75,6 @@ export function Sidebar() {
 
       toast.success(`Changes saved to ${selectedFile.name}`);
       
-      // Update the local state with the new content
       setSelectedFile({
         ...selectedFile,
         content: newContent
@@ -90,25 +89,34 @@ export function Sidebar() {
   return (
     <div className="h-full flex flex-col">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 w-full rounded-none flex flex-col">
-        <div className="border-b">
-          <TabsList className="w-full rounded-none dark:bg-zinc-700 ">
-            <TabsTrigger value="history" className="flex-1" onClick={() => setMcp("auto")}>
-              History
-            </TabsTrigger>
-            <TabsTrigger value="files" className="flex-1" onClick={() => setMcp("context")}>
-              Codespace
-            </TabsTrigger>
-          </TabsList>
-        </div>
-        
-        <TabsContent value="history" className="flex-1 mt-0">
-          <ChatHistory />
-        </TabsContent>
-        
-        <TabsContent value="files" className="flex-1 mt-0">
-          <FileExplorer onFileSelect={handleFileSelect} />
-        </TabsContent>
+      <div className="border-b">
+        <TabsList className="w-full rounded-none flex px-2">
+          <TabsTrigger
+            value="history"
+            className={`flex-1 border-b-2 ${activeTab === 'history' ? 'border-red-500 ' : 'border-transparent'}`}
+            onClick={() => setMcp("auto")}
+          >
+            History
+          </TabsTrigger>
+          <TabsTrigger
+            value="files"
+            className={`flex-1 border-b-2 ${activeTab === 'files' ? 'border-red-500' : 'border-transparent'}`}
+            onClick={() => setMcp("context")}
+          >
+            Codespace
+          </TabsTrigger>
+        </TabsList>
+      </div>
+
+      <TabsContent value="history" className="flex-1 mt-0">
+        <ChatHistory />
+      </TabsContent>
+
+      <TabsContent value="files" className="flex-1 mt-0">
+        <FileExplorer onFileSelect={handleFileSelect} />
+      </TabsContent>
       </Tabs>
+
 
       {isEditorOpen && selectedFile && (
         <CodeEditorCanvas

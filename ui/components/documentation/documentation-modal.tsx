@@ -30,6 +30,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { formatFileSize } from "@/utils/format-utils";
 import { Textarea } from "@/components/ui/textarea";
+import { showProgressIndicator, hideProgressIndicator, isOperationInProgress } from "@/components/progress-indicator";
 
 interface ExistingDocument {
   id: string;
@@ -38,7 +39,7 @@ interface ExistingDocument {
 }
 
 interface GithubProject {
-  id: string; // Backend might use ID, previous code used name for removal. Using ID based on interface now.
+  id: string;
   name: string;
   path?: string;
   size_mb?: number;
@@ -46,7 +47,6 @@ interface GithubProject {
 
 export function DocumentationModal() {
   const [isOpen, setIsOpen] = useState(false);
-
   const [isUploading, setIsUploading] = useState(false);
   const [isRemovingDocs, setIsRemovingDocs] = useState(false);
   const [isRemovingGithub, setIsRemovingGithub] = useState(false);
@@ -75,6 +75,8 @@ export function DocumentationModal() {
     setIsFetchingDocs(true);
     setExistingDocuments([]);
     setDocumentsToRemove(new Set());
+    showProgressIndicator("Loading existing documents...");
+    
     try {
       const response = await fetch(`${API_ENDPOINT}/get_documentation`);
       if (!response.ok) {
@@ -94,6 +96,7 @@ export function DocumentationModal() {
       );
     } finally {
       setIsFetchingDocs(false);
+      hideProgressIndicator();
     }
   };
 
@@ -101,6 +104,8 @@ export function DocumentationModal() {
     setIsFetchingGithub(true);
     setGithubProjects([]);
     setProjectsToRemove(new Set());
+    showProgressIndicator("Loading GitHub projects...");
+    
     try {
       const response = await fetch(`${API_ENDPOINT}/get_github_projects`);
       if (!response.ok) {
@@ -120,6 +125,7 @@ export function DocumentationModal() {
       );
     } finally {
       setIsFetchingGithub(false);
+      hideProgressIndicator();
     }
   };
 
@@ -213,13 +219,17 @@ export function DocumentationModal() {
 
   const uploadNewContent = async () => {
     if (isLoading) return;
+    if (isOperationInProgress()) {
+      toast.error("Please wait for the current operation to complete before starting a new one.");
+      return;
+    }
 
     if (files.length === 0 && !documentationText && linkBubbles.length === 0) {
       toast.info("Please add some content to upload!");
       return;
     }
-
     setIsUploading(true);
+    showProgressIndicator("Uploading documentation...");
     try {
       const formData = new FormData();
 
@@ -242,9 +252,6 @@ export function DocumentationModal() {
       }
       toast.success("Content added successfully!");
       resetForm();
-      // Optionally refresh the existing list after adding content
-      // await fetchExistingDocuments();
-      // await fetchGithubProjects(); // If adding links/text might affect these
     } catch (error) {
       console.error("Upload failed:", error);
       toast.error(
@@ -254,6 +261,7 @@ export function DocumentationModal() {
       );
     } finally {
       setIsUploading(false);
+      hideProgressIndicator();
     }
   };
 
@@ -262,9 +270,16 @@ export function DocumentationModal() {
       if (documentsToRemove.size === 0) toast.info("No documents selected to remove!");
       return;
     }
+    
+    if (isOperationInProgress()) {
+      toast.error("Please wait for the current operation to complete before starting a new one.");
+      return;
+    }
 
     setIsRemovingDocs(true);
     const idsToRemove = Array.from(documentsToRemove);
+    
+    showProgressIndicator("Removing selected documents...");
 
     try {
       const response = await fetch(`${API_ENDPOINT}/remove_documentation`, {
@@ -290,6 +305,7 @@ export function DocumentationModal() {
           error instanceof Error ? error.message : "Please try again."
         }`
       );
+      hideProgressIndicator();
     } finally {
       setIsRemovingDocs(false);
     }
@@ -301,9 +317,14 @@ export function DocumentationModal() {
       return;
     }
 
+    if (isOperationInProgress()) {
+      toast.error("Please wait for the current operation to complete before starting a new one.");
+      return;
+    }
+
     setIsRemovingGithub(true);
-    // Using project IDs for removal based on the interface definition
     const idsToRemove = Array.from(projectsToRemove);
+    showProgressIndicator("Removing selected GitHub projects...");
 
     try {
       const response = await fetch(`${API_ENDPOINT}/remove_github_project`, {
@@ -333,6 +354,7 @@ export function DocumentationModal() {
           error instanceof Error ? error.message : "Please try again."
         }`
       );
+      hideProgressIndicator();
     } finally {
       setIsRemovingGithub(false);
     }
@@ -345,6 +367,7 @@ export function DocumentationModal() {
     }
 
     setIsRemovingGithub(true);
+    showProgressIndicator("Removing all GitHub projects...");
 
     try {
       const response = await fetch(`${API_ENDPOINT}/erase_all_github_projects`, {
@@ -368,6 +391,7 @@ export function DocumentationModal() {
           error instanceof Error ? error.message : ""
         }`
       );
+      hideProgressIndicator();
     } finally {
       setIsRemovingGithub(false);
     }
@@ -375,6 +399,7 @@ export function DocumentationModal() {
 
   const eraseLongTermMemoryConfirm = async () => {
     if (isLoading) return;
+    showProgressIndicator("Erasing all memory...");
 
     try {
       const response = await fetch(`${API_ENDPOINT}/erase_long_term_memory`, {
@@ -400,6 +425,7 @@ export function DocumentationModal() {
           error instanceof Error ? error.message : ""
         }`
       );
+      hideProgressIndicator();
     }
   };
 
@@ -424,8 +450,6 @@ export function DocumentationModal() {
     setLinkBubbles([]);
   }
 
-  const hasPendingUploads =
-    files.length > 0 || !!documentationText || linkBubbles.length > 0;
   const hasPendingDocumentRemovals = documentsToRemove.size > 0;
   const hasPendingProjectRemovals = projectsToRemove.size > 0;
 
@@ -440,8 +464,7 @@ export function DocumentationModal() {
               sources like documents and GitHub projects.
             </DialogDescription>
           </DialogHeader>
-
-          <div className="overflow-y-auto max-h-[70vh] px-6 pb-6 pt-0">
+          <div className="overflow-y-auto max-h-[50vh] px-6 pb-6 pt-0">
             <Tabs defaultValue="add" className="w-full">
               <TabsList className="grid w-full grid-cols-2 h-10">
                 <TabsTrigger value="add" disabled={isLoading}>
@@ -451,7 +474,6 @@ export function DocumentationModal() {
                   Manage Existing
                 </TabsTrigger>
               </TabsList>
-
               <TabsContent value="add" className="mt-6 space-y-8">
                 <div className="space-y-4">
                   <h4 className="text-lg font-semibold text-foreground">Upload Files</h4>
@@ -593,7 +615,7 @@ export function DocumentationModal() {
 
                 <Button
                   onClick={uploadNewContent}
-                  disabled={isLoading || !hasPendingUploads}
+                  disabled={isLoading || files.length === 0 && !documentationText && linkBubbles.length === 0 || isOperationInProgress()}
                   className="w-full mt-6 h-10 text-base rounded-lg"
                 >
                   {isUploading ? (
@@ -660,7 +682,7 @@ export function DocumentationModal() {
                       <Button
                         variant="destructive"
                         onClick={handleRemoveSelectedDocuments}
-                        disabled={isLoading || !hasPendingDocumentRemovals}
+                        disabled={isLoading || !hasPendingDocumentRemovals || isOperationInProgress()}
                         className="w-full mt-2 h-10 text-base rounded-lg"
                       >
                         {isRemovingDocs ? (
@@ -703,16 +725,16 @@ export function DocumentationModal() {
                       <div className="max-h-48 overflow-y-auto overflow-x-hidden space-y-2 p-3 border rounded-lg bg-muted/30">
                         {githubProjects.map((project) => (
                           <div
-                            key={project.id} // Using ID as key
+                            key={project.id} 
                             className="flex items-center justify-between bg-background p-3 rounded-md text-sm border border-border transition-colors hover:bg-muted/50"
                           >
                             <div className="flex items-center gap-3 overflow-hidden flex-grow mr-2">
                               <Checkbox
-                                id={`remove-github-${project.id}`} // Using ID for checkbox ID
+                                id={`remove-github-${project.id}`} 
                                 checked={projectsToRemove.has(project.id)}
                                 onCheckedChange={(checked) =>
                                   handleProjectRemoveSelectionChange(
-                                    project.id, // Pass ID to handler
+                                    project.id,
                                     checked
                                   )
                                 }
@@ -722,7 +744,7 @@ export function DocumentationModal() {
                               />
                               <GithubIcon className="h-5 w-5 text-foreground shrink-0" />
                               <label
-                                htmlFor={`remove-github-${project.id}`} // Using ID for label htmlFor
+                                htmlFor={`remove-github-${project.id}`}
                                 className="truncate cursor-pointer font-medium text-foreground flex-grow"
                                 title={project.name}
                               >
@@ -746,7 +768,7 @@ export function DocumentationModal() {
                         <Button
                           variant="destructive"
                           onClick={handleRemoveSelectedProjects}
-                          disabled={isLoading || !hasPendingProjectRemovals}
+                          disabled={isLoading || !hasPendingProjectRemovals || isOperationInProgress()}
                           className="w-full h-10 text-base rounded-lg"
                         >
                           {isRemovingGithub && hasPendingProjectRemovals ? (
@@ -817,7 +839,24 @@ export function DocumentationModal() {
             </div>
           </div>
 
-          <DialogFooter className="p-6 pt-4 border-t border-border">
+          <DialogFooter className="p-6 pt-4 flex border-t border-border">
+            <div>
+            <Button
+                  onClick={uploadNewContent}
+                  disabled={isLoading || files.length === 0 && !documentationText && linkBubbles.length === 0 || isOperationInProgress()}
+                  className="w-full  h-10 text-base rounded-lg"
+                >
+                  {isUploading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />{" "}
+                      Adding Content...
+                    </>
+                  ) : (
+                    "Save Changes"
+                  )}
+            </Button>
+            </div>
+            <div>
             <Button
               variant="outline"
               onClick={() => setIsOpen(false)}
@@ -826,6 +865,7 @@ export function DocumentationModal() {
             >
               Close
             </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -14,7 +14,7 @@ export function prepareApiRequest(
   personalInfo?: string,
   pinnedFiles?: PinnedFile[]
 ): ApiRequest {
-  // Create a deep copy of pinnedFiles to avoid any reference issues
+
   const processedPinnedFiles = pinnedFiles ? 
     pinnedFiles.map(file => ({
       path: file.path,
@@ -22,7 +22,6 @@ export function prepareApiRequest(
     })) : 
     undefined;
 
-  // Log the pinned files that we're sending
   if (processedPinnedFiles && processedPinnedFiles.length > 0) {
     console.log("Using pinned files for context:", processedPinnedFiles);
   }

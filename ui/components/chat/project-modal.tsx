@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast-message"
 import { API_ENDPOINT } from "@/config/constants"
 import ReactConfetti from 'react-confetti'
 import { Input } from "@/components/ui/input"
+import { showProgressIndicator, hideProgressIndicator, isOperationInProgress } from "@/components/progress-indicator"
 
 interface ProjectModalProps {
   isOpen: boolean
@@ -55,7 +56,6 @@ export function ProjectModal({ isOpen, onClose, projectStatus }: ProjectModalPro
   const { width: windowWidth, height: windowHeight } = useWindowSize();
 
   function fetchProjectStatus() {
-    //fetch project status from the server
     fetch(`${API_ENDPOINT}/project_status/`)
     .then(response => response.json())
     .then(data => {
@@ -130,6 +130,8 @@ export function ProjectModal({ isOpen, onClose, projectStatus }: ProjectModalPro
     }
 
     setIsUploading(true)
+    showProgressIndicator("Uploading project file...");
+    
     const formData = new FormData()
     formData.append('file', file)
 
@@ -149,14 +151,19 @@ export function ProjectModal({ isOpen, onClose, projectStatus }: ProjectModalPro
         description: "Project uploaded and indexing started.",
       })
 
+      showProgressIndicator("Indexing project...");
 
       const pollInterval = setInterval(async () => {
         await fetchStatus()
         if (projectStatus.has_index) {
           clearInterval(pollInterval)
+          hideProgressIndicator();
         }
       }, 2000)
-      setTimeout(() => clearInterval(pollInterval), 120000)
+      setTimeout(() => {
+        clearInterval(pollInterval)
+        hideProgressIndicator();
+      }, 120000)
 
     } catch (error: any) {
       toast({
@@ -164,6 +171,8 @@ export function ProjectModal({ isOpen, onClose, projectStatus }: ProjectModalPro
         description: error.message || "An unexpected error occurred during upload.",
         variant: "destructive",
       })
+
+      hideProgressIndicator();
     } finally {
       setIsUploading(false)
       if (event.target) {
@@ -177,20 +186,15 @@ export function ProjectModal({ isOpen, onClose, projectStatus }: ProjectModalPro
     if (!files || files.length === 0) return
 
     setIsUploadingFolder(true)
+    showProgressIndicator("Uploading folder...");
     
     try {
-      // Prepare folder structure
       const folderStructure = Array.from(files).map(file => {
-        // Get the relative path within the selected folder
-        // Note: webkitRelativePath provides the path relative to the selected folder
-        const relativePath = (file as any).webkitRelativePath || file.name;
+      const relativePath = (file as any).webkitRelativePath || file.name;
         return {
-          id: file.name, // Use file name as ID to match files in the form data
-          path: relativePath
+          id: file.name, path: relativePath
         };
       });
-
-      // Prepare form data with all files and structure
       const formData = new FormData();
       Array.from(files).forEach(file => {
         formData.append('files', file);
@@ -212,13 +216,19 @@ export function ProjectModal({ isOpen, onClose, projectStatus }: ProjectModalPro
         description: "Folder uploaded and indexing started.",
       });
 
+      showProgressIndicator("Indexing project folder...");
+
       const pollInterval = setInterval(async () => {
         await fetchStatus();
         if (projectStatus.has_index) {
           clearInterval(pollInterval);
+          hideProgressIndicator();
         }
       }, 2000);
-      setTimeout(() => clearInterval(pollInterval), 120000);
+      setTimeout(() => {
+        clearInterval(pollInterval);
+        hideProgressIndicator();
+      }, 120000);
 
     } catch (error: any) {
       toast({
@@ -226,6 +236,7 @@ export function ProjectModal({ isOpen, onClose, projectStatus }: ProjectModalPro
         description: error.message || "An unexpected error occurred during upload.",
         variant: "destructive",
       });
+      hideProgressIndicator();
     } finally {
       setIsUploadingFolder(false);
       if (event.target) {
@@ -235,7 +246,8 @@ export function ProjectModal({ isOpen, onClose, projectStatus }: ProjectModalPro
   };
 
   const handleDeleteProject = async () => {
-    setIsDeleting(true)
+    setIsDeleting(true) 
+    showProgressIndicator("Deleting project...");
     try {
       const response = await fetch(`${API_ENDPOINT}/clear_project/`, {
         method: 'DELETE',
@@ -259,13 +271,24 @@ export function ProjectModal({ isOpen, onClose, projectStatus }: ProjectModalPro
         description: error.message || "An unexpected error occurred during deletion.",
         variant: "destructive",
       })
+      hideProgressIndicator();
     } finally {
       setIsDeleting(false)
+      hideProgressIndicator();
     }
   }
 
   const handleReindex = async () => {
+    if (isOperationInProgress()) {
+      toast({
+        title: "Operation in Progress",
+        description: "Please wait for the current operation to complete before starting a new one.",
+        variant: "destructive",
+      })
+      return;
+    }
     setIsReindexing(true)
+    showProgressIndicator("Reindexing project...");
     try {
       const response = await fetch(`${API_ENDPOINT}/reindex_project/`, {
         method: 'POST',
@@ -285,11 +308,14 @@ export function ProjectModal({ isOpen, onClose, projectStatus }: ProjectModalPro
         await fetchStatus()
         if (projectStatus.has_index) {
           clearInterval(pollInterval)
+          hideProgressIndicator();
         }
       }, 5000) 
 
-
-      setTimeout(() => clearInterval(pollInterval), 120000)
+      setTimeout(() => {
+        clearInterval(pollInterval);
+        hideProgressIndicator();
+      }, 120000)
 
     } catch (error: any) {
       toast({
@@ -297,6 +323,7 @@ export function ProjectModal({ isOpen, onClose, projectStatus }: ProjectModalPro
         description: error.message || "An unexpected error occurred during reindexing.",
         variant: "destructive",
       })
+      hideProgressIndicator();
     } finally {
       setIsReindexing(false)
     }
@@ -318,6 +345,8 @@ export function ProjectModal({ isOpen, onClose, projectStatus }: ProjectModalPro
     }
 
     setIsCloning(true)
+    showProgressIndicator("Cloning GitHub repository...");
+    
     try {
       const response = await fetch(`${API_ENDPOINT}/clone_personal_github_repo?repo_full_name=${encodeURIComponent(repoFullName)}&use_token=false`, {
         method: 'POST',
@@ -328,7 +357,8 @@ export function ProjectModal({ isOpen, onClose, projectStatus }: ProjectModalPro
 
       if (!response.ok) {
         const errorData = await response.json();
-        // If public clone fails, try with token
+        showProgressIndicator("Trying with token authentication...");
+        
         const tokenResponse = await fetch(`${API_ENDPOINT}/clone_personal_github_repo?repo_full_name=${encodeURIComponent(repoFullName)}&use_token=true`, {
           method: 'POST',
           headers: {
@@ -349,13 +379,22 @@ export function ProjectModal({ isOpen, onClose, projectStatus }: ProjectModalPro
           })
           setRepoUrl("")
           
+          
+          showProgressIndicator("Indexing GitHub repository...");
+          
           const pollInterval = setInterval(async () => {
             await fetchStatus()
             if (projectStatus.has_index) {
               clearInterval(pollInterval)
+              
+              hideProgressIndicator();
             }
           }, 2000) 
-          setTimeout(() => clearInterval(pollInterval), 120000)
+          setTimeout(() => {
+            clearInterval(pollInterval);
+            
+            hideProgressIndicator();
+          }, 120000)
         } else {
           throw new Error(tokenData.error || 'Failed to clone repository')
         }
@@ -368,15 +407,23 @@ export function ProjectModal({ isOpen, onClose, projectStatus }: ProjectModalPro
           })
           setRepoUrl("")
           
-
+          
+          showProgressIndicator("Indexing GitHub repository...");
+          
           const pollInterval = setInterval(async () => {
             await fetchStatus()
             if (projectStatus.has_index) {
               clearInterval(pollInterval)
+              
+              hideProgressIndicator();
             }
           }, 2000) 
           
-          setTimeout(() => clearInterval(pollInterval), 120000)
+          setTimeout(() => {
+            clearInterval(pollInterval);
+            
+            hideProgressIndicator();
+          }, 120000)
         } else {
           throw new Error(data.error || 'Failed to clone repository')
         }
@@ -387,6 +434,8 @@ export function ProjectModal({ isOpen, onClose, projectStatus }: ProjectModalPro
         description: error.message || "An unexpected error occurred during cloning.",
         variant: "destructive",
       })
+      
+      hideProgressIndicator();
     } finally {
       setIsCloning(false)
     }
@@ -396,7 +445,7 @@ export function ProjectModal({ isOpen, onClose, projectStatus }: ProjectModalPro
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-    {showCelebration && (
+    {showCelebration && projectStatus.has_index && (
       <ReactConfetti
         className="!fixed top-0 left-0 w-full h-full z-[9999]"
         width={windowWidth}
@@ -412,7 +461,6 @@ export function ProjectModal({ isOpen, onClose, projectStatus }: ProjectModalPro
             Upload a ZIP file, folder, or clone a GitHub repository to enable code-aware chat features. Note that uploading will overwrite the existing project.
           </DialogDescription>
         </DialogHeader>
-
             <>
                 {projectStatus.has_project && (
                   <Alert variant={projectStatus.has_index ? "default" : "destructive"} className={projectStatus.has_index ? "" : "bg-yellow-50"}>
@@ -442,7 +490,6 @@ export function ProjectModal({ isOpen, onClose, projectStatus }: ProjectModalPro
                     </Alert>
                 )}
             </>
-
         <div className="flex flex-col gap-4 py-4">
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
@@ -467,7 +514,6 @@ export function ProjectModal({ isOpen, onClose, projectStatus }: ProjectModalPro
                 id="project-upload"
                 disabled={isBusy}
               />
-              
               <label htmlFor="folder-upload" className="col-span-1">
                 <Button
                   variant="outline"
@@ -491,7 +537,6 @@ export function ProjectModal({ isOpen, onClose, projectStatus }: ProjectModalPro
                 {...{ webkitdirectory: "true", directory: "" } as any}
               />
             </div>
-
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
                 <span className="w-full border-t" />
@@ -530,17 +575,25 @@ export function ProjectModal({ isOpen, onClose, projectStatus }: ProjectModalPro
               </p>
             </div>
           </div>
-
           {projectStatus.has_project && (
             <>
               <Button
-                variant="outline"
-                onClick={handleReindex}
+                variant="default" 
                 className="w-full"
-                disabled={isBusy}
+                onClick={handleReindex}
+                disabled={isReindexing || isOperationInProgress()}
               >
-                {isReindexing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
-                {isReindexing ? "Reindexing..." : "Reindex Project"}
+                {isReindexing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Reindexing...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Reindex Project
+                  </>
+                )}
               </Button>
 
               <Button

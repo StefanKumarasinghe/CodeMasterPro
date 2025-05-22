@@ -30,7 +30,6 @@ export function SaveToFileDialog({ isOpen, onClose, content }: SaveToFileDialogP
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [newFilePath, setNewFilePath] = useState("");
 
-  // Reset state when dialog opens/closes
   useEffect(() => {
     if (isOpen) {
       setSelectedFile(null);
@@ -88,7 +87,6 @@ export function SaveToFileDialog({ isOpen, onClose, content }: SaveToFileDialogP
 
     try {
       setIsSaving(true);
-      // Construct the full path
       const filePath = newFilePath ? `${newFilePath}/${newFileName}` : newFileName;
       
       const response = await fetch(`${API_ENDPOINT}/save_file_content/`, {

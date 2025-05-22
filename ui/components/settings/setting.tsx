@@ -4,6 +4,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
+import { FREE_MODELS } from "@/config/constants";
 
 interface CodeQualityPreferences {
   linting?: boolean;
@@ -23,22 +24,6 @@ interface GeneralSettingsTabProps {
   codeQuality?: CodeQualityPreferences;
   setCodeQuality: (value: CodeQualityPreferences) => void;
 }
-
-const FREE_MODELS = [
-    "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",
-    "Qwen/Qwen3-235B-A22B-fp8-tput",
-    "Qwen/QwQ-32B",
-    "deepseek-ai/DeepSeek-R1",
-    "deepseek-ai/DeepSeek-R1-Distill-Llama-70B-free",
-    "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8",
-    "deepseek-ai/DeepSeek-V3",
-    "meta-llama/Llama-4-Scout-17B-16E-Instruct",
-    "meta-llama/Llama-Vision-Free",
-    "Qwen/Qwen2.5-Coder-32B-Instruct",
-    "Qwen/Qwen2.5-72B-Instruct-Turbo",
-    "mistralai/Mistral-Small-24B-Instruct-2501",
-    "google/gemma-3-27b-it"
-  ];
 
   const PROVIDER_MODELS = [
     { id: "chatgpt", name: "ChatGPT (OpenAI)" },

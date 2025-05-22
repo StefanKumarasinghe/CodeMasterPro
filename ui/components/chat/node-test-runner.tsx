@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { showProgressIndicator, hideProgressIndicator, isOperationInProgress } from "@/components/progress-indicator"
 
 interface NodeTestRunnerProps {
   isOpen: boolean
@@ -46,37 +47,38 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
   const [testCode, setTestCode] = useState("")
   const [framework, setFramework] = useState("jest")
   const [activeProcessId, setActiveProcessId] = useState<string | null>(null)
-  const [eventSource, setEventSource] = useState<EventSource | null>(null)
+  const eventSourceRef = useRef<EventSource | null>(null)
   const outputRef = useRef<HTMLDivElement>(null)
   const { handleSubmit } = useChat()
   const instanceId = useRef(`node-test-runner-${Date.now()}`)
-  const resizeTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const resizingRef = useRef(false)
 
-  const handleClose = useCallback(() => {
-    // Cancel any pending resize timeouts
-    if (resizeTimeoutRef.current) {
-      clearTimeout(resizeTimeoutRef.current);
-      resizeTimeoutRef.current = null;
-    }
+  const dispatchStateEvent = useCallback((open: boolean, maximized: boolean) => {
     
-    // Set resizing flag to false
-    resizingRef.current = false;
+    const width = open ? (maximized ? window.innerWidth : 400) : 0
     
-    // Only dispatch state update to restore layout
+    
+    document.documentElement.style.setProperty("--right-sidebar-width", `${width}px`)
+    
+    
     window.dispatchEvent(
       new CustomEvent("node-test-runner-state", {
-        detail: { isOpen: false, width: 0, instanceId: instanceId.current },
+        detail: { isOpen: open, width: width, instanceId: instanceId.current },
       }),
     )
     
-    // Trigger a resize event to update the layout
-    window.dispatchEvent(new CustomEvent("sidebar-resize"))
+    
+    window.dispatchEvent(new Event('resize'))
+    
     
     setTimeout(() => {
-      onClose()
+      window.dispatchEvent(new CustomEvent("sidebar-resize"))
     }, 50)
-  }, [onClose])
+  }, [])
+
+  const handleClose = useCallback(() => {
+    dispatchStateEvent(false, isMaximized)
+    onClose()
+  }, [onClose, dispatchStateEvent, isMaximized])
 
   useEffect(() => {
     if (directory) {
@@ -92,354 +94,257 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
     }
   }, [codeSnippet])
 
-  useEffect(() => {
-    if (!isOpen) {
-      // When closing, dispatch event to restore layout
-      window.dispatchEvent(
-        new CustomEvent("node-test-runner-state", {
-          detail: { isOpen: false, width: 0, instanceId: instanceId.current },
-        }),
-      )
-      window.dispatchEvent(new CustomEvent("sidebar-resize"))
-      return
-    } else {
-      // Prevent closing other components if this component is already in the process of opening
-      if (resizingRef.current) return;
-      
-      resizingRef.current = true;
-      
-      // Close other components
-      window.dispatchEvent(
-        new CustomEvent("code-editor-close", {
-          detail: { forced: true },
-        }),
-      )
+useEffect(() => {
+  if (isOpen) {
+    window.dispatchEvent(
+      new CustomEvent("code-editor-close", { detail: { forced: true } }),
+    )
+    window.dispatchEvent(
+      new CustomEvent("python-shell-close", { detail: { forced: true } })
+    )
+    window.dispatchEvent(
+      new CustomEvent("html-preview-close", { detail: { forced: true } })
+    )
 
-      window.dispatchEvent(
-        new CustomEvent("python-shell-close", {
-          detail: { forced: true },
-        })
-      )
-
-      window.dispatchEvent(
-        new CustomEvent("html-preview-close", {
-          detail: { forced: true },
-        })
-      )
-
-      // Wait for other components to close before updating our state
-      setTimeout(() => {
-        window.dispatchEvent(
-          new CustomEvent("node-test-runner-state", {
-            detail: { isOpen: true, width: isMaximized ? window.innerWidth : 400, instanceId: instanceId.current },
-          }),
-        )
-        
-        // Trigger a resize event to update the layout
-        window.dispatchEvent(new CustomEvent("sidebar-resize"))
-        
-        // Reset resizing flag after a delay
-        setTimeout(() => {
-          resizingRef.current = false;
-        }, 300);
-      }, 100)
-    }
-
-    const handleForcedClose = (event: CustomEvent) => {
-      if (event.detail?.forced) {
-        handleClose()
-      }
-    }
-
-    const handleNewRunner = (event: CustomEvent) => {
-      if (event.detail?.isOpen && event.detail?.instanceId !== instanceId.current) {
-        onClose()
-      }
-    }
-
-    const handleCodeEditorState = (event: CustomEvent) => {
-      if (event.detail?.isOpen) {
-        handleClose()
-      }
-    }
-
-    window.addEventListener("node-test-runner-close", handleForcedClose as EventListener)
-    window.addEventListener("node-test-runner-state", handleNewRunner as EventListener)
-    window.addEventListener("code-editor-state", handleCodeEditorState as EventListener)
-
-    return () => {
-      window.removeEventListener("node-test-runner-close", handleForcedClose as EventListener)
-      window.removeEventListener("node-test-runner-state", handleNewRunner as EventListener)
-      window.removeEventListener("code-editor-state", handleCodeEditorState as EventListener)
-    }
-  }, [isOpen, isMaximized, onClose, handleClose])
-
-  useEffect(() => {
-    if (outputRef.current) {
-      outputRef.current.scrollTop = outputRef.current.scrollHeight
-    }
-  }, [output])
-
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        handleClose()
-      }
-    }
-
-    window.addEventListener("keydown", handleEscape)
-    return () => window.removeEventListener("keydown", handleEscape)
-  }, [handleClose])
-
-  useEffect(() => {
-    const handleResize = () => {
-      // Debounce resize handling
-      if (resizeTimeoutRef.current) {
-        clearTimeout(resizeTimeoutRef.current);
-      }
-      
-      // Set a flag to prevent concurrent resize operations
-      if (resizingRef.current) return;
-      resizingRef.current = true;
-      
-      resizeTimeoutRef.current = setTimeout(() => {
-        if (isOpen) {
-          window.dispatchEvent(
-            new CustomEvent("node-test-runner-state", {
-              detail: { 
-                isOpen: isOpen, 
-                width: isMaximized ? window.innerWidth : 400, 
-                instanceId: instanceId.current 
-              },
-            }),
-          );
-          
-          // Trigger a resize event to update the layout
-          window.dispatchEvent(new CustomEvent("sidebar-resize"));
-        }
-        
-        // Clear resizing flag
-        resizingRef.current = false;
-        resizeTimeoutRef.current = null;
-      }, 200);
-    };
-
-    window.addEventListener("resize", handleResize);
-    return () => {
-      window.removeEventListener("resize", handleResize);
-      if (resizeTimeoutRef.current) {
-        clearTimeout(resizeTimeoutRef.current);
-      }
-    };
-  }, [isOpen, isMaximized]);
-
-  const runOperation = async (operationType: "test" | "run", command: string, params: URLSearchParams, endpoint: string, description: string) => {
-     if (isRunning) return
-
-     setIsRunning(true)
-     setOutput(prev => [...prev, { type: "command", content: `${description}: ${command}` }, {type: "loading", content: "..."}])
-
-     try {
-       const response = await fetch(`${API_ENDPOINT}${endpoint}?${params.toString()}`, {
-         method: "POST",
-         headers: {
-           "Content-Type": "application/json"
-         },
-         body: endpoint === "/test_javascript_code" ? JSON.stringify({
-           code,
-           test_code: testCode || undefined,
-           framework
-         }) : endpoint === "/run_node_app" ? JSON.stringify({
-           directory: selectedDirectory || undefined,
-           run_command: command
-         }) : undefined,
-       })
-
-       setOutput(prev => prev.filter(item => item.type !== "loading"))
-
-       if (!response.ok) {
-         const errorText = await response.text();
-         throw new Error(`HTTP error! Status: ${response.status} - ${errorText || response.statusText}`);
-       }
-
-       const result = await response.json()
-       
-       // For streaming endpoints, set up event source
-       if (endpoint === "/run_node_app" && result.process_id) {
-         setActiveProcessId(result.process_id)
-         setupEventSource(result.process_id)
-         setOutput(prev => [...prev, { 
-           type: "system", 
-           content: `Started process ${result.process_id}. Streaming output...` 
-         }])
-       } else {
-         setOutput(prev => [...prev, { type: "result", content: result }])
-         setIsRunning(false)
-       }
-     } catch (error) {
-       console.error(`Error running ${operationType}:`, error)
-       setOutput(prev => [
-         ...prev.filter(item => item.type !== "loading"),
-         {
-           type: "system",
-           content: `Operation failed: ${error instanceof Error ? error.message : String(error)}`
-         }
-       ])
-       setIsRunning(false)
-     }
+    dispatchStateEvent(true, isMaximized)
+  } else {
+    dispatchStateEvent(false, isMaximized)
   }
 
-  const setupEventSource = (processId: string) => {
-    // Close any existing event source
-    if (eventSource) {
-      eventSource.close()
+  const handleForcedClose = (event: CustomEvent) => {
+    if (event.detail?.forced) {
+      handleClose()
+    }
+  }
+
+  const handleNewRunner = (event: CustomEvent) => {
+    if (event.detail?.isOpen && event.detail?.instanceId !== instanceId.current) {
+      onClose() 
+    }
+  }
+
+  const handleCodeEditorState = (event: CustomEvent) => {
+    if (event.detail?.isOpen) {
+      handleClose()
+    }
+  }
+
+  window.addEventListener("node-test-runner-close", handleForcedClose as EventListener)
+  window.addEventListener("node-test-runner-state", handleNewRunner as EventListener)
+  window.addEventListener("code-editor-state", handleCodeEditorState as EventListener)
+
+  return () => {
+    window.removeEventListener("node-test-runner-close", handleForcedClose as EventListener)
+    window.removeEventListener("node-test-runner-state", handleNewRunner as EventListener)
+    window.removeEventListener("code-editor-state", handleCodeEditorState as EventListener)
+  }
+}, [isOpen, isMaximized, onClose, handleClose, dispatchStateEvent])
+
+
+
+  useEffect(() => {
+     dispatchStateEvent(isOpen, isMaximized)
+  }, [isMaximized, isOpen, dispatchStateEvent])
+
+  const setupEventSource = useCallback((processId: string) => {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close()
     }
 
     const newEventSource = new EventSource(`${API_ENDPOINT}/node_app_output/${processId}`)
-    
-    // Add event listeners for each event type
-    const eventTypes = ["stdout", "stderr", "error", "system", "command", "complete", "heartbeat"];
-    
-    eventTypes.forEach(eventType => {
-      newEventSource.addEventListener(eventType, (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          
-          if (eventType === "heartbeat") {
-            // Ignore heartbeat messages
-            return;
-          }
-          
-          if (eventType === "complete") {
-            setOutput(prev => [...prev, { type: "system", content: data.content }]);
-            newEventSource.close();
-            setEventSource(null);
-            setActiveProcessId(null);
-            setIsRunning(false);
-            return;
-          }
-          
-          setOutput(prev => [...prev, { 
-            type: eventType as "stdout" | "stderr" | "error" | "system" | "command" | "heartbeat" | "complete", 
-            content: data.content 
-          }]);
-          
-          // Auto-scroll to bottom
-          if (outputRef.current) {
-            outputRef.current.scrollTop = outputRef.current.scrollHeight;
-          }
-        } catch (error) {
-          console.error(`Error parsing ${eventType} event data:`, error);
-        }
-      });
-    });
-    
-    newEventSource.onerror = (error) => {
-      console.error("EventSource error:", error);
-      setOutput(prev => [...prev, { 
-        type: "error", 
-        content: "Connection error. Output streaming stopped." 
-      }]);
-      newEventSource.close();
-      setEventSource(null);
-      setActiveProcessId(null);
-      setIsRunning(false);
-    };
-    
-    setEventSource(newEventSource);
-  }
 
-  const stopRunningProcess = async () => {
-    if (!activeProcessId) return
-    
+    const handleMessage = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data)
+        if (data.type === "heartbeat") return
+
+        if (data.type === "complete") {
+          setOutput(prev => [...prev, { type: "system", content: data.content }])
+          newEventSource.close()
+          eventSourceRef.current = null
+          setActiveProcessId(null)
+          setIsRunning(false)
+          hideProgressIndicator()
+          return
+        }
+
+        setOutput(prev => [...prev, { type: data.type as OutputItem['type'], content: data.content }])
+      } catch (error) {
+        console.error(`Error parsing event data:`, error)
+      }
+    }
+
+    newEventSource.addEventListener("message", handleMessage)
+
+    newEventSource.onerror = (error) => {
+      console.error("EventSource error:", error)
+      setOutput(prev => [...prev, {
+        type: "error",
+        content: "Connection error. Output streaming stopped."
+      }])
+      newEventSource.close()
+      eventSourceRef.current = null
+      setActiveProcessId(null)
+      setIsRunning(false)
+      hideProgressIndicator()
+    }
+
+    eventSourceRef.current = newEventSource
+  }, [])
+
+  const runOperation = useCallback(async (operationType: "test" | "run", command: string, params: URLSearchParams, endpoint: string, description: string) => {
+    if (isRunning) return
+
+    if (isOperationInProgress()) {
+      toast.error("Please wait for the current operation to complete before starting a new one.")
+      return
+    }
+
+    setIsRunning(true)
+    setOutput(prev => [...prev, { type: "command", content: `${description}: ${command}` }, {type: "loading", content: "..."}])
+    showProgressIndicator(`Running ${operationType === "test" ? "tests" : "app"}: ${command}`)
+
     try {
-      const response = await fetch(`${API_ENDPOINT}/terminate_node_app`, {
+      const response = await fetch(`${API_ENDPOINT}${endpoint}?${params.toString()}`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          process_id: activeProcessId
-        })
+        headers: { "Content-Type": "application/json" },
+        body: endpoint === "/test_javascript_code" ? JSON.stringify({
+          code,
+          test_code: testCode || undefined,
+          framework
+        }) : endpoint === "/run_node_app" ? JSON.stringify({
+          directory: selectedDirectory || undefined,
+          run_command: command
+        }) : undefined,
       })
-      
+
+      setOutput(prev => prev.filter(item => item.type !== "loading"))
+
       if (!response.ok) {
         const errorText = await response.text()
         throw new Error(`HTTP error! Status: ${response.status} - ${errorText || response.statusText}`)
       }
-      
+
+      const result = await response.json()
+
+      if (endpoint === "/run_node_app" && result.process_id) {
+        setActiveProcessId(result.process_id)
+        setupEventSource(result.process_id)
+        setOutput(prev => [...prev, {
+          type: "system",
+          content: `Started process ${result.process_id}. Streaming output...`
+        }])
+      } else {
+        setOutput(prev => [...prev, { type: "result", content: result }])
+        setIsRunning(false)
+        hideProgressIndicator()
+      }
+    } catch (error) {
+      console.error(`Error running ${operationType}:`, error)
+      setOutput(prev => [
+        ...prev.filter(item => item.type !== "loading"),
+        {
+          type: "system",
+          content: `Operation failed: ${error instanceof Error ? error.message : String(error)}`
+        }
+      ])
+      setIsRunning(false)
+      hideProgressIndicator()
+    }
+  }, [isRunning, code, testCode, framework, selectedDirectory, setupEventSource])
+
+  const stopRunningProcess = useCallback(async () => {
+    if (!activeProcessId) return
+
+    if (isOperationInProgress() && !isRunning) {
+      toast.error("Please wait for the current operation to complete before stopping this process.")
+      return
+    }
+
+    showProgressIndicator("Stopping process...")
+
+    try {
+      const response = await fetch(`${API_ENDPOINT}/terminate_node_app`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ process_id: activeProcessId })
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new Error(`HTTP error! Status: ${response.status} - ${errorText || response.statusText}`)
+      }
+
       const result = await response.json()
       setOutput(prev => [...prev, { type: "system", content: result.message || "Process terminated" }])
-      
-      // Clean up
-      if (eventSource) {
-        eventSource.close()
-        setEventSource(null)
+
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close()
+        eventSourceRef.current = null
       }
-      
+
       setActiveProcessId(null)
       setIsRunning(false)
+      hideProgressIndicator()
     } catch (error) {
       console.error("Error stopping process:", error)
-      setOutput(prev => [...prev, { 
-        type: "error", 
-        content: `Failed to stop process: ${error instanceof Error ? error.message : String(error)}` 
+      setOutput(prev => [...prev, {
+        type: "error",
+        content: `Failed to stop process: ${error instanceof Error ? error.message : String(error)}`
       }])
+      hideProgressIndicator()
     }
-  }
+  }, [activeProcessId, isRunning])
 
-  // Clean up event source when component unmounts
   useEffect(() => {
+    const currentEventSource = eventSourceRef.current
+    const currentProcessId = activeProcessId
+
     return () => {
-      if (eventSource) {
-        eventSource.close()
+      if (currentEventSource) {
+        currentEventSource.close()
       }
-      
-      // Attempt to terminate any active process when closing
-      if (activeProcessId) {
+
+      if (currentProcessId) {
         fetch(`${API_ENDPOINT}/terminate_node_app`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            process_id: activeProcessId
-          })
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ process_id: currentProcessId })
         }).catch(error => {
           console.error("Error terminating process on unmount:", error)
         })
       }
-      
-      // Clear any pending timeouts
-      if (resizeTimeoutRef.current) {
-        clearTimeout(resizeTimeoutRef.current);
-      }
     }
-  }, [eventSource, activeProcessId])
+  }, [activeProcessId])
 
-  const runAppTests = () => {
+  const runAppTests = useCallback(() => {
     const params = new URLSearchParams()
     if (selectedDirectory) {
       params.append("directory", selectedDirectory)
     }
     params.append("test_command", testCommand)
     runOperation("test", `npm ${testCommand}`, params, "/run_node_tests", `Running npm ${testCommand}`)
-  }
+  }, [selectedDirectory, testCommand, runOperation])
 
-  const runApplication = () => {
-    runOperation("run", runCommand, new URLSearchParams(), "/run_node_app", `Running npm ${runCommand}`)
-  }
+  const runApplication = useCallback(() => {
+    const params = new URLSearchParams()
+    if (selectedDirectory) {
+      params.append("directory", selectedDirectory)
+    }
+    params.append("run_command", runCommand)
+    runOperation("run", `npm ${runCommand}`, params, "/run_node_app", `Running npm ${runCommand}`)
+  }, [selectedDirectory, runCommand, runOperation])
 
-  const runSnippetTests = () => {
-     const params = new URLSearchParams()
-     runOperation("test", `Testing with ${framework}`, params, "/test_javascript_code", `Testing code snippet`)
-  }
+  const runSnippetTests = useCallback(() => {
+    const params = new URLSearchParams()
+    runOperation("test", `Testing with ${framework}`, params, "/test_javascript_code", `Testing code snippet`)
+  }, [framework, runOperation])
 
-  const clearOutput = () => {
+  const clearOutput = useCallback(() => {
     setOutput([])
-  }
+  }, [])
 
-  const copyOutput = () => {
+  const copyOutput = useCallback(() => {
     const text = output
       .map(item => {
         if (typeof item.content === "string") {
@@ -453,13 +358,13 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
 
     navigator.clipboard.writeText(text)
     toast.success("Output copied to clipboard")
-  }
+  }, [output])
 
-  const askAboutTests = () => {
+  const askAboutTests = useCallback(() => {
     if (output.length === 0) return
 
     const lastOutputItem = output.findLast(item => item.type === "result")
-    const lastErrorItem = output.findLast(item => item.type === "system")
+    const lastErrorItem = output.findLast(item => item.type === "system" || item.type === "error")
 
     if (!lastOutputItem && !lastErrorItem) {
        toast.error("No recent results or errors to ask about.")
@@ -486,49 +391,23 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
     }
 
     if (lastErrorItem && typeof lastErrorItem.content === 'string') {
-        if (lastOutputItem) query += "\n---\n"; // Separator if both exist
-        query += `System Message:\n\`\`\`\n${lastErrorItem.content}\n\`\`\`\n`;
+        if (lastOutputItem) query += "\n---\n";
+        query += `${lastErrorItem.type === 'error' ? 'Error Message' : 'System Message'}:\n\`\`\`\n${lastErrorItem.content}\n\`\`\`\n`;
     }
 
     query += "\nCan you help me understand this result and suggest potential fixes or next steps?";
 
     handleSubmit(query)
     handleClose()
-  }
+  }, [output, handleSubmit, handleClose])
 
-  const handleMaximizeToggle = () => {
-    // Set resizing flag to prevent other resize operations
-    if (resizingRef.current) return;
-    resizingRef.current = true;
-    
-    // Cancel any pending resize operations
-    if (resizeTimeoutRef.current) {
-      clearTimeout(resizeTimeoutRef.current);
-    }
-    
-    // Update state
-    setIsMaximized(!isMaximized);
-    
-    // Batch the resize operations
-    setTimeout(() => {
-      window.dispatchEvent(
-        new CustomEvent("node-test-runner-state", {
-          detail: { 
-            isOpen: true, 
-            width: !isMaximized ? window.innerWidth : 400, 
-            instanceId: instanceId.current 
-          },
-        }),
-      );
-      
-      window.dispatchEvent(new CustomEvent("sidebar-resize"));
-      
-      // Reset resizing flag after operations complete
-      setTimeout(() => {
-        resizingRef.current = false;
-      }, 300);
-    }, 50);
-  };
+  const handleMaximizeToggle = useCallback(() => {
+    setIsMaximized(prev => {
+      const newState = !prev;
+      dispatchStateEvent(isOpen, newState);
+      return newState;
+    });
+  }, [isOpen, dispatchStateEvent])
 
   if (!isOpen) return null
 
@@ -570,10 +449,10 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
         <div className="px-3 py-2 border-b bg-background">
           <TabsList className="w-full grid grid-cols-2">
             <TabsTrigger value="app">
-              Application Tests
+              Application
             </TabsTrigger>
             <TabsTrigger value="snippet">
-              Code Snippet Tests
+              Code Snippet
             </TabsTrigger>
           </TabsList>
         </div>
@@ -624,7 +503,7 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
                  ) : (
                    output.map((item, index) => (
                      <div key={`app-output-${index}`} className="mb-2 last:mb-0 break-words">
-                       {renderOutputContent(item, index)}
+                       {renderOutputContent(item)}
                      </div>
                    ))
                  )}
@@ -668,47 +547,40 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
 
             </div>
             <div className="flex items-center gap-2 w-full sm:w-auto">
-              <div className="flex-1">
               <Button
                 onClick={runAppTests}
-                disabled={isRunning}
+                disabled={!selectedDirectory || isRunning || isOperationInProgress()}
                 size="sm"
                 variant="secondary"
-                style={{ width: "100%" }}
                 className={cn("w-full sm:w-auto", isRunning ? "opacity-70 cursor-not-allowed" : "")}
               >
-                <Play className="h-4 " />
-                Run Tests
+                 <Play className="h-4 w-4 mr-2" />
+                 Run Tests
               </Button>
-              </div>
             </div>
-            
           </div>
-            <div className="flex-1 w-full">
-            {activeProcessId && (
-                <Button
-                  onClick={stopRunningProcess}
-                  variant="destructive"
-                  size="sm"
-                  className="w-full sm:w-auto"
-                  style={{ width: "100%" }}
-                >
-                  <StopCircle className="h-3.5 w-3.5 mr-1" />
-                  Stop
-                </Button>
-              )}
-            </div>
-            <div className="flex-1 w-full">
-              <Button
-                onClick={runApplication}
-                disabled={isRunning}
-                variant="default"
-                style={{ width: "100%" }}
-                className={cn("w-full sm:w-auto", isRunning ? "opacity-70 cursor-not-allowed" : "")}
-              >
-                <Rocket className="h-4 w-full mr-2" />
-                Run App
-              </Button> 
+            <div className="flex-1 w-full flex gap-3">
+              {activeProcessId ? (
+                  <Button
+                    onClick={stopRunningProcess}
+                    variant="destructive"
+                    size="sm"
+                    className="w-full"
+                  >
+                    <StopCircle className="h-3.5 w-3.5 mr-1" />
+                    Stop App
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={runApplication}
+                    disabled={!selectedDirectory || isRunning || isOperationInProgress()}
+                    variant="default"
+                    className={cn("w-full", isRunning ? "opacity-70 cursor-not-allowed" : "")}
+                  >
+                    <Rocket className="h-4 w-full mr-2" />
+                    Run App
+                  </Button>
+                )}
             </div>
         </TabsContent>
 
@@ -764,20 +636,14 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
                 ) : (
                   output.map((item, index) => (
                     <div key={`snippet-output-${index}`} className="mb-2 last:mb-0 break-words">
-                      {renderOutputContent(item, index)}
+                      {renderOutputContent(item)}
                     </div>
                   ))
                 )}
-                {isRunning && !activeProcessId && (
+                {isRunning && (
                   <div className="flex items-center text-blue-400 italic">
                     <Clock className="h-4 w-4 mr-2 animate-spin" />
                     Running...
-                  </div>
-                )}
-                {activeProcessId && (
-                  <div className="flex items-center text-blue-400 italic">
-                    <Clock className="h-4 w-4 mr-2 animate-spin" />
-                    Running (streaming)...
                   </div>
                 )}
               </div>
@@ -805,29 +671,17 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
                  <Copy className="h-3.5 w-3.5 mr-1" />
                  Copy
                </Button>
-               {activeProcessId && (
-                 <Button
-                   onClick={stopRunningProcess}
-                   variant="destructive"
-                   size="sm"
-                   className="w-full sm:w-auto"
-                 >
-                   <StopCircle className="h-3.5 w-3.5 mr-1" />
-                   Stop
-                 </Button>
-               )}
              </div>
-
-           </div>
-           <Button
+             <Button
                onClick={runSnippetTests}
-               disabled={isRunning || !code}
+               disabled={(!code) || isRunning || isOperationInProgress()}
                size="sm"
                className={cn("w-full sm:w-auto", isRunning ? "opacity-70 cursor-not-allowed" : "")}
              >
-               <Play className="mr-2" />
-               Run Tests
+               {isRunning ? <StopCircle className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+               {isRunning ? "Stop" : "Run Test"}
              </Button>
+           </div>
         </TabsContent>
       </Tabs>
 
@@ -844,13 +698,12 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
   )
 }
 
-function renderOutputContent(item: OutputItem, index: number) {
-  // Helper function to format content with proper overflow handling
+function renderOutputContent(item: OutputItem) {
   const formatContent = (content: string | TestOutput): React.ReactElement => {
     if (typeof content !== 'string') {
       return <span className="break-words overflow-hidden" style={{ maxWidth: "100%", display: "inline-block" }}>{JSON.stringify(content)}</span>;
     }
-    
+
     return (
       <div className="break-words overflow-hidden" style={{ maxWidth: "100%" }}>
         {content}
@@ -867,7 +720,7 @@ function renderOutputContent(item: OutputItem, index: number) {
   }
 
   if (item.type === "loading") {
-    return null; // Loading indicator is handled outside the map
+    return null;
   }
 
   if (item.type === "stdout") {

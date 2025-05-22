@@ -16,6 +16,7 @@ import { toast } from "@/utils/toast-util"
 import { SaveChatButton } from "./save-chat-button"
 import { TutorialModal } from "@/components/tutorial/tutorial-modal"
 import { v4 as uuidv4 } from "uuid"
+import { showProgressIndicator, hideProgressIndicator } from "@/components/progress-indicator"
 
 export function ChatHeader({ style, size }: { style?: React.CSSProperties; size?: number }) {
   const [showTutorial, setShowTutorial] = useState(false)
@@ -36,6 +37,9 @@ export function ChatHeader({ style, size }: { style?: React.CSSProperties; size?
 
   const reIndex = async () => {
     try {
+      // Show progress indicator
+      showProgressIndicator("Reindexing memory...");
+      
       const response = await fetch(`${API_ENDPOINT}/reindex/`, {
         method: "POST",
       })
@@ -47,6 +51,9 @@ export function ChatHeader({ style, size }: { style?: React.CSSProperties; size?
     } catch (error) {
       console.error("Failed to reindex memory:", error)
       toast.error("Failed to reindex memory")
+    } finally {
+      // Hide progress indicator
+      hideProgressIndicator();
     }
   }
 
@@ -103,7 +110,7 @@ export function ChatHeader({ style, size }: { style?: React.CSSProperties; size?
   return (
     <>
       <header
-        className="h-14 border-b overflow-x-auto px-4 flex md:flex items-center justify-between fluid-content"
+        className="h-14 border-b overflow-x-auto px-4 flex md:flex items-center justify-between fluid-content relative"
         style={style}
       >
         <div className="flex items-center gap-2 md:gap-4">
@@ -177,8 +184,28 @@ export function ChatHeader({ style, size }: { style?: React.CSSProperties; size?
           {messages.length > 0 && <SaveChatButton messages={messages} />}
           <MemoryControls />
           <SettingsSheet
-            preferences={preferences}
-            setPreferences={setPreferences}
+            preferences={{
+              inputPreference: preferences.inputPreference as "Autotag" | "NoTag",
+              outputFormat: preferences.outputFormat as "codeAndExplanation" | "codeOnly" | "explanationOnly",
+              codeQuality: preferences.codeQuality,
+              freeModel: preferences.freeModel,
+              providerModel: preferences.providerModel,
+            }}
+            setPreferences={(update) => {
+              setPreferences((prev: any) => {
+                const base = typeof update === "function" ? update({
+                  inputPreference: prev.inputPreference,
+                  outputFormat: prev.outputFormat,
+                  codeQuality: prev.codeQuality,
+                  freeModel: prev.freeModel,
+                  providerModel: prev.providerModel,
+                }) : update;
+                return {
+                  ...prev,
+                  ...base,
+                };
+              });
+            }}
             customPrompt={customPrompt}
             setCustomPrompt={setCustomPrompt}
             personalInfo={personalInfo}

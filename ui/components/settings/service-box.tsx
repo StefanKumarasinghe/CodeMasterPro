@@ -1,9 +1,10 @@
 import React from "react";
+import { LucideIcon } from "lucide-react";
 
 interface Service {
   id: string;
   name: string;
-  icon: Icon;
+  icon: LucideIcon;
   description: string;
   link: string;
 }

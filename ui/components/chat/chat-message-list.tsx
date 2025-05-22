@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useRef, useEffect, useState, useCallback } from "react"
 import ChatMessage from "./chat-message"
@@ -14,6 +13,7 @@ import { ChatProgressBar } from "./chat-progress-bar"
 import { useInView } from "react-intersection-observer"
 import { API_ENDPOINT } from "@/config/constants"
 import type { Message } from "@/types"
+import { ProgressIndicator } from "@/components/progress-indicator"
 
 const LOADING_MESSAGES = [
   "CodeMasterPro is thinking...",
@@ -48,9 +48,6 @@ interface ChatMessageListProps {
 export function ChatMessageList({
   language,
   isLoading,
-  style,
-  editorWidth = 0,
-  isResizing = false,
 }: ChatMessageListProps) {
   const { messages, preferences, handleCodeAction, setMemoryState, language: contextLanguage } = useChat()
 
@@ -73,7 +70,7 @@ export function ChatMessageList({
   const messageListRef = useRef<HTMLDivElement | null>(null)
   const [editorVisible, setEditorVisible] = useState(false)
   const [editorPosition, setEditorPosition] = useState({ x: 0, y: 0, width: 0 })
-  const messagesRef = useRef<HTMLDivElement>(null)
+  const [showBackgroundOperation, setShowBackgroundOperation] = useState(false)
 
   const scrollToBottom = useCallback(() => {
     const messagesEnd = messagesEndRef.current
@@ -115,7 +112,7 @@ export function ChatMessageList({
       }
     }
 
-    source.onerror = (error) => {
+    source.onerror = () => {
       source.close()
       streamSourceRef.current = null
       setUpdateMessage("Stream error: Could not connect to updates.")
@@ -215,7 +212,7 @@ export function ChatMessageList({
     setMemoryState((prev) => ({ ...prev, forgetMemory: true }))
   }, [setMemoryState])
 
-  // Add effect to listen for editor position changes
+  
   useEffect(() => {
     const handleEditorPositionChange = (e: CustomEvent) => {
       if (e.detail) {
@@ -241,24 +238,54 @@ export function ChatMessageList({
     const handleCodeEditorClose = () => {
       setEditorVisible(false)
     }
+    
+    
+    const handleNodeTestRunnerState = () => {
+      
+      window.dispatchEvent(new Event('resize'))
+      
+      
+      setTimeout(() => {
+        if (messageListRef.current) {
+          const event = new Event('resize')
+          window.dispatchEvent(event)
+        }
+      }, 200)
+    }
 
     window.addEventListener("editor-position-change", handleEditorPositionChange as EventListener)
     window.addEventListener("editor-resize", handleEditorPositionChange as EventListener)
     window.addEventListener("editor-interaction-end", handleEditorInteractionEnd as EventListener)
     window.addEventListener("code-editor-close", handleCodeEditorClose as EventListener)
+    window.addEventListener("node-test-runner-state", handleNodeTestRunnerState as EventListener)
 
     return () => {
       window.removeEventListener("editor-position-change", handleEditorPositionChange as EventListener)
       window.removeEventListener("editor-resize", handleEditorPositionChange as EventListener)
       window.removeEventListener("editor-interaction-end", handleEditorInteractionEnd as EventListener)
       window.removeEventListener("code-editor-close", handleCodeEditorClose as EventListener)
+      window.removeEventListener("node-test-runner-state", handleNodeTestRunnerState as EventListener)
+    }
+  }, [])
+
+  useEffect(() => {
+    const handleOperationStatusChange = (event: CustomEvent) => {
+      if (event.detail) {
+        setShowBackgroundOperation(event.detail.isInProgress)
+      }
+    }
+    
+    window.addEventListener("operation-status-change", handleOperationStatusChange as EventListener)
+    
+    return () => {
+      window.removeEventListener("operation-status-change", handleOperationStatusChange as EventListener)
     }
   }, [])
 
   return (
     <div
       ref={messageListRef}
-      className={cn("flex flex-col gap-5 overflow-y-auto flex-grow p-4 sm:p-6 chat-message-list", isLoading && "opacity-90")}
+      className={cn("flex flex-col gap-5 overflow-y-auto flex-grow p-3 chat-message-list")}
       style={{
         transition: "width 0.3s ease-in-out, margin-right 0.3s ease-in-out",
         ...(editorVisible
@@ -275,6 +302,11 @@ export function ChatMessageList({
           onClearMemory={handleClearMemory}
         />
       )}
+      
+      {showBackgroundOperation && (
+  <ProgressIndicator className="fixed top-0 left-0 w-full z-50" />
+)}
+
 
       <ScrollArea className="flex-1 px-2 sm:px-4 py-4" ref={scrollAreaRef}>
         <div

@@ -14,15 +14,20 @@ import { DocumentationModal } from "@/components/documentation/documentation-mod
 import { ChatProvider } from "@/context/chat-context"
 import "./globals.css"
 
-// Add event types for custom events
+
 declare global {
   interface WindowEventMap {
     'node-test-runner-state': CustomEvent<SidebarStateDetail>;
     'code-editor-state': CustomEvent<SidebarStateDetail>;
+    'sidebar-resize': CustomEvent<SidebarStateDetail>;
+    'python-shell-state': CustomEvent<SidebarStateDetail>;
     'code-editor-close': CustomEvent<{ forced: boolean }>;
     'python-shell-close': CustomEvent<{ forced: boolean }>;
     'html-preview-close': CustomEvent<{ forced: boolean }>;
     'node-test-runner-close': CustomEvent<{ forced: boolean }>;
+    'progress-indicator-start': CustomEvent<{ operationText?: string }>;
+    'progress-indicator-end': CustomEvent;
+    'operation-status-change': CustomEvent<{ isInProgress: boolean, operationText: string }>;
   }
 }
 
