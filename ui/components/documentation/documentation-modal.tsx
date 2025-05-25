@@ -456,7 +456,7 @@ export function DocumentationModal() {
   return (
     <>
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="sm:max-w-4xl grid grid-rows-[auto,1fr,auto] p-0">
+        <DialogContent className="md:max-w-4xl w-full h-[100vh] md:h-auto justify-center items-center grid grid-rows-[auto,1fr,auto] p-0">
           <DialogHeader className="p-6 pb-4">
             <DialogTitle>Manage Knowledge & Resources</DialogTitle>
             <DialogDescription>
@@ -861,7 +861,7 @@ export function DocumentationModal() {
               variant="outline"
               onClick={() => setIsOpen(false)}
               disabled={isLoading}
-              className="h-10 text-base rounded-lg"
+              className="h-10 text-base rounded-lg w-full md:w-auto my-2 md:my-0"
             >
               Close
             </Button>

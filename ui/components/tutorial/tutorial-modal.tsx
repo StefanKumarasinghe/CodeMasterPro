@@ -24,7 +24,6 @@ const TUTORIAL_STEPS = [
     description:
       "Hey CodeMaster! 🚀 I’m here to help you build faster, smarter, and cleaner. Whether you're coding from scratch or refining old code, just ask — I’ve got your back every step of the way.",
     icon: <Sparkles className="h-6 w-6 text-primary" />,
-    gif: "/welcome.gif",
   },
   {
     title: "🎬 Getting Started",
@@ -183,13 +182,6 @@ export function TutorialModal({ isOpen, onClose }: TutorialModalProps) {
                         <p className="text-muted-foreground whitespace-pre-line">
                           {TUTORIAL_STEPS[currentStep].description}
                         </p>
-                        {TUTORIAL_STEPS[currentStep].gif && (
-                          <img
-                            src={TUTORIAL_STEPS[currentStep].gif}
-                            alt={TUTORIAL_STEPS[currentStep].title}
-                            className="rounded-md mt-4"
-                          />
-                        )}
                       </div>
                     </div>
                   ) : (
@@ -201,7 +193,7 @@ export function TutorialModal({ isOpen, onClose }: TutorialModalProps) {
               </AnimatePresence>
             </div>
 
-            <div className="p-6 pt-4 border-t flex justify-between items-center">
+            <div className="p-6 pt-4 border-t flex flex-col gap-4 md:gap-0 md:flex-row justify-between items-center">
               <div className="flex gap-2">
                 {currentStep === 0 && (
                   <Button variant="ghost" onClick={onClose}>

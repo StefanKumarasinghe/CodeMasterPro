@@ -1,13 +1,6 @@
 import React from "react";
-import { LucideIcon } from "lucide-react";
+import { Service } from "@/types";
 
-interface Service {
-  id: string;
-  name: string;
-  icon: LucideIcon;
-  description: string;
-  link: string;
-}
 
 interface ServiceBoxProps {
   service: Service;

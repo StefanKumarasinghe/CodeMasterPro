@@ -114,12 +114,15 @@ export function CodeSast({ code, language, onClose }: CodeSastProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-card border rounded-lg shadow-lg p-6 max-w-4xl w-full max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[9999] flex items-center justify-center md:p-4">
+      <div className="bg-card border rounded-lg shadow-lg p-6 max-w-4xl w-full h-full md:max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold flex items-center gap-2">
+          <h2 className="text-xl font-bold flex items-center gap-2 hidden md:block">
             <Shield className="h-5 w-5 text-primary" />
             Security & Quality Analysis
+          </h2>
+          <h2 className="text-xl font-bold flex items-center gap-2 block md:hidden">
+            SAST
           </h2>
           <div className="flex items-center gap-2">
             <Button
@@ -286,14 +289,14 @@ export function CodeSast({ code, language, onClose }: CodeSastProps) {
             <Tabs
               value={activeTab}
               onValueChange={setActiveTab}
-              className="flex-1 flex flex-col"
+              className="flex-1 flex flex-col "
             >
-              <TabsList className="mb-4">
-                <TabsTrigger value="issues">
+              <TabsList className="mb-4 overflow-x-auto md:overflow-x-hidden ">
+                <TabsTrigger value="issues" className="text-xs md:text-base">
                   Issues ({results.summary.total})
                 </TabsTrigger>
-                <TabsTrigger value="metrics">Detailed Metrics</TabsTrigger>
-                <TabsTrigger value="recommendations">
+                <TabsTrigger value="metrics" className="text-xs md:text-base">Detailed Metrics</TabsTrigger>
+                <TabsTrigger value="recommendations" className="text-xs md:text-base">
                   Recommendations
                 </TabsTrigger>
               </TabsList>

@@ -102,7 +102,7 @@ export function ChatWelcome() {
         style={{
           WebkitTextStroke: '2px white',
         }}
-        className="text-5xl hidden dark:block md:text-6xl font-extrabold my-4 text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-blue-500"
+        className="lg:text-5xl md:text-4xl text-3xl hidden dark:block md:text-6xl font-extrabold my-4 text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-blue-500"
       >
         The CodeMaster Returns
       </motion.h1>
@@ -133,7 +133,7 @@ export function ChatWelcome() {
           variants={itemVariants}
           className="text-base text-muted-foreground max-w-full mt-8 p-6 rounded-lg"
         >
-          <FaDocker className="h-16 w-16 text-blue-500 inline-block mr-4 mb-4" />
+          <FaDocker className="h-16 w-16 text-blue-500  font-mono inline-block mr-4 mb-4" />
           <p className="mb-6 text-sm md:text-lg ">
             You will need to download the Docker image to run the backend server
             locally.
@@ -146,9 +146,7 @@ export function ChatWelcome() {
           >
             docker pull stefankumarasinghe/codemasterpro
           </a>
-          <div className="flex justify-center text-xs md:text-lg mt-6  rounded-md overflow-x-auto">
-            <p className="whitespace-pre-wrap text-black dark:text-white">{dockerRunCommand}</p>
-          </div>
+          <p className="text-green-800 text-xs md:text-lg my-4 dark:text-green-300 font-mono">{dockerRunCommand}</p>
         </motion.div>
       )}
     </motion.div>

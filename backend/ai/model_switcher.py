@@ -1,6 +1,6 @@
 from Model.ModelClass import ModelFactory
-from ai.structured_output import ValidationChainOutput, DocumentationChainOutput, RankedQuestionsOutput, LinkCategoriesOutput, RefineLocalSearchOutput
-from Prompts.prompts import process_prompt, refinement_prompt, summarize_file_chain_prompt, relevance_chain_prompt, link_chain_prompt, pip_install_prompt, code_analysis_prompt, user_intent_prompt, refine_search, refine_local_search, validate_gemini_prompt, rank_chain_prompt, refine_stack_search, convert_to_markdown, cleaned_search_result_prompt, reword_prompt, runnable_prompt, feedback_chain_python, process_summary_prompt, validation_prompt, user_behavior_prompt, final_code_prompt, reasoning_prompt, tool_prompt, analyse_changes_python_prompt, quick_answer_chain_prompt, analyse_bandit_prompt, analyse_compute_chain_prompt, strategy_prompt, file_format_prompt, memory_analyzer_prompt, github_select_prompt, github_reword_prompt, reference_check_chain_prompt, get_code_completion_prompt, context_chain_prompt, reference_github_check_chain_prompt
+from ai.structured_output import ValidationChainOutput, DocumentationChainOutput, RankedQuestionsOutput, LinkCategoriesOutput, RefineLocalSearchOutput, NodeReflectionOutput
+from Prompts.prompts import process_prompt, refinement_prompt, node_reflection_prompt, summarize_file_chain_prompt, relevance_chain_prompt, link_chain_prompt, pip_install_prompt, code_analysis_prompt, user_intent_prompt, refine_search, refine_local_search, validate_gemini_prompt, rank_chain_prompt, refine_stack_search, convert_to_markdown, cleaned_search_result_prompt, reword_prompt, runnable_prompt, feedback_chain_python, process_summary_prompt, validation_prompt, user_behavior_prompt, final_code_prompt, reasoning_prompt, tool_prompt, analyse_changes_python_prompt, quick_answer_chain_prompt, analyse_bandit_prompt, analyse_compute_chain_prompt, strategy_prompt, file_format_prompt, memory_analyzer_prompt, github_select_prompt, github_reword_prompt, reference_check_chain_prompt, get_code_completion_prompt, context_chain_prompt, reference_github_check_chain_prompt, analyse_node_prompt, self_bash_correction_chain_prompt, analyse_bash_chain_prompt, enforce_rules_chain_prompt
 
 model_factory = ModelFactory()
 
@@ -281,4 +281,39 @@ def summarize_file_chain(model_type: str, provider_type: str):
         return None
 
 
+def node_reflection_chain(model_type: str, provider_type: str):
+    try:
+        return create_dynamic_chain(node_reflection_prompt, provider_type,  model_type, True, NodeReflectionOutput)
+    except Exception as e:
+        print(f"[Node Reflection Chain Error] Failed to build node reflection chain: {e}")
+        return None
 
+def analyse_node_chain(model_type: str, provider_type: str):
+    try:
+        return create_dynamic_chain(analyse_node_prompt, provider_type,  model_type)
+    except Exception as e:
+        print(f"[Analyse Node Chain Error] Failed to build analyse node chain: {e}")
+        return None
+
+def self_bash_correction_chain(model_type: str, provider_type: str):
+    try:
+        return create_dynamic_chain(self_bash_correction_chain_prompt, provider_type, model_type)
+    except Exception as e:
+        print(f"[Self Bash Correction Chain Error] Failed to build self bash correction chain: {e}")
+        return None
+    
+def analyse_bash_chain(model_type: str, provider_type: str):
+    try:
+        return create_dynamic_chain(analyse_bash_chain_prompt, provider_type, model_type)
+    except Exception as e:
+        print(f"[Analyse Bash Chain Error] Failed to build analyse bash chain: {e}")
+        return None
+
+
+def enforce_rules_chain(model_type: str, provider_type: str):
+    try:
+        return create_dynamic_chain(enforce_rules_chain_prompt, provider_type, model_type)
+        return None
+    except Exception as e:
+        print(f"[Enforce Rules Chain Error] Failed to build enforce rules chain: {e}")
+        return None

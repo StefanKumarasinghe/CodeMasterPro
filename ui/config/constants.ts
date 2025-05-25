@@ -3,20 +3,43 @@ export const API_ENDPOINT = process.env.NEXT_PUBLIC_API_ENDPOINT || "http://loca
 export const APP_NAME = "CodeMasterPro"
 export const APP_VERSION = "v2.0.1"
 
+import {
+  Brain,
+  Monitor,
+  FileCode2,
+  ShieldCheck,
+  BarChart4,
+  Zap,
+  SearchCheck,
+  Github,
+  Globe2,
+  Home,
+  Flame,
+  Bot,
+  NotebookIcon,
+  Laugh,
+  Terminal
+} from "lucide-react";
+
+
 export const MCP_OPTIONS = [
-  { value: "context", label: "🤔 Project Context" },
-  { value: "computer", label: "💻 Compute" },
-  { value: "python", label: "🐍 PyRun" },
-  { value: "sast", label: "🛡️ Bandit" },
-  { value: "visualization", label: "📊 Visualize" },
-  { value: "quick", label: "⚡ Lightning" },
-  { value: "code_analysis", label: "🔍 Deep Analysis" },
-  { value: "github", label: "🌐 GitHub" },
-  { value: "web", label: "🕸️ Web" },
-  { value: "internal", label: "🏠 Internal Resources" },
-  { value: "stack", label: "🔥 StackOverflow" },
-  { value: "auto", label: "🤖 Auto Detect (Agentic)" },
-]
+  { value: "context", label: "Project Context", icon: Brain, color: "text-blue-300" },
+  { value: "computer", label: "Compute", icon: Monitor, color: "text-blue-600" },
+  { value: "python", label: "PyRun", icon: FileCode2, color: "text-green-600" },
+  { value: "sast", label: "Bandit", icon: ShieldCheck, color: "text-red-600" },
+  { value: "visualization", label: "Visualize", icon: BarChart4, color: "text-pink-600" },
+  { value: "quick", label: "Lightning", icon: Zap, color: "text-yellow-500" },
+  { value: "code_analysis", label: "Deep Analysis", icon: SearchCheck, color: "text-cyan-500" },
+  { value: "github", label: "GitHub", icon: Github, color: "text-gray-400" },
+  { value: "web", label: "Web", icon: Globe2, color: "text-blue-500" },
+  { value: "internal", label: "Internal Resources", icon: Home, color: "text-orange-500" },
+  { value: "stack", label: "StackOverflow", icon: Flame, color: "text-red-300" },
+  { value: "node", label: "JsRunner", icon: NotebookIcon, color: "text-green-600" },
+  { value: "reddit", label: "Reddit", icon: Laugh, color: "text-red-600" },
+  { value: "bash", label: "Bash", icon: Terminal, color: "text-blue-600" },
+  { value: "auto", label: "Auto Detect", icon: Bot, color: "text-purple-400" },
+];
+
 
 export const FREE_MODELS = [
   "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free",

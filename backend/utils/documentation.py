@@ -49,7 +49,6 @@ async def add_documentation(
             try:
                 links = json.loads(documentation_links)
                 if not isinstance(links, list):
-                    print(links) 
                     raise ValueError("documentation_links must be a list of URLs.")
                 for link in links:
                     try:

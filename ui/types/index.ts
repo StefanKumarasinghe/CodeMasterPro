@@ -19,6 +19,14 @@ export interface Preferences {
   }
 }
 
+export interface Service {
+  id: string
+  name: string
+  description: string
+  icon: React.FC<React.SVGProps<SVGSVGElement>>
+  link: string
+}
+
 export interface CodeBlock {
   language: string
   code: string

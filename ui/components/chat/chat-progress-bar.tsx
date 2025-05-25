@@ -102,7 +102,7 @@ export function ChatProgressBar({ messageCount, onClearMemory }: ChatProgressBar
                 duration: 0.2,
               },
             }}
-            className="mt-3 rounded-md border border-amber-400/40 bg-amber-100 p-3"
+            className="mt-3 rounded-lg border border-amber-400/40 bg-amber-100 p-3"
           >
             <div className="flex items-start gap-3">
               <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
@@ -116,7 +116,7 @@ export function ChatProgressBar({ messageCount, onClearMemory }: ChatProgressBar
                 <Button
                   variant="outline"
                   size="sm"
-                  className="text-amber-600 border-amber-400 hover:bg-amber-200/30 h-7 px-2 text-xs"
+                  className="text-amber-600 border-amber-400 h-7 px-2 text-xs"
                   onClick={handleClearMemory}
                 >
                   <Trash2 className="w-3 h-3 mr-1" />
@@ -125,7 +125,7 @@ export function ChatProgressBar({ messageCount, onClearMemory }: ChatProgressBar
                 <Button
                   variant="outline"
                   size="sm"
-                  className="text-gray-200 border-gray-400 hover:bg-gray-200/30 h-7 px-2 text-xs"
+                  className="dark:text-gray-200 text-black border-gray-400  h-7 px-2 text-xs"
                   onClick={handleHide}
                 >
                   <X className="w-3 h-3 mr-1" />

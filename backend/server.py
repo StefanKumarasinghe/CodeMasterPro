@@ -35,10 +35,7 @@ from utils.documentation import add_documentation, get_documentation, delete_doc
 from sse_starlette.sse import EventSourceResponse
 from contextlib import asynccontextmanager
 from utils.env_change import get_api_key, save_api_key
-from utils.autocomplete import get_code_completion
-from Model.CompletionRequest import CompletionRequest
-from Model.CompletionResponse import CompletionResponse
-from utils.context import CODESPACE_DIR, upload_project, clear_project, get_project_status, index_status, reindex_project, clone_personal_github_repo, get_project_files_and_folders, get_content_of_file
+from utils.context import CODESPACE_DIR, upload_project, clear_project, get_project_status, index_status, reindex_project, clone_personal_github_repo, get_project_files_and_folders, get_content_of_file, upload_folder
 from utils.github import delete_all_cloned_repos, list_cloned_repos, delete_cloned_repo, reindex_all_github_projects
 from pydantic import BaseModel
 import time
@@ -51,7 +48,6 @@ task_manager = TaskManager()
 memory_manager = ChatMemoryManager(gemini)
 CODESPACE_DIR.mkdir(exist_ok=True)
 
-# Add a new model for JavaScript code testing
 class JavaScriptTestRequest(BaseModel):
     code: str
     test_code: Optional[str] = None
@@ -311,14 +307,6 @@ async def save_api_keys(request: Request, data: ApiKeyData):
     except Exception as e:
         gemini.logger.error(f"Error in save_api_keys: {e}")
         raise HTTPException(status_code=500, detail="Failed to save API key.")
-    
-@app.post("/complete", response_model=CompletionResponse)
-async def get_code_completion_endpoint(request: CompletionRequest):
-    try:
-        return await get_code_completion(request)
-    except Exception as e:
-        gemini.logger.error(f"Error in get_code_completion: {e}")
-        raise HTTPException(status_code=500, detail="Failed to get code completion.")   
     
 @app.post("/upload_project/")
 @limiter.limit("5/minute")

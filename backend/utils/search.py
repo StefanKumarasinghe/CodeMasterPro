@@ -202,8 +202,7 @@ def extract_all_articles(input) -> Dict[str, Dict[str, Any]]:
     results = {"documentation": {}, "example": {}}
     doc_urls = input.documentation
     ex_urls = input.example
-    
-    print(doc_urls, ex_urls)
+
 
     if not doc_urls and not ex_urls:
         return results
@@ -238,7 +237,8 @@ def extract_all_articles(input) -> Dict[str, Dict[str, Any]]:
             except Exception as e:
                 gemini.logger.error(f"Task result processing failed: {str(e)}")
     
-    return results
+    return results 
+
 
 def search_and_extract(query: str, max_results: int = 5) -> Dict[str, Any]:
     search_results = asyncio.run(brave_search(query, count=max_results * 2))
@@ -247,6 +247,7 @@ def search_and_extract(query: str, max_results: int = 5) -> Dict[str, Any]:
         return {"error": "Search returned no results", "query": query}
     
     urls = [result.url for result in search_results[:max_results]]
+
     input_json = {"documentation": urls}
     
     return extract_all_articles(input_json)

@@ -13,6 +13,7 @@ from ai.model_switcher import (
     user_behavior_chain,
     validation_chain,
     reasoning_chain,
+    enforce_rules_chain
 )
 from config import tars as gemini
 from Model.MessageBody import MessageRequest
@@ -20,9 +21,8 @@ from Prompts.prompts import get_format_rules
 from utils import deep_think as deep_think
 from utils.invoke_retry import invoke_with_retry
 from utils.parser import process_reasoning_response
-from utils.tools import handle_tool_selector
+from utils.tools import handle_tool_selector, tool_results
 from utils.updates import set_update
-
 
 VALID_MCP_TYPES = {
     "auto",
@@ -37,7 +37,11 @@ VALID_MCP_TYPES = {
     "internal",
     "stack",
     "context",
+    "reddit",
+    "node",
+    "bash"
 }
+
 VALID_OUTPUT_FORMATS = {"codeonly", "explanationonly", "codeandexplanation"}
 VALID_PROVIDERS = {"gemini", "chatgpt", "claude"}
 VALID_MODELS = {"fast", "advanced", "pro", "quick-think"}
@@ -53,12 +57,9 @@ _processing_lock = asyncio.Lock()
 memory_manager = ChatMemoryManager(gemini)
 
 def is_similar(text1: str, text2: str, threshold: float = 0.7) -> bool:
-    """Checks if two texts are similar based on a similarity ratio."""
     return SequenceMatcher(None, text1.strip(), text2.strip()).ratio() >= threshold
 
-
 async def validate_request(payload: Dict[str, Any]) -> Tuple[Optional[MessageRequest], Optional[str]]:
-    """Validates the request payload against the MessageRequest model and other constraints."""
     try:
         if "pinnedFiles" in payload:
             gemini.logger.info(
@@ -115,7 +116,7 @@ async def validate_request(payload: Dict[str, Any]) -> Tuple[Optional[MessageReq
                 f"Invalid model type. Must be one of: {', '.join(VALID_MODELS)}",
             )
 
-        # Length validations based on the provider
+        
         message_length = len(msg.message)
         provider = msg.providerName.lower().strip()
 
@@ -135,7 +136,7 @@ async def validate_request(payload: Dict[str, Any]) -> Tuple[Optional[MessageReq
                 "Gemini models require a maximum message length of 100000 characters for better results.",
             )
 
-        # Process pinned files
+        
         if hasattr(msg, "pinnedFiles") and msg.pinnedFiles:
             gemini.logger.info(f"Found pinnedFiles after validation: {msg.pinnedFiles}")
 
@@ -239,9 +240,6 @@ async def process_iteration(
     history: list,
     recent_messages: list,
     resources: Dict[str, Any],
-    personal_info: str,
-    custom_prompt: str,
-    format_rules: str,
     best_answer: str,
     user_behavior_content: str,
     model_answer_from_reasoning: str,
@@ -250,9 +248,11 @@ async def process_iteration(
     feedback: str,
     improvements: str,
     quick_think: bool,
+    msg: MessageRequest,
+    mem: Any,
+    request: Request,
 ) -> Tuple[Optional[str], Optional[str], Optional[int], str, str, str, str, bool]:
     iteration_start_time = asyncio.get_event_loop().time()
-
     try:
         iter_tasks = {}
         iter_tasks["draft"] = invoke_with_retry(
@@ -262,9 +262,6 @@ async def process_iteration(
                 "query": message_query,
                 "past_messages": recent_messages,
                 "resources": resources,
-                "personalInfo": personal_info,
-                "customPrompt": custom_prompt,
-                "format_rules": format_rules,
                 "current_best_answer": best_answer,
                 "incentive": user_behavior_content,
                 "model_answer": model_answer_from_reasoning,
@@ -323,9 +320,6 @@ async def process_iteration(
                     {
                         "draft": current_draft,
                         "query": message_query,
-                        "personalInfo": personal_info,
-                        "format_rules": format_rules,
-                        "customPrompt": custom_prompt,
                         "history": history,
                     },
                 )
@@ -367,6 +361,24 @@ async def process_iteration(
                 current_val_score = int(val_resp.score)
                 feedback = val_resp.feedback
                 improvements = val_resp.improvements
+                tool_calls = val_resp.tool_calls
+
+                if model_type == "advanced":
+
+                    if tool_calls:
+                        set_update(f"Tool calls: {tool_calls}")
+
+                    tools_response = await tool_results(
+                        msg,
+                        tool_calls,
+                        current_refined,
+                        recent_messages,
+                        mem,
+                        request,
+                    )
+
+                    if tools_response.get("results"):
+                        resources.context = tools_response.get("results")
 
                 rl_agent = getattr(gemini, "rl_agent", None)
                 action = rl_agent.select_action() if rl_agent else "accept"
@@ -438,45 +450,47 @@ async def process_message(request: Request) -> Dict[str, Any]:
 
     start_time = asyncio.get_event_loop().time()
 
+    try:
+        payload = await request.json()
+        gemini.logger.info(f"Request payload keys: {payload.keys()}")
+        if "pinnedFiles" in payload:
+            gemini.logger.info(
+                f"Found pinnedFiles in payload: {payload['pinnedFiles']}"
+            )
+    except json.JSONDecodeError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid JSON: {e}"
+        )
+    
+
     if _processing_lock.locked():
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Processing already in progress.",
         )
+    
+    msg, error = await validate_request(payload)
+    
+    if error:
+        return {"result": error, "chatId": payload.get("chatId", "")}
 
-    async with _processing_lock:
-        try:
-            try:
-                payload = await request.json()
-                gemini.logger.info(f"Request payload keys: {payload.keys()}")
-                if "pinnedFiles" in payload:
-                    gemini.logger.info(
-                        f"Found pinnedFiles in payload: {payload['pinnedFiles']}"
-                    )
-            except json.JSONDecodeError as e:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid JSON: {e}"
-                )
+    if hasattr(msg, "pinnedFiles"):
+        gemini.logger.info(f"After validation, msg has pinnedFiles: {msg.pinnedFiles}")
 
-            msg, error = await validate_request(payload)
-            if error:
-                return {"result": error, "chatId": payload.get("chatId", "")}
+    model_config = await setup_model_config(msg.modelType.lower().strip())
 
-            if hasattr(msg, "pinnedFiles"):
-                gemini.logger.info(f"After validation, msg has pinnedFiles: {msg.pinnedFiles}")
+    set_update(msg.message[:200])
 
-            model_config = await setup_model_config(msg.modelType.lower().strip())
+    mem, history, recent_messages, last_message, has_history = (
+        await get_memory_data(msg.chatId)
+    )
 
-            set_update(msg.message[:200])
+    deep_think_world = (
+        deep_think.get_deep_thinking(msg.chatId) if has_history else None
+    )
 
-            mem, history, recent_messages, last_message, has_history = (
-                await get_memory_data(msg.chatId)
-            )
-            deep_think_world = (
-                deep_think.get_deep_thinking(msg.chatId) if has_history else None
-            )
-
-            tool_result = await handle_tool_selector(
+    
+    tool_result = await handle_tool_selector(
                 msg.mcp.lower() if msg.mcp else DEFAULT_MCP_TYPE,
                 msg,
                 history,
@@ -486,37 +500,46 @@ async def process_message(request: Request) -> Dict[str, Any]:
                 mem,
             )
 
-            if (
-                tool_result.get("result") is not None
-                and not tool_result.get("continue", False)
-            ):
-                if tool_result.get("tooling") == "visualization":
-                    return {
-                        "result": tool_result["result"],
-                        "chatId": msg.chatId,
-                        "image_url": tool_result.get("image_url"),
-                    }
-                else:
-                    return {"result": tool_result["result"], "chatId": msg.chatId}
-
-            tool_selector = tool_result.get("tooling")
-
-            resources = {
-                "stackoverflow": tool_result.get("result")
-                if tool_selector == "stack"
-                else None,
-                "internal": tool_result.get("result")
-                if tool_selector == "internal"
-                else None,
-                "web": tool_result.get("result") if tool_selector == "web" else None,
-                "github": tool_result.get("result")
-                if tool_selector == "github"
-                else None,
-                "context": tool_result.get("result")
-                if tool_selector == "context"
-                else None,
+    if (
+        tool_result.get("result") is not None
+        and not tool_result.get("continue", False)
+    ):
+        if tool_result.get("tooling") == "visualization":
+            return {
+                "result": tool_result["result"],
+                "chatId": msg.chatId,
+                "image_url": tool_result.get("image_url"),
             }
+        else:
+            return {"result": tool_result["result"], "chatId": msg.chatId}
 
+    tool_selector = tool_result.get("tooling")
+
+    resources = {
+        "stackoverflow": tool_result.get("result")
+        if tool_selector == "stack"
+        else None,
+        "internal": tool_result.get("result")
+        if tool_selector == "internal"
+        else None,
+        "web": tool_result.get("result") if tool_selector == "web" else None,
+        "github": tool_result.get("result")
+        if tool_selector == "github"
+        else None,
+        "context": tool_result.get("result")
+        if tool_selector == "context"
+        else None,
+        "reddit": tool_result.get("result")
+        if tool_selector == "reddit"
+        else None,
+        "node": tool_result.get("result")
+        if tool_selector == "node"
+        else None,
+    }
+    
+
+    async with _processing_lock:
+        try:
             tasks = {}
 
             if msg.modelType.lower().strip() != "fast":
@@ -565,6 +588,7 @@ async def process_message(request: Request) -> Dict[str, Any]:
                 msg.outputFormat.lower() if msg.outputFormat else ""
             )
 
+
             for i in range(model_config["retry_chain"]):
                 (
                     current_refined,
@@ -582,9 +606,6 @@ async def process_message(request: Request) -> Dict[str, Any]:
                     history,
                     recent_messages,
                     resources,
-                    msg.personalInfo,
-                    msg.customPrompt,
-                    format_rules,
                     best_answer,
                     user_behavior_content,
                     model_answer_from_reasoning,
@@ -593,6 +614,9 @@ async def process_message(request: Request) -> Dict[str, Any]:
                     feedback,
                     improvements,
                     model_config["quick_think"],
+                    msg,
+                    mem,
+                    request,
                 )
 
                 if not current_refined:
@@ -644,6 +668,24 @@ async def process_message(request: Request) -> Dict[str, Any]:
             gemini.logger.info(
                 f"Processing finished for chat {msg.chatId} in {total_time_taken:.2f} seconds"
             )
+
+            final_answer = await invoke_with_retry(
+                enforce_rules_chain(
+                    model_type=msg.modelType.lower().strip(),
+                    provider_type=msg.providerName.lower().strip()
+                ),
+                {
+                    "result": final_answer,
+                    "query": msg.message,
+                    "format_rules": format_rules,
+                    "customPrompt": msg.customPrompt,
+                    "personalInfo": msg.personalInfo,
+                    "history": history,
+                }
+            )
+
+            final_answer = final_answer.content.strip()
+
 
             return {"result": final_answer, "chatId": msg.chatId}
 

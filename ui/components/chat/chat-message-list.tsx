@@ -13,7 +13,6 @@ import { ChatProgressBar } from "./chat-progress-bar"
 import { useInView } from "react-intersection-observer"
 import { API_ENDPOINT } from "@/config/constants"
 import type { Message } from "@/types"
-import { ProgressIndicator } from "@/components/progress-indicator"
 
 const LOADING_MESSAGES = [
   "CodeMasterPro is thinking...",
@@ -285,13 +284,12 @@ export function ChatMessageList({
   return (
     <div
       ref={messageListRef}
-      className={cn("flex flex-col gap-5 overflow-y-auto flex-grow p-3 chat-message-list")}
+      className={cn("flex flex-col gap-5 h-[80vh] md:h-full overflow-y-auto flex-grow w-screen md:w-full scrollbar-hide chat-message-list")}
       style={{
         transition: "width 0.3s ease-in-out, margin-right 0.3s ease-in-out",
         ...(editorVisible
           ? {
-              width: `calc(100% - ${Math.min(50, Math.max(0, editorPosition.width - 200))}px)`,
-              marginRight: `${Math.min(50, Math.max(0, editorPosition.width - 300))}px`,
+              width: `calc(100% - ${Math.min(0, Math.max(0, editorPosition.width))}px)`,
             }
           : {}),
       }}
@@ -303,9 +301,7 @@ export function ChatMessageList({
         />
       )}
       
-      {showBackgroundOperation && (
-  <ProgressIndicator className="fixed top-0 left-0 w-full z-50" />
-)}
+   
 
 
       <ScrollArea className="flex-1 px-2 sm:px-4 py-4" ref={scrollAreaRef}>
@@ -334,14 +330,14 @@ export function ChatMessageList({
           )}
 
           {isLoading && (
-            <div className="gap-1 text-muted-foreground  text-sm">
+            <div className="gap-1 text-muted-foreground  text-xs md:text-sm">
               <div className="flex items-center gap-2">
                 <div className="h-3 w-3 rounded-full bg-primary animate-pulse" />
                 <span>{loadingMessage}</span>
               </div>
               {updateMessage && (
-                <span className="p-3 my-2 bg-gray-100 dark:bg-gray-700 rounded-md items-center gap-2 text-muted-foreground max-w-[60%] inline-flex break-words">
-                  <span className="text-black dark:text-green-200 text-sm">{updateMessage}</span>
+                <span className="p-3 my-2 bg-gray-100 dark:bg-gray-700 rounded-md items-center gap-2 text-muted-foreground md:max-w-[60%] inline-flex break-words">
+                  <span className="text-black dark:text-green-200 text-xs md:text-sm">{updateMessage}</span>
                 </span>
               )}
             </div>

@@ -13,6 +13,7 @@ import { ResizableSidebar } from "@/components/sidebar"
 import { DocumentationModal } from "@/components/documentation/documentation-modal"
 import { ChatProvider } from "@/context/chat-context"
 import "./globals.css"
+import { Flame} from "lucide-react"
 
 
 declare global {
@@ -59,11 +60,11 @@ export default function Layout({ children }: { children: ReactNode }) {
         <ThemeProvider defaultTheme="dark" storageKey="code-assistant-theme" attribute="class">
           <ChatProvider>
             <SidebarProvider defaultWidth={280} defaultFontScale={1.0}>
-              <div className="flex h-screen bg-background overflow-hidden">
+              <div className="md:flex h-screen bg-background">
                 <Sidebar side="left" resizable={true}>
                   <SidebarHeader className="border-b">
                     <div className="flex items-center justify-between p-3">
-                      <div className="text-md">️‍🔥 CodeMasterPro</div>
+                      <div className="text-md items-center">️<Flame className="w-8 h-8 text-red-500  inline " /> CodeMasterPro</div>
                     </div>
                   </SidebarHeader>
                   <SidebarContent>

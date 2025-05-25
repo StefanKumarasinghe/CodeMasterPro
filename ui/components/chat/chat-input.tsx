@@ -532,22 +532,29 @@ export function ChatInput() {
 
   return (
     <TooltipProvider> 
-      <div className="p-2 sm:p-4 border-t relative">
+      <div className="p-2 sm:p-4 border-t fixed bottom-0 left-0 right-0 bg-background md:relative ">
         <div className="flex flex-col gap-1 mx-auto">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
             <div className="flex flex-wrap items-center gap-1">
               <Select value={mcp} onValueChange={setMcp}>
-                <SelectTrigger className="w-[60px] h-8">
-                  <SelectValue placeholder="✨ MCP ✨" />
+                <SelectTrigger className="w-auto min-w-[3rem] h-8">
+                  {(() => {
+                    const selected = MCP_OPTIONS.find((opt) => opt.value === mcp)
+                    return selected ? <selected.icon className={`w-4 h-4 mx-2 ${selected.color}`} /> : <SelectValue placeholder="✨ MCP ✨" />
+                  })()}
                 </SelectTrigger>
                 <SelectContent>
-                  {MCP_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
+                  {MCP_OPTIONS.map(({ value, label, icon: Icon, color }) => (
+                    <SelectItem key={value} value={value}>
+                      <div className="flex items-center gap-2">
+                        <Icon className={`w-4 h-4 ${color}`} />
+                        <span>{label}</span>
+                      </div>
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -556,8 +563,7 @@ export function ChatInput() {
                     className="h-8 px-2 text-xs gap-1"
                     onClick={() => setShowTemplates(!showTemplates)}
                   >
-                    <Code className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Snippets</span>
+                    <Code className="h-3.5 w-3.5 dark:text-blue-300 text-blue-500" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
@@ -569,11 +575,10 @@ export function ChatInput() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-8 px-2 text-xs gap-1"
+                    className="h-8 px-2 text-xs text-red-500 dark:text-red-300 gap-1"
                     onClick={() => setShowProjectModal(true)}
                   >
                     <Github className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Project</span>
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
@@ -581,13 +586,13 @@ export function ChatInput() {
                 </TooltipContent>
               </Tooltip>
             </div>
-            <div className="flex items-center gap-2 ">
+            <div className="flex items-center gap-2">
               {charCount > 0 && (
                 <Badge
                   variant={charCount > 50000 ? "destructive" : charCount > 25000 ? "secondary" : "outline"} 
                   className={cn(
-                    "h-6 px-2 text-xs transition-colors",
-                    charCount > 25000 && charCount <= 50000 && "bg-amber-500/20 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20",
+                    "h-6 px-2 text-xs transition-colors hidden md:block",
+                    charCount > 25000 && charCount <= 50000 && "bg-amber-500/20  text-amber-700 dark:text-amber-400 hover:bg-amber-500/20",
                   )}
                 >
                   {charCount} / 100000
@@ -724,7 +729,7 @@ export function ChatInput() {
               <Textarea
                 ref={textareaRef}
                 placeholder={`How can I help you to code today`}
-                className="min-h-[44px] max-h-[200px] flex-1 resize-none overflow-y-auto" 
+                className="min-h-[22px] max-h-[44px] md:min-h-[44px] md:max-h-[200px] flex-1 resize-none overflow-y-auto" 
                 value={messageInput}
                 onChange={handleInputChange}
                 autoFocus={true}

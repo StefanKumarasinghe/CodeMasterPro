@@ -44,34 +44,15 @@ async def search_stackoverflow(query: str, sort: str = 'votes') -> List[Dict[str
         return []
 
 async def rank_with_gemini(questions: List[Dict[str, Any]], user_query: str) -> List[Dict[str, Any]]:
-    if not questions:
-        return []
-        
-    question_texts = "\n".join([
-        f"{i+1}. {q['title']} (ID: {q['question_id']})" 
-        for i, q in enumerate(questions)
-    ])
-    
-    prompt_input = {
-        "query": user_query,
-        "questions": question_texts
-    }
-    
     try:
-        result = await invoke_with_retry(
-            rank_chain(
-                model_type=gemini.modelType, 
-                provider_type=gemini.providerName
-            ), 
-            prompt_input
-        )
+        if not questions:
+            return []
         
-        ranked_questions = result.output.ranked_questions
-        
-        return [questions[i] for i in ranked_questions if i < len(questions)]
+        return questions
+
     except Exception as e:
         gemini.logger.error(f"[ERROR] Ranking failed: {e}")
-        return questions[:5]
+        return questions
 
 async def get_top_answer(question_id: int) -> Optional[Dict[str, Any]]:
     try:

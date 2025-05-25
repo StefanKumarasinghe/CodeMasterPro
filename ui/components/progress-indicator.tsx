@@ -105,12 +105,12 @@ export function ProgressIndicator({ className }: { className?: string }) {
   if (!show) return null;
 
   return (
-    <div className={cn("fixed top-0 left-0 w-full z-50", className)}>
+    <div className={cn("absolute top-0 w-full z-50", className)}>
       <div className="progress-indicator-chat" />
       {operationText && (
         <div className="flex justify-center w-full mb-4">
-          <div className="px-3 py-1 bg-green-300 dark:bg-green-900/30 text-green-800 dark:text-green-300 text-md rounded-md shadow-md animate-pulse">
-            {operationText} . Please wait without doing anything else.
+          <div className="px-3 py-1 bg-green-300 dark:bg-green-900/30 my-2 text-green-800 dark:text-green-300 text-xs rounded-md shadow-md ">
+            {operationText}
           </div>
         </div>
       )}

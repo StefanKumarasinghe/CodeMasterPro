@@ -44,15 +44,15 @@ PROVIDER_DEFAULTS = {
 MODEL_NAMES = {
     "gemini": {
         "lite": "gemini-2.0-flash-lite",
-        "super-lite": "gemini-2.0-flash-lite",
+        "super-lite": "gemma-3n-e4b-it",
         "fast": "gemini-2.0-flash",
         "summary": "gemini-2.0-flash-lite",
-        "code": "gemini-2.5-flash-preview-04-17",
+        "code": "gemini-2.5-flash-preview-05-20",
         "thinking": "gemini-2.5-flash-preview-04-17",
         "suggest": "gemini-2.0-flash-lite",
         "pro": "gemini-2.5-pro-exp-03-25",
-        "advanced": "gemini-2.5-flash-preview-04-17",
-        "quick-think": "gemini-2.5-flash-preview-04-17",
+        "advanced": "gemini-2.5-flash-preview-05-20",
+        "quick-think": "gemini-2.5-flash-preview-05-20",
     },
     "chatgpt": {
         "lite": "gpt-3.5-turbo",

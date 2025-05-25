@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { useChat } from "@/context/chat-context"
 import { Textarea } from "@/components/ui/textarea"
+import { showProgressIndicator, hideProgressIndicator, isOperationInProgress } from "@/components/progress-indicator"
 
 interface PythonShellProps {
   code: string
@@ -199,6 +200,11 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
       setOutputHistory((prev) => [...prev, { type: "system", content: "Error: No active Python session." }])
       return
     }
+    if (isOperationInProgress()) {
+      toast.warning("Please wait for the current operation to complete.")
+      return
+    }
+    showProgressIndicator("Executing a python code")
     startSessionTimer()
     setIsRunning(true)
     setOutputHistory((prev) => [...prev, { type: "command", content: "Running code..." }])
@@ -238,6 +244,7 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
       toast.error("Failed to run code")
     } finally {
       setIsRunning(false)
+      hideProgressIndicator()
       setShowCorrectedCode(false)
     }
   }
@@ -389,7 +396,7 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
       ref={shellRef}
       className={cn(
         "border-l border-zinc-700 shadow-xl flex flex-col bg-zinc-900 transition-all duration-300",
-        isOpen ? "fixed z-50 top-0 right-0 h-full w-[400px] min-w-[350px]" : "hidden",
+        isOpen ? "fixed z-50 top-0 right-0 h-full w-full md:w-[400px] min-w-[350px]" : "hidden",
       )}
     >
       <div className="flex items-center justify-between p-2 border-b border-zinc-700 bg-zinc-800">

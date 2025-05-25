@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { useEffect, useRef, useState, useCallback, memo, useMemo } from "react";
+import { useEffect, useRef, useState, useCallback, memo } from "react";
 import ReactMarkdown from "react-markdown";
 import { useTheme } from "next-themes";
 import remarkGfm from "remark-gfm";
@@ -29,12 +29,6 @@ export interface SavedSnippet {
   name: string;
   description: string;
   code: string;
-}
-
-interface CodeBlockInfo {
-  code: string;
-  language: string;
-  index: number;
 }
 
 interface MessageContentProps {
@@ -81,7 +75,7 @@ const PreformattedCode = ({
         showLineNumbers={false}
         wrapLines={true}
         PreTag="div"
-        className="overflow-x-auto m-0 max-w-prose scrollbar-hide"
+        className="overflow-x-auto m-0 text-xs md:text-base max-w-prose scrollbar-hide"
         customStyle={{
           margin: 0,
           border: darkMode ? "1px solid #374151" : "1px solid rgb(105, 105, 105)",
@@ -93,7 +87,7 @@ const PreformattedCode = ({
           maxWidth: "100%",
         }}
       >
-        {code.trim()}
+        {code?.trim()}
       </SyntaxHighlighter>
     );
   }
@@ -148,104 +142,21 @@ const isHtmlCode = (code: string, lang: string): boolean => {
 };
 
 const calculateFontSize = () => {
-  const windowWidth = typeof window !== 'undefined' ? window.innerWidth : 0;
-  if (windowWidth < 768) {
-    return "14px";
-  }
   return "16px";
 };
 
 const TextBlock = memo(({ content, imageData }: TextBlockProps) => {
   const [hasError, setHasError] = useState(false);
   const textBlockRef = useRef<HTMLDivElement>(null);
-  const [containerWidth, setContainerWidth] = useState(0);
 
   useEffect(() => {
     setHasError(false);
   }, [content]);
 
-  useEffect(() => {
-    const element = textBlockRef.current;
-    if (!element) return;
-  
-    const scrollViewport = element.closest('[data-radix-scroll-area-viewport]');
-    const getBestWidth = () => {
-      if (scrollViewport instanceof HTMLElement && scrollViewport.offsetWidth > 0) {
-        return Math.max(scrollViewport.offsetWidth , 300);
-      }
-  
-      const fallback =
-        element.closest('.message-container') ||
-        element.closest('.chat-message-list') ||
-        element.parentElement;
-  
-      if (fallback instanceof HTMLElement && fallback.offsetWidth > 0) {
-        return Math.max(fallback.offsetWidth , 300);
-      }
-  
-      let parent = element.parentElement;
-      let bestWidth = 0;
-      while (parent) {
-        if (parent instanceof HTMLElement && parent.offsetWidth > bestWidth) {
-          bestWidth = parent.offsetWidth;
-        }
-        parent = parent.parentElement;
-      }
-  
-      return Math.max(bestWidth , 300);
-    };
-  
-    const updateWidth = () => {
-      const newWidth = getBestWidth();
-      setContainerWidth(prev => {
-        if (Math.abs(newWidth - prev) > 10) return newWidth;
-        return prev;
-      });
-    };
-  
-    const debouncedUpdateWidth = () => {
-      clearTimeout(debouncedUpdateWidth.timeout);
-      debouncedUpdateWidth.timeout = setTimeout(updateWidth, 100);
-    };
-    debouncedUpdateWidth.timeout = null as unknown as NodeJS.Timeout;
-  
-    const resizeObserver = new ResizeObserver(debouncedUpdateWidth);
-    resizeObserver.observe(element);
-    if (scrollViewport) resizeObserver.observe(scrollViewport);
-  
-    window.addEventListener('resize', debouncedUpdateWidth);
-    window.addEventListener('sidebar-resize', debouncedUpdateWidth);
-    window.addEventListener('node-test-runner-state', debouncedUpdateWidth as EventListener);
-    window.addEventListener('code-editor-state', debouncedUpdateWidth as EventListener);
-  
-    updateWidth();
-  
-    return () => {
-      clearTimeout(debouncedUpdateWidth.timeout);
-      resizeObserver.disconnect();
-      window.removeEventListener('resize', debouncedUpdateWidth);
-      window.removeEventListener('sidebar-resize', debouncedUpdateWidth);
-      window.removeEventListener('node-test-runner-state', debouncedUpdateWidth as EventListener);
-      window.removeEventListener('code-editor-state', debouncedUpdateWidth as EventListener);
-    };
-  }, []); 
-
   const handleError = () => {
     setHasError(true);
   };
 
-  const getOptimalTextWidth = useMemo(() => {
-    if (containerWidth > 0) {
-      if (containerWidth < 500) {
-        return `${Math.min(containerWidth, 450)}px`;
-      } else if (containerWidth < 700) {
-        return `${Math.min(containerWidth, 650)}px`;
-      } else {
-        return `${Math.min(containerWidth, 800)}px`;
-      }
-    }
-    return "100%";
-  }, [containerWidth]);
 
   if (hasError) {
     return (
@@ -263,13 +174,13 @@ const TextBlock = memo(({ content, imageData }: TextBlockProps) => {
   return (
     <div 
       ref={textBlockRef}
-      className="w-full break-words bg-card rounded-md my-4 prose prose-zinc dark:prose-invert max-w-full overflow-hidden" 
+      className="w-full break-words  rounded-md my-4 prose prose-zinc dark:prose-invert max-w-full overflow-hidden" 
       style={{ 
         fontSize: calculateFontSize(),
         overflowWrap: "break-word",
         wordWrap: "break-word",
         wordBreak: "break-word",
-        maxWidth: getOptimalTextWidth,
+        maxWidth: "600px",
         width: "100%",
         transition: "max-width 0.3s ease-in-out"
       }}
@@ -286,19 +197,19 @@ const TextBlock = memo(({ content, imageData }: TextBlockProps) => {
         remarkPlugins={[remarkGfm]}
         components={{
           h1: ({ node, ...props }) => (
-            <h1 {...props} className="text-2xl font-bold mt-6 mb-4 max-w-full overflow-hidden break-words" />
+            <h1 {...props} className="text-lg md:text-2xl font-bold mt-6 mb-4 max-w-full overflow-hidden break-words" />
           ),
           h2: ({ node, ...props }) => (
-            <h2 {...props} className="text-xl font-bold mt-5 mb-3 max-w-full overflow-hidden dark:text-green-400 break-words" />
+            <h2 {...props} className="text-md md:text-xl font-bold mt-5 mb-3 max-w-full overflow-hidden dark:text-green-400 break-words" />
           ),
           h3: ({ node, ...props }) => (
-            <h3 {...props} className="text-lg font-bold mt-4 mb-2 max-w-full overflow-hidden  dark:text-green-400 break-words" />
+            <h3 {...props} className="text-md md:text-lg  font-bold mt-4 mb-2 max-w-full overflow-hidden  dark:text-green-400 break-words" />
           ),
           h4: ({ node, ...props }) => (
-            <h4 {...props} className="text-base dark:text-red-400 font-semibold mt-3 mb-2 max-w-full overflow-hidden break-words" />
+            <h4 {...props} className=" text-xs md:text-base dark:text-red-400 font-semibold mt-3 mb-2 max-w-full overflow-hidden break-words" />
           ),
           p: ({ node, ...props }) => (
-            <p {...props} className="my-2 mb-3 leading-relaxed break-words max-w-full overflow-hidden" />
+            <p {...props} className="my-2 mb-3 text-xs md:text-base leading-relaxed break-words max-w-full overflow-hidden" />
           ),
           ul: ({ node, ...props }) => (
             <ul {...props} className="list-disc pl-6 ml-4 my-3 max-w-full overflow-hidden" />
@@ -306,22 +217,31 @@ const TextBlock = memo(({ content, imageData }: TextBlockProps) => {
           ol: ({ node, ...props }) => (
             <ol {...props} className="list-decimal pl-6 ml-4 my-3 max-w-full overflow-hidden" />
           ),
-          li: ({ node, ...props }) => <li {...props} className="my-1 max-w-full overflow-hidden break-words" />,
+          li: ({ node, ...props }) => <li {...props} className="mb-3 max-w-full text-xs md:text-base overflow-hidden break-words" />,
           blockquote: ({ node, ...props }) => (
             <blockquote
               {...props}
-              className="border-l-4 border-primary/30 pl-4 italic my-3 text-muted-foreground"
+              className="border-l-4 text-xs md:text-base border-primary/30 pl-4 italic my-3 text-muted-foreground"
             />
           ),
           code({ node, className, children, ...props }) {
-            const isInlineCode = !className || !/language-(\w+)/.test(className);
+            const content = children?.toString() || '';
+            const parts = content.split(/(`[^`\s](?:.*?[^\s])?`)/g);
             return (
-              <code
-                className="bg-zinc-100 dark:bg-zinc-800 text-pink-600 dark:text-pink-400 px-1.5 py-0.5 rounded font-mono text-sm font-scale-sm"
-                {...props}
-              >
-                {children?.toString().trim()}
-              </code>
+              <span className="text-md" {...props}>
+                {parts.map((part, i) =>
+                  /^`[^`\s](?:.*?[^\s])?`$/.test(part) ? (
+                    <code
+                      key={i}
+                      className="bg-zinc-100 dark:bg-zinc-800 text-xs md:text-base text-pink-600 dark:text-pink-400 px-1.5 py-0.5 rounded font-mono  font-scale-sm"
+                    >
+                      {part.slice(1, -1)}
+                    </code>
+                  ) : (
+                    part
+                  )
+                )}
+              </span>
             );
           },
           a: ({ node, ...props }) => (
@@ -329,7 +249,7 @@ const TextBlock = memo(({ content, imageData }: TextBlockProps) => {
               {...props}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-primary hover:underline inline-flex items-center gap-1"
+              className="text-primary hover:underline text-xs md:text-base inline-flex items-center gap-1"
             >
               {props.children}
               <ExternalLink className="h-3 w-3 inline" />
@@ -339,7 +259,7 @@ const TextBlock = memo(({ content, imageData }: TextBlockProps) => {
             <div className="overflow-x-auto my-4">
               <table
                 {...props}
-                className="border-collapse table-auto w-full text-sm"
+                className="border-collapse table-auto w-full text-xs md:text-base"
               />
             </div>
           ),
@@ -377,6 +297,9 @@ const TextBlock = memo(({ content, imageData }: TextBlockProps) => {
           ),
           mark: ({ node, ...props }) => (
             <mark {...props} className="bg-yellow-200" />
+          ),
+          pre: ({ node, ...props }) => (
+            <p {...props} className="my-2 mb-3 ml-4 text-xs md:text-base leading-relaxed break-words max-w-full overflow-hidden" />
           ),
         }}
       >
@@ -419,101 +342,7 @@ const CodeBlock = memo(
     const codeBlockRef = useRef<HTMLDivElement>(null);
     const [blockWidth, setBlockWidth] = useState<number | null>(null);
     const [containerWidth, setContainerWidth] = useState(0);
-    
-    useEffect(() => {
-      if (codeBlockRef.current) {
-        let parentElement = codeBlockRef.current.parentElement;
-        
-        while (parentElement) {
-          if (parentElement.closest('[data-radix-scroll-area-viewport]') || 
-              parentElement.closest('.chat-message-list')) {
-            if (parentElement instanceof HTMLElement) {
-              const containerWidth = parentElement.offsetWidth;
-              setContainerWidth(Math.max(containerWidth - 48, 300));
-              break;
-            }
-          }
-          
-          if (parentElement.classList.contains('message-container') || 
-              parentElement.classList.contains('prose') || 
-              (parentElement instanceof HTMLElement && parentElement.offsetWidth > 0)) {
-            if (parentElement instanceof HTMLElement) {
-              const containerWidth = parentElement.offsetWidth;
-              setContainerWidth(Math.max(containerWidth - 32, 300));
-              break;
-            }
-          }
-          parentElement = parentElement.parentElement;
-        }
-        
-        const updateWidth = () => {
-          if (!codeBlockRef.current) return;
-          
-          let parent = codeBlockRef.current.closest('[data-radix-scroll-area-viewport]');
-          
-          if (parent instanceof HTMLElement && parent.offsetWidth > 100) {
-            const newWidth = Math.max(parent.offsetWidth - 48, 300);
-            if (Math.abs(newWidth - containerWidth) > 10) {
-              setContainerWidth(newWidth);
-            }
-            return;
-          }
-          
-          parent = codeBlockRef.current.parentElement;
-          while (parent) {
-            if (parent instanceof HTMLElement && parent.offsetWidth > 100) {
-              const newWidth = Math.max(parent.offsetWidth -48, 300); 
-              if (Math.abs(newWidth - containerWidth) > 10) {
-                setContainerWidth(newWidth);
-              }
-              break;
-            }
-            parent = parent.parentElement;
-          }
-          
-          if (codeBlockRef.current) {
-            setBlockWidth(codeBlockRef.current.offsetWidth);
-          }
-        };
-        
-        let resizeTimeout: NodeJS.Timeout;
-        const debouncedUpdateWidth = () => {
-          clearTimeout(resizeTimeout);
-          resizeTimeout = setTimeout(updateWidth, 100);
-        };
-        
-        const resizeObserver = new ResizeObserver(() => {
-          debouncedUpdateWidth();
-        });
-
-        if (codeBlockRef.current) {
-          resizeObserver.observe(codeBlockRef.current);
-          
-          const parent = codeBlockRef.current.parentElement;
-          if (parent) {
-            resizeObserver.observe(parent);
-          }
-          
-          const scrollViewport = codeBlockRef.current.closest('[data-radix-scroll-area-viewport]');
-          if (scrollViewport) {
-            resizeObserver.observe(scrollViewport);
-          }
-        }
-        
-        window.addEventListener('sidebar-resize', debouncedUpdateWidth);
-        window.addEventListener('node-test-runner-state', debouncedUpdateWidth as EventListener);
-        window.addEventListener('code-editor-state', debouncedUpdateWidth as EventListener);
-        
-        return () => {
-          clearTimeout(resizeTimeout);
-          resizeObserver.disconnect();
-          window.removeEventListener('sidebar-resize', debouncedUpdateWidth);
-          window.removeEventListener('node-test-runner-state', debouncedUpdateWidth as EventListener);
-          window.removeEventListener('code-editor-state', debouncedUpdateWidth as EventListener);
-        }
-      }
-    }, [containerWidth]);
-
+  
     const { theme } = useTheme();
     const isSystemDark = typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches;
     const actualDarkMode = theme === "dark" || (theme === "system" && isSystemDark);
@@ -610,41 +439,26 @@ const CodeBlock = memo(
       }, 100);
     };
 
-    const getOptimalWidth = useMemo(() => {
-      if (containerWidth > 0) {
-        if (containerWidth < 500) {
-          return `${Math.min(containerWidth, 450)}px`;
-        } else if (containerWidth < 700) {
-          return `${Math.min(containerWidth, 600)}px`;
-        } else {
-          return `${Math.min(containerWidth, 800)}px`;
-        }
-      }
-      
-      return "min(100%, 600px)";
-    }, [containerWidth]);
 
     return (
       <div
         ref={codeBlockRef}
         className={cn(
-          "relative mb-0 mt-0 group shadow-md rounded-md",
+          "relative mb-0 mt-0 group shadow-md rounded-md  text-xs md:text-base",
           isInteractive &&
-            "hover:ring-1 hover:ring-primary/50 transition-all duration-200"
+            "hover:ring-1 hover:ring-primary/50 transition-all duration-200 md:w-[600px] w-[300px]"
         )}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         style={{
           fontSize: calculateCodeFontSize(),
           transition: "font-size 0.3s ease-in-out, max-width 0.3s ease-in-out",
-          maxWidth: getOptimalWidth,
-          width: "100%"
         }}
       >
         {isInteractive && (
           <div
             className={cn(
-              "bg-zinc-800/90 border-b border-zinc-700 p-1  transition-opacity duration-200",
+              "bg-zinc-800/90 border-b border-zinc-700 p-1 md:text-base text-xs transition-opacity duration-200",
               isHovered ? "opacity-100" : "opacity-0 "
             )}
           >
@@ -657,7 +471,7 @@ const CodeBlock = memo(
         )}
 
         <div className="bg-zinc-800  text-zinc-300 text-xs px-4 py-2 flex justify-between items-center font-mono overflow-x-auto scrollbar-hide">
-          <div className="flex bg-zinc-800 border-2 border-zinc-700  items-center gap-2">
+          <div className="flex bg-zinc-800 border-2 md:text-base text-xs border-zinc-700  items-center gap-2">
             {fileName ? (
               <span className="px-2 font-scale-sm">
                 {fileName} <span className="opacity-50 px-2">({lang})</span>
@@ -988,24 +802,9 @@ function MessageContent({
   const [copiedBlockIndex, setCopiedBlockIndex] = useState<number | null>(null);
 
   const calculateFontScale = useCallback(() => {
-    if (containerWidth) {
-      if (containerWidth < 400) return 0.85;
-      if (containerWidth < 600) return 0.9;
-      if (containerWidth < 800) return 0.95;
-      if (containerWidth < 1024) return 1.0;
-      return 1.05;
-    }
+    return 16
+  }, []);
 
-    return 1;
-  }, [containerWidth]);
-
-
-  const getOptimalContentWidth = useMemo(() => {
-    if (containerWidth > 0) {
-      return `${Math.min(containerWidth - 16, 850)}px`;
-    }
-    return "100%";
-  }, [containerWidth]);
 
   const handleCodeUpdate = (newCode: string, blockIndexToUpdate: number) => {
     const codeBlockRegex = /^(```(?:[\s\S]*?)```)/gm;
@@ -1033,7 +832,7 @@ function MessageContent({
       if (!selection || selection.isCollapsed) return;
 
       const selectedNode = selection.anchorNode?.parentElement;
-      const codeBlockElement = selectedNode?.closest("div[class*='react-syntax-highlighter'] pre, div > p[class*='bg-muted']");
+      const codeBlockElement = selectedNode?.closest("div[class*='react-syntax-highlighter'], div > p[class*='bg-muted']");
 
 
       if (codeBlockElement) {
@@ -1198,7 +997,7 @@ function MessageContent({
     if (!selectedText) return;
 
     const anchorNode = selection.anchorNode as Element;
-    const codeBlockElement = anchorNode?.closest?.("div[class*='react-syntax-highlighter'] pre, div > p[class*='bg-muted']");
+    const codeBlockElement = anchorNode?.closest?.("div[class*='react-syntax-highlighter'], div > p[class*='bg-muted']");
     if (codeBlockElement) return;
 
     if (isLikelyCode(selectedText)) {
@@ -1532,7 +1331,7 @@ function MessageContent({
       ref={textRef}
       className="w-full break-words overflow-hidden"
       style={{
-        maxWidth: getOptimalContentWidth,
+        maxWidth: "600px",
         width: "100%",
         transition: "font-size 0.3s ease-in-out, max-width 0.3s ease-in-out",
         fontSize: containerWidth ? `calc(${calculateFontScale()} * 1rem * var(--font-scale, 1))` : undefined

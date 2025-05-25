@@ -1059,18 +1059,6 @@ async def read_file_content(filename: str):
     
 
 async def upload_folder(request: Request, uploaded_files: List[UploadFile], folder_structure: str, background_tasks: BackgroundTasks = None):
-    """
-    Process and upload a folder structure with files directly.
-    
-    Args:
-        request: The FastAPI request object
-        uploaded_files: List of files uploaded through the form
-        folder_structure: JSON string containing the folder structure information
-        background_tasks: Optional background tasks runner
-        
-    Returns:
-        Dict with status message
-    """
     try:
         gemini.logger.info("Received folder upload request")
         
@@ -1081,25 +1069,27 @@ async def upload_folder(request: Request, uploaded_files: List[UploadFile], fold
         CODESPACE_DIR.mkdir(exist_ok=True)
         gemini.logger.info(f"Created codespace directory at {CODESPACE_DIR}")
         
-        # Parse the folder structure
         folder_data = json.loads(folder_structure)
+        gemini.logger.info(f"Parsed folder structure with {len(folder_data)} files")
         
-        # Process uploaded files according to the structure
-        for file_info in folder_data:
-            relative_path = file_info.get("path", "")
-            file_id = file_info.get("id", "")
-            
-            # Find the corresponding file in the uploaded files
-            file_obj = next((f for f in uploaded_files if f.filename == file_id), None)
-            if not file_obj:
-                gemini.logger.warning(f"No uploaded file found for id {file_id}")
+        file_map = {}
+        for i, file in enumerate(uploaded_files):
+            file_map[i] = file
+            gemini.logger.info(f"Mapped file {i}: {file.filename}")
+        
+        for i, file_info in enumerate(folder_data):
+            if i >= len(file_map):
+                gemini.logger.warning(f"No uploaded file found for index {i}")
                 continue
                 
-            # Create the target directory if it doesn't exist
+            file_obj = file_map[i]
+            relative_path = file_info.get("path", "")
+            
+            gemini.logger.info(f"Processing file {i}: {relative_path}")
+            
             target_dir = CODESPACE_DIR / os.path.dirname(relative_path)
             target_dir.mkdir(parents=True, exist_ok=True)
             
-            # Save the file
             target_path = CODESPACE_DIR / relative_path
             try:
                 contents = await file_obj.read()
@@ -1107,12 +1097,10 @@ async def upload_folder(request: Request, uploaded_files: List[UploadFile], fold
                     f.write(contents)
                 gemini.logger.info(f"Saved file to {target_path}")
                 
-                # Reset file pointer for potential reuse
                 await file_obj.seek(0)
             except Exception as e:
                 gemini.logger.error(f"Error saving file {relative_path}: {e}")
                 
-        # Build the index
         if background_tasks:
             gemini.logger.info("Triggering background index build")
             background_tasks.add_task(build_index, True)

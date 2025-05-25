@@ -5,6 +5,7 @@ from Model.ApiKeyData import ApiKeyData
 from Model.ApiKeyRequest import ApiKeyRequest
 import config.tars as gemini
 import os
+
 ENV_FILE_PATH = gemini.ENV_FILE_PATH
 
 async def get_api_key(data: ApiKeyRequest):

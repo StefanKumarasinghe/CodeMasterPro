@@ -12,10 +12,11 @@ import json
 import tempfile
 from typing import Dict, Any, AsyncGenerator
 from pathlib import Path
-
+from ai.model_switcher import node_reflection_chain
+import config.tars as gemini
+from utils.invoke_retry import invoke_with_retry
 CODESPACE_DIR = Path("codespace")
 
-# Global dictionary to store active processes and their output queues
 active_processes: Dict[str, Dict[str, Any]] = {}
 
 async def stream_output_async(process_id: str, stream, stream_type: str) -> None:
@@ -114,7 +115,6 @@ def run_app_and_test():
                 app_process.kill()
 
 async def run_node_app_with_streaming(process_id: str, directory: str = None, run_command: str = "start") -> Dict[str, Any]:
-    # Kill any existing process with the same ID
     if process_id in active_processes and active_processes[process_id]["process"]:
         try:
             active_processes[process_id]["process"].terminate()
@@ -125,7 +125,6 @@ async def run_node_app_with_streaming(process_id: str, directory: str = None, ru
             except:
                 pass
     
-    # Initialize process data
     active_processes[process_id] = {
         "process": None,
         "output_queue": asyncio.Queue(),
@@ -177,7 +176,6 @@ async def run_node_app_with_streaming(process_id: str, directory: str = None, ru
                 "error": "Invalid package.json file"
             }
             
-        # Run npm install if node_modules doesn't exist
         if not os.path.exists(os.path.join(working_dir, "node_modules")):
             await active_processes[process_id]["output_queue"].put({
                 "type": "command",
@@ -193,7 +191,6 @@ async def run_node_app_with_streaming(process_id: str, directory: str = None, ru
                 universal_newlines=False
             )
             
-            # Stream install output
             asyncio.create_task(stream_output_async(process_id, install_process.stdout, "stdout"))
             asyncio.create_task(stream_output_async(process_id, install_process.stderr, "stderr"))
             
@@ -211,7 +208,6 @@ async def run_node_app_with_streaming(process_id: str, directory: str = None, ru
                     "error": "Failed to install dependencies"
                 }
         
-        # Run the application
         await active_processes[process_id]["output_queue"].put({
             "type": "command",
             "content": f"Running 'npm run {run_command}'..."
@@ -228,11 +224,9 @@ async def run_node_app_with_streaming(process_id: str, directory: str = None, ru
         
         active_processes[process_id]["process"] = process
         
-        # Stream output in background tasks
         asyncio.create_task(stream_output_async(process_id, process.stdout, "stdout"))
         asyncio.create_task(stream_output_async(process_id, process.stderr, "stderr"))
         
-        # Monitor process completion in background
         asyncio.create_task(monitor_process_completion(process_id, process))
         
         return {
@@ -283,7 +277,6 @@ async def get_process_output(process_id: str) -> AsyncGenerator[Dict[str, str], 
         }
         return
     
-    # First yield any existing messages in the queue
     while not active_processes[process_id]["output_queue"].empty():
         message = await active_processes[process_id]["output_queue"].get()
         yield {
@@ -291,23 +284,19 @@ async def get_process_output(process_id: str) -> AsyncGenerator[Dict[str, str], 
             "data": json.dumps({"content": message["content"]})
         }
     
-    # Then continue yielding new messages as they arrive
     while active_processes[process_id]["is_running"]:
         try:
-            # Wait for a new message with timeout
             message = await asyncio.wait_for(active_processes[process_id]["output_queue"].get(), timeout=1.0)
             yield {
                 "event": message["type"],
                 "data": json.dumps({"content": message["content"]})
             }
         except asyncio.TimeoutError:
-            # No message received, yield a heartbeat
             yield {
                 "event": "heartbeat",
                 "data": json.dumps({"content": ""})
             }
     
-    # Process has completed, yield any remaining messages
     while not active_processes[process_id]["output_queue"].empty():
         message = await active_processes[process_id]["output_queue"].get()
         yield {
@@ -315,7 +304,6 @@ async def get_process_output(process_id: str) -> AsyncGenerator[Dict[str, str], 
             "data": json.dumps({"content": message["content"]})
         }
     
-    # Final status message
     yield {
         "event": "complete",
         "data": json.dumps({"content": f"Process completed with exit code {active_processes[process_id]['exit_code']}"})
@@ -376,7 +364,6 @@ async def run_node_tests(directory: str = None, test_command: str = "test"):
                 "stderr": "Error: package.json not found in the specified directory."
             }
         
-        # Check if the test script exists in package.json
         try:
             with open(os.path.join(working_dir, "package.json"), 'r') as f:
                 package_data = json.load(f)
@@ -396,7 +383,6 @@ async def run_node_tests(directory: str = None, test_command: str = "test"):
                 "stderr": "Error: Invalid package.json file"
             }
             
-        # Run npm install if node_modules doesn't exist
         if not os.path.exists(os.path.join(working_dir, "node_modules")):
             install_process = await asyncio.create_subprocess_exec(
                 "npm", "install",
@@ -414,7 +400,6 @@ async def run_node_tests(directory: str = None, test_command: str = "test"):
                     "stderr": install_stderr.decode('utf-8', errors='replace')
                 }
         
-        # Run the tests
         test_process = await asyncio.create_subprocess_exec(
             "npm", "run", test_command,
             stdout=asyncio.subprocess.PIPE,
@@ -451,10 +436,8 @@ async def test_javascript_code(code: str, test_code: str = None, framework: str 
     Returns:
         dict: A dictionary containing the test results
     """
-    try:
-        # Create a temporary directory
+    try: 
         with tempfile.TemporaryDirectory() as temp_dir:
-            # Create a basic package.json
             package_json = {
                 "name": "code-test",
                 "version": "1.0.0",
@@ -467,15 +450,12 @@ async def test_javascript_code(code: str, test_code: str = None, framework: str 
             with open(os.path.join(temp_dir, "package.json"), 'w') as f:
                 json.dump(package_json, f)
                 
-            # Create the code file
             with open(os.path.join(temp_dir, "code.js"), 'w') as f:
                 f.write(code)
                 
-            # Create or generate test file
             if test_code:
                 test_content = test_code
             else:
-                # Generate basic test if none provided
                 test_content = f"""
                 const code = require('./code');
 
@@ -493,7 +473,6 @@ async def test_javascript_code(code: str, test_code: str = None, framework: str 
             with open(os.path.join(temp_dir, "code.test.js"), 'w') as f:
                 f.write(test_content)
                 
-            # Install test framework
             install_process = await asyncio.create_subprocess_exec(
                 "npm", "install", "--no-package-lock", "--no-save", framework,
                 stdout=asyncio.subprocess.PIPE,
@@ -511,7 +490,6 @@ async def test_javascript_code(code: str, test_code: str = None, framework: str 
                     "stderr": install_stderr.decode('utf-8', errors='replace')
                 }
                 
-            # Run the tests
             test_process = await asyncio.create_subprocess_exec(
                 "npm", "test",
                 stdout=asyncio.subprocess.PIPE,
@@ -535,3 +513,72 @@ async def test_javascript_code(code: str, test_code: str = None, framework: str 
             "stdout": "",
             "stderr": f"Error: {str(e)}"
         }
+
+
+async def run_with_self_correction_loop(
+    code: str,
+    recent_messages: list
+):
+    string_messages = str(recent_messages[-1])  
+    attempt = 0
+    last_result = {}
+    current_code = code + string_messages
+    max_attempts = 5
+    framework = "jest"
+    current_test_code = None
+
+    install_process = await asyncio.create_subprocess_exec(
+        "npm", "install",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=os.getcwd()
+    )
+    await install_process.wait()
+
+    while attempt < max_attempts:
+        result = await test_javascript_code(current_code, current_test_code, framework)
+        last_result = result
+
+        if result.get("success"):
+            return {
+                "success": True,
+                "code": current_code,
+                "stdout": result.get("stdout"),
+                "stderr": result.get("stderr"),
+            }
+
+        reflection_input = {
+            "code": current_code,
+            "test_code": current_test_code or "",
+            "stdout": result.get("stdout", ""),
+            "stderr": result.get("stderr", ""),
+            "exit_code": result.get("exit_code", -1),
+        }
+
+        try:
+            reflection = await invoke_with_retry(
+                node_reflection_chain(
+                    model_type=gemini.modelType,
+                    provider_type=gemini.providerName
+                ),
+                reflection_input
+            )
+
+            updated = reflection.code.strip()
+            updated = updated.replace("```javascript", "").replace("```", "").strip()
+            current_code = updated
+            
+        except Exception as reflection_error:
+            gemini.logger.warning(f"[Self-Correction] Reflection failed: {reflection_error}")
+            break
+
+        attempt += 1
+
+    return {
+        "success": False,
+        "final_code": current_code,
+        "last_result": last_result
+    }
+
+  
+    

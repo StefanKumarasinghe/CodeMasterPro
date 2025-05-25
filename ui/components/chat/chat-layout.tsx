@@ -261,7 +261,7 @@ export function ChatLayout() {
 
     >
       <ChatHeader />
-      <div className="flex-1 overflow-y-auto scrollbar-hide relative w-full  max-w-full">
+      <div className="flex-1 overflow-y-auto scrollbar-hide  w-full  max-w-full">
         <ChatMessageList 
           language={language} 
           isLoading={isLoading}

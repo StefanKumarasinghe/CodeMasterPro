@@ -112,7 +112,7 @@ export default function SettingsSheet({
               </TabsContent>
             </Tabs>
             <Button className="m-3" onClick={savePreferences}>
-              <Save className="mr-2 h-4 w-4" />
+              <Save className=" w-full h-4 w-4" />
               Save Preferences
             </Button>
           </div>

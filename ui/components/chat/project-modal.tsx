@@ -8,7 +8,7 @@ import { API_ENDPOINT } from "@/config/constants"
 import ReactConfetti from 'react-confetti'
 import { Input } from "@/components/ui/input"
 import { showProgressIndicator, hideProgressIndicator, isOperationInProgress } from "@/components/progress-indicator"
-
+import { useWindowSize } from "@/hooks/useWindowSize"
 interface ProjectModalProps {
   isOpen: boolean
   onClose: () => void
@@ -17,29 +17,6 @@ interface ProjectModalProps {
     has_index: boolean
   }
 }
-
-const useWindowSize = () => {
-  const [size, setSize] = useState({
-    width: typeof window !== 'undefined' ? window.innerWidth : 0,
-    height: typeof window !== 'undefined' ? window.innerHeight : 0,
-  });
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const handleResize = () => {
-      setSize({
-        width: window.innerWidth,
-        height: window.innerHeight,
-      });
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  return size;
-};
 
 
 export function ProjectModal({ isOpen, onClose, projectStatus }: ProjectModalProps) {
@@ -189,14 +166,16 @@ export function ProjectModal({ isOpen, onClose, projectStatus }: ProjectModalPro
     showProgressIndicator("Uploading folder...");
     
     try {
-      const folderStructure = Array.from(files).map(file => {
-      const relativePath = (file as any).webkitRelativePath || file.name;
+      const filesArray = Array.from(files);
+      const folderStructure = filesArray.map(file => {
+        const relativePath = (file as any).webkitRelativePath || file.name;
         return {
-          id: file.name, path: relativePath
+          path: relativePath
         };
       });
+      
       const formData = new FormData();
-      Array.from(files).forEach(file => {
+      filesArray.forEach(file => {
         formData.append('files', file);
       });
       formData.append('folder_structure', JSON.stringify(folderStructure));
@@ -454,7 +433,7 @@ export function ProjectModal({ isOpen, onClose, projectStatus }: ProjectModalPro
         numberOfPieces={1000}
       />
     )}
-      <DialogContent className="sm:max-w-[425px] md:max-w-[500px] lg:max-w-[600px] text-center">
+      <DialogContent className="w-full h-[100vh] md:h-auto justify-center items-center md:max-w-[500px] lg:max-w-[600px] text-center">
         <DialogHeader>
           <DialogTitle>Project Management</DialogTitle>
           <DialogDescription>

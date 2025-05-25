@@ -368,58 +368,7 @@ export const CodeEditorCanvas: React.FC<CodeEditorCanvasProps> = ({
           allowJsx: true,
         })
       }
-
-      if (API_ENDPOINT) {
-        monaco.languages.registerCompletionItemProvider(selectedLanguage, {
-          triggerCharacters: [".", "(", "[", "{", '"', "'", "`", "@", "#", "/", "<"],
-          provideCompletionItems: async (model: any, position: any) => {
-            try {
-              const offset = model.getOffsetAt(position)
-              const text = model.getValue()
-
-              const response = await fetch(`${API_ENDPOINT}/complete`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  code: text,
-                  language: selectedLanguage,
-                  cursor_position: offset,
-                }),
-              })
-
-              if (!response.ok) {
-                console.error(`Failed to get completions: ${response.status} ${response.statusText}`)
-                return { suggestions: [] }
-              }
-
-              const data = await response.json()
-
-              if (!data || !Array.isArray(data.completions)) {
-                console.error("Invalid response format from completions API:", data)
-                return { suggestions: [] }
-              }
-
-              const suggestions = data.completions.map((completion: string) => {
-                return {
-                  label: completion,
-                  kind: monaco.languages.CompletionItemKind.Text,
-                  insertText: completion,
-                  detail: "AI Suggestion",
-                  insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                }
-              })
-
-              return { suggestions }
-            } catch (error: any) {
-              console.error("Error getting completions:", error)
-              return { suggestions: [] }
-            }
-          },
-        })
-      } else {
-        console.warn("API_ENDPOINT not defined. AI completion feature disabled.")
-      }
-
+      
       editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
         if (isDirty && onSave) handleSave()
       })

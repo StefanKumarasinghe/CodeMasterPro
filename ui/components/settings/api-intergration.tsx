@@ -10,14 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { toast } from "@/utils/toast-util";
 import { API_ENDPOINT } from "@/config/constants";
 import ServiceBox from "./service-box";
-
-interface Service {
-  id: string;
-  name: string;
-  icon: typeof Icon;
-  description: string;
-  link: string;
-}
+import { Service } from "@/types";
 
 const API_SERVICES: Service[] = [
   { id: "openai", name: "ChatGPT (OpenAI)", icon: Zap, description: "o3 and Turbo Model", link: "https://platform.openai.com/api-keys" },
@@ -189,7 +182,7 @@ const ApiIntegrationContent = () => {
       </p>
 
       <Dialog open={isModalOpen} onOpenChange={handleModalClose}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="w-full md:max-w-[425px] mx-1">
           <DialogHeader>
             {selectedService && modalView === "initial" && (
               <>

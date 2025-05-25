@@ -169,7 +169,6 @@ async def load_documents_from_folder(folder_path: str, file_types: tuple = DOCUM
         for path in file_paths:
             content = None
             
-            # Try different encodings
             for encoding in encodings:
                 try:
                     async with aiofiles.open(path, "r", encoding=encoding) as f:
@@ -334,7 +333,7 @@ async def build_index(background_tasks: Optional[BackgroundTasks] = None) -> str
 
 
 
-async def web_search(query: str, msg: MessageRequest) -> str:
+async def web_search(query: str, msg: MessageRequest) -> dict:
     cache_key = f"web_{hashlib.md5(query.encode()).hexdigest()}"
     cached_result = query_cache.get(cache_key)
     if cached_result:
@@ -368,7 +367,8 @@ async def web_search(query: str, msg: MessageRequest) -> str:
                 chain_inputs
             )
 
-        
+        links = str(output.documentation) + str(output.example)
+        print(links)
         
         web_results = extract_all_articles(output)
         
@@ -384,12 +384,17 @@ async def web_search(query: str, msg: MessageRequest) -> str:
             raise ValueError("No content extracted from search results")
             
         success = await save_resource(str(web_results), RESOURCES_FOLDER)
+        await build_index()
         if not success:
             gemini.logger.warning("Failed to save web resources")
         
         query_cache.put(cache_key, web_results)
         
-        return web_results
+        return {
+            "doc_urls": links,
+            "resources": web_results
+        }
+    
     except Exception as e:
         gemini.logger.error(f"Web search error: {str(e)}", exc_info=True)
         raise ValueError(f"Web search failed: {str(e)}")
@@ -703,7 +708,7 @@ async def search_resources_web(query: str, msg: MessageRequest, k: int = 3) -> s
     
     try:
 
-        web_result = await web_search(query, msg)
+        web_result = str(await web_search(query, msg))
         set_update("Web search completed successfully.")
         return web_result
     except ValueError as e:
@@ -732,13 +737,13 @@ async def search_resources_local(query: str, k: int = 3) -> str:
         set_update("Searching local resources...")
   
         result = await local_search(query, k, min_relevance_threshold=-5.0)
-        
+
         if not result or "No relevant resources found" in result:
             set_update("No relevant local resources found.")
             return None
         
-
         set_update("Verifying relevance of search results...")
+        
         try:
             relevance = await invoke_with_retry(
                 reference_check_chain(
@@ -749,6 +754,7 @@ async def search_resources_local(query: str, k: int = 3) -> str:
             )
             
             relevance_status = relevance.content.strip().lower()
+
             
             if relevance_status == "incorrect":
                 set_update("Search results deemed not relevant.")

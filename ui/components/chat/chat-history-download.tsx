@@ -157,6 +157,7 @@ export function ChatHistoryDownload({ messages }: ChatHistoryDownloadProps) {
   };
 
   return (
+    <div className="hidden md:block">
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         <Button variant="ghost" size="sm" className="gap-1">
@@ -213,5 +214,6 @@ export function ChatHistoryDownload({ messages }: ChatHistoryDownloadProps) {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    </div>
   );
 }

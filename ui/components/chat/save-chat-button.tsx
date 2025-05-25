@@ -52,7 +52,7 @@ export function SaveChatButton({ messages }: SaveChatButtonProps) {
     }
   }
   return (
-    <>
+    <div className="hidden md:block">
       <Button
         variant="ghost"
         size="sm"
@@ -94,6 +94,6 @@ export function SaveChatButton({ messages }: SaveChatButtonProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </>
+    </div>
   )
 }

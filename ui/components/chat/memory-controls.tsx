@@ -91,14 +91,14 @@ export function MemoryControls() {
   const getModelIcon = () => {
     switch (modelType) {
       case "advanced":
-        return <Brain className="h-4 w-4 mr-2" />;
+        return <Brain className="h-4 text-green-500 w-4 mr-2" />;
       case "fast":
-        return <Zap className="h-4 w-4 mr-2" />;
+        return <Zap className="h-4 text-yellow-500 w-4 mr-2" />;
       case "quick-think":
-        return <Cpu className="h-4 w-4 mr-2" />;
+        return <Cpu className="h-4 text-purple-500 w-4 mr-2" />;
       case "pro":
       default:
-        return <BrainCircuit className="h-4 w-4 mr-2" />;
+        return <BrainCircuit className="h-4 text-blue-500 w-4 mr-2" />;
     }
   };
 
@@ -131,10 +131,6 @@ export function MemoryControls() {
                   disabled={isLoading}
                 >
                   {getModelIcon()}
-                  <span className="hidden sm:inline font-medium">
-                    {getModelDisplayName()}
-                  </span>
-                  <span className="sm:hidden">Model</span>
                   <ChevronDown className="h-3.5 w-3.5 opacity-70" />
                 </Button>
               </DropdownMenuTrigger>
@@ -143,7 +139,7 @@ export function MemoryControls() {
               <p>Select AI model</p>
             </TooltipContent>
           </Tooltip>
-          <DropdownMenuContent className="w-64" align="end">
+          <DropdownMenuContent className="w-64" align="center">
             {renderModelOption(
               "fast",
               "Gemini Flash",
@@ -166,7 +162,7 @@ export function MemoryControls() {
             {renderModelOption(
               "advanced",
               "Reasoner Pro",
-              "Complex tasks, deep analysis (3min+)",
+              "Complex tasks, deep analysis with tools (3min+)",
               <Brain className="h-5 w-5 mr-3 text-green-500" />
             )}
           </DropdownMenuContent>
@@ -178,14 +174,14 @@ export function MemoryControls() {
               onClick={forgetMemory}
               variant="ghost"
               size="sm"
-              className="h-10 w-10 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm"
+              className="h-10 w-10 rounded-full text-red-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm"
               disabled={isLoading}
             >
-              <Trash2 className="h-4 w-4 text-slate-500" />
+              <Trash2 className="h-4 w-4 " />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">
-            <p>Clear conversation memory</p>
+            <p>Clears all conversation memory</p>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>

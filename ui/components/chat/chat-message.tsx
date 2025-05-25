@@ -240,17 +240,17 @@ const ChatMessage = memo(function ChatMessage({
   }, [onCodeAction])
 
   return (
-    <div className={cn("flex gap-3 w-full", isUser ? "ml-auto justify-end text-right" : "text-left")}>
+    <div className={cn("flex gap-3 w-full", isUser ? "ml-auto justify-end text-left" : "text-left")}>
       <div className={cn("space-y-2 max-w-full", isUser ? "order-1" : "order-2")}>
         <div className={cn("flex items-center gap-2 w-full", isUser ? "justify-end" : "justify-start")}>
-          <span className="text-sm font-medium truncate px-3 font-scale-base">{isUser ? "You" : "CodeMasterPro"}</span>
+          <span className="text-xs md:text-sm font-medium truncate px-3 font-scale-base">{isUser ? "You" : "CodeMasterPro"}</span>
           {!isUser && (
-            <Badge variant="outline" className="text-xs truncate font-scale-sm">
+            <Badge variant="outline" className="text-xs truncate bg-red-500 text-white font-scale-sm">
               Developer
             </Badge>
           )}
           {isUser && language && (
-            <Badge variant="outline" className="text-xs truncate font-scale-sm">
+            <Badge variant="outline" className="text-xs bg-green-300 text-black truncate font-scale-sm">
               CodeMaster
             </Badge>
           )}
@@ -259,7 +259,7 @@ const ChatMessage = memo(function ChatMessage({
           ref={messageContentRef}
           className={cn(
             "p-4 rounded-lg text-sm sm:text-base break-words overflow-auto font-scale-base custom-scrollbar fluid-motion message-container",
-            isUser ? "ml-auto text-left border border-blue-500/10" : "bg-card text-left shadow-sm",
+            isUser ? "ml-auto text-rigt border border-blue-500/10" : "bg-card text-left shadow-sm",
             isResizing && "resize-transition",
           )}
           style={{
@@ -267,7 +267,6 @@ const ChatMessage = memo(function ChatMessage({
               ? "none"
               : "max-width w-full 0.3s ease-in-out, font-size 0.3s ease-in-out, width 0.3s ease-in-out",
             fontSize: `calc(1rem * var(--font-scale, 1))`,
-            minWidth: "500px",
           }}
         >
           <Suspense fallback={<div className="animate-pulse bg-muted h-24 max-w-3xl rounded-md"></div>}>

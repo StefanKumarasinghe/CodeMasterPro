@@ -322,11 +322,11 @@ export function ChatHistory() {
         <p className={cn("text-xs text-muted-foreground mb-4")}>
           Reference your previous conversations
         </p>
-        <div className="relative">
+        <div className="relative text-xs">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search chats..."
-            className="pl-8 h-9"
+            placeholder="..."
+            className="pl-8 h-9 text-xs"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
