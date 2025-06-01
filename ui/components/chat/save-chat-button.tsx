@@ -4,12 +4,12 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {Dialog,DialogContent,DialogDescription,DialogFooter,DialogHeader,DialogTitle} from "@/components/ui/dialog"
+import {Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle} from "@/components/ui/dialog"
 import { toast } from "@/utils/toast-util"
 import { MessageCircleHeart } from "lucide-react"
 import { formatDate } from "@/utils/format-utils"
-import { v4 as uuidv4 } from "uuid"
 import type { Message } from "ai"
+import { saveChatToHistory } from "@/utils/chat-utils"
 
 interface SaveChatButtonProps {
   messages: Message[]
@@ -29,28 +29,23 @@ export function SaveChatButton({ messages }: SaveChatButtonProps) {
       toast.warning("There's no chat content to save")
       return
     }
+
     try {
-      const chatItem = {
-        id: uuidv4(),
-        title: title.trim(),
-        date: formatDate(new Date()),
-        preview: messages[0].content.substring(0, 100) + (messages[0].content.length > 100 ? "..." : ""),
-        messages: messages.map((msg) => ({
-          role: msg.role,
-          content: msg.content,
-        })),
+      const success = saveChatToHistory(messages, title.trim());
+      
+      if (success) {
+        toast.success("Chat saved to history")
+        setIsOpen(false)
+        setTitle("")
+      } else {
+        throw new Error("Failed to save chat")
       }
-      const existingHistory = JSON.parse(localStorage.getItem("tars-chat-history") || "[]")
-      const updatedHistory = [chatItem, ...existingHistory]
-      localStorage.setItem("tars-chat-history", JSON.stringify(updatedHistory))
-      toast.success("Chat saved to history")
-      setIsOpen(false)
-      setTitle("")
     } catch (error) {
       console.error("Failed to save chat:", error)
-      toast.error("Failed to save chat. Please try again.")
+      toast.error(`Failed to save chat: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
+
   return (
     <div className="hidden md:block">
       <Button
@@ -60,7 +55,7 @@ export function SaveChatButton({ messages }: SaveChatButtonProps) {
         onClick={() => setIsOpen(true)}
         disabled={messages.length === 0}
       >
-        <MessageCircleHeart style={{ height: "1.2rem", width: "1.2rem" }}  />
+        <MessageCircleHeart className="text-muted-foreground h-4 w-4 hover:text-primary hover:bg-muted-foreground/10 rounded-md" />
       </Button>
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>

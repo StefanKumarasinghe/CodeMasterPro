@@ -25,5 +25,5 @@ class MessageRequest(BaseModel):
     modelType: str
     providerName: str
     clientInfo: ClientInfo
-    free_model: Optional[str] = None
+    freeModel: Optional[str] = None
     pinnedFiles: Optional[List[PinnedFile]] = None

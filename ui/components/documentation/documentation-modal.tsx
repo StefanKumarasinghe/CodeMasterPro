@@ -26,11 +26,13 @@ import {
   Loader2,
   GithubIcon,
   FileWarning,
+  Eye,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { formatFileSize } from "@/utils/format-utils";
 import { Textarea } from "@/components/ui/textarea";
 import { showProgressIndicator, hideProgressIndicator, isOperationInProgress } from "@/components/progress-indicator";
+import { GitHubProjectViewer } from "./github-project-viewer";
 
 interface ExistingDocument {
   id: string;
@@ -38,11 +40,20 @@ interface ExistingDocument {
   size: number;
 }
 
-interface GithubProject {
+interface DocumentContent {
   id: string;
+  name: string;
+  content: string;
+  size: number;
+  encoding: string;
+}
+
+interface GithubProject {
   name: string;
   path?: string;
   size_mb?: number;
+  has_index?: boolean;
+  indexed_at?: string;
 }
 
 export function DocumentationModal() {
@@ -52,6 +63,11 @@ export function DocumentationModal() {
   const [isRemovingGithub, setIsRemovingGithub] = useState(false);
   const [isFetchingDocs, setIsFetchingDocs] = useState(false);
   const [isFetchingGithub, setIsFetchingGithub] = useState(false);
+  const [isViewingDocument, setIsViewingDocument] = useState(false);
+  const [documentViewerOpen, setDocumentViewerOpen] = useState(false);
+  const [currentDocument, setCurrentDocument] = useState<DocumentContent | null>(null);
+  const [githubProjectViewerOpen, setGithubProjectViewerOpen] = useState(false);
+  const [selectedGithubProject, setSelectedGithubProject] = useState<{id: string, name: string} | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [documentationText, setDocumentationText] = useState("");
   const [documentationLinks, setDocumentationLinks] = useState("");
@@ -69,7 +85,7 @@ export function DocumentationModal() {
   );
   const [eraseConfirmOpen, setEraseConfirmOpen] = useState(false);
   const isLoading =
-    isUploading || isRemovingDocs || isRemovingGithub || isFetchingDocs || isFetchingGithub;
+    isUploading || isRemovingDocs || isRemovingGithub || isFetchingDocs || isFetchingGithub || isViewingDocument;
 
   const fetchExistingDocuments = async () => {
     setIsFetchingDocs(true);
@@ -89,11 +105,6 @@ export function DocumentationModal() {
       setExistingDocuments(data);
     } catch (error) {
       console.error("Failed to fetch existing documents:", error);
-      toast.error(
-        `Could not load existing documents. ${
-          error instanceof Error ? error.message : ""
-        }`
-      );
     } finally {
       setIsFetchingDocs(false);
       hideProgressIndicator();
@@ -118,15 +129,41 @@ export function DocumentationModal() {
       setGithubProjects(data);
     } catch (error) {
       console.error("Failed to fetch GitHub projects:", error);
-      toast.error(
-        `Could not load GitHub projects. ${
-          error instanceof Error ? error.message : ""
-        }`
-      );
     } finally {
       setIsFetchingGithub(false);
       hideProgressIndicator();
     }
+  };
+
+  const viewDocumentContent = async (documentId: string) => {
+    if (isLoading) return;
+    
+    setIsViewingDocument(true);
+    showProgressIndicator("Loading document content...");
+    
+    try {
+      const response = await fetch(`${API_ENDPOINT}/get_document_content/${encodeURIComponent(documentId)}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `Failed to fetch document content: ${response.status} - ${errorText}`
+        );
+      }
+      const documentContent: DocumentContent = await response.json();
+      setCurrentDocument(documentContent);
+      setDocumentViewerOpen(true);
+    } catch (error) {
+      console.error("Failed to fetch document content:", error);
+      toast.error("Failed to load document content. Please try again.");
+    } finally {
+      setIsViewingDocument(false);
+      hideProgressIndicator();
+    }
+  };
+
+  const viewGithubProject = (projectName: string, displayName: string) => {
+    setSelectedGithubProject({ id: projectName, name: displayName });
+    setGithubProjectViewerOpen(true);
   };
 
   useEffect(() => {
@@ -203,15 +240,15 @@ export function DocumentationModal() {
   };
 
   const handleProjectRemoveSelectionChange = (
-    projectId: string, // Using ID based on interface
+    projectName: string, // Using name as the unique identifier
     checked: boolean | "indeterminate"
   ) => {
     setProjectsToRemove((prev) => {
       const newSet = new Set(prev);
       if (checked === true) {
-        newSet.add(projectId);
+        newSet.add(projectName);
       } else {
-        newSet.delete(projectId);
+        newSet.delete(projectName);
       }
       return newSet;
     });
@@ -254,11 +291,6 @@ export function DocumentationModal() {
       resetForm();
     } catch (error) {
       console.error("Upload failed:", error);
-      toast.error(
-        `Failed to add content: ${
-          error instanceof Error ? error.message : "Please try again."
-        }`
-      );
     } finally {
       setIsUploading(false);
       hideProgressIndicator();
@@ -464,7 +496,7 @@ export function DocumentationModal() {
               sources like documents and GitHub projects.
             </DialogDescription>
           </DialogHeader>
-          <div className="overflow-y-auto max-h-[50vh] px-6 pb-6 pt-0">
+          <div className="overflow-y-auto max-h-[50vh] scrollbar-thin scrollbar-thumb-muted-foreground scrollbar-track-muted-foreground px-6 pb-6 pt-0">
             <Tabs defaultValue="add" className="w-full">
               <TabsList className="grid w-full grid-cols-2 h-10">
                 <TabsTrigger value="add" disabled={isLoading}>
@@ -671,11 +703,23 @@ export function DocumentationModal() {
                                 {doc.name}
                               </label>
                             </div>
-                            {doc.size !== undefined && (
-                              <Badge variant="secondary" className="shrink-0 text-xs">
-                                {formatFileSize(doc.size)}
-                              </Badge>
-                            )}
+                            <div className="flex items-center gap-2 shrink-0">
+                              {doc.size !== undefined && (
+                                <Badge variant="secondary" className="text-xs">
+                                  {formatFileSize(doc.size)}
+                                </Badge>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-primary transition-colors"
+                                onClick={() => viewDocumentContent(doc.id)}
+                                disabled={isLoading}
+                                title={`View ${doc.name}`}
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -725,16 +769,16 @@ export function DocumentationModal() {
                       <div className="max-h-48 overflow-y-auto overflow-x-hidden space-y-2 p-3 border rounded-lg bg-muted/30">
                         {githubProjects.map((project) => (
                           <div
-                            key={project.id} 
+                            key={project.name} 
                             className="flex items-center justify-between bg-background p-3 rounded-md text-sm border border-border transition-colors hover:bg-muted/50"
                           >
                             <div className="flex items-center gap-3 overflow-hidden flex-grow mr-2">
                               <Checkbox
-                                id={`remove-github-${project.id}`} 
-                                checked={projectsToRemove.has(project.id)}
+                                id={`remove-github-${project.name}`} 
+                                checked={projectsToRemove.has(project.name)}
                                 onCheckedChange={(checked) =>
                                   handleProjectRemoveSelectionChange(
-                                    project.id,
+                                    project.name,
                                     checked
                                   )
                                 }
@@ -744,7 +788,7 @@ export function DocumentationModal() {
                               />
                               <GithubIcon className="h-5 w-5 text-foreground shrink-0" />
                               <label
-                                htmlFor={`remove-github-${project.id}`}
+                                htmlFor={`remove-github-${project.name}`}
                                 className="truncate cursor-pointer font-medium text-foreground flex-grow"
                                 title={project.name}
                               >
@@ -755,11 +799,23 @@ export function DocumentationModal() {
                                   {project.path}
                                 </p>
                               )}
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
                               {project.size_mb !== undefined && (
-                                <Badge variant="secondary" className="shrink-0 ml-auto text-xs">
+                                <Badge variant="secondary" className="text-xs">
                                   {project.size_mb.toFixed(1)} MB
                                 </Badge>
                               )}
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-primary transition-colors"
+                                onClick={() => viewGithubProject(project.name, project.name)}
+                                disabled={isLoading}
+                                title={`View ${project.name}`}
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
                             </div>
                           </div>
                         ))}
@@ -870,6 +926,51 @@ export function DocumentationModal() {
         </DialogContent>
       </Dialog>
 
+      {/* Document Viewer Modal */}
+      <Dialog open={documentViewerOpen} onOpenChange={setDocumentViewerOpen}>
+        <DialogContent className="md:max-w-4xl w-full h-[90vh] md:h-[80vh] grid grid-rows-[auto,1fr,auto] p-0">
+          <DialogHeader className="p-6 pb-4 border-b">
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-primary" />
+              {currentDocument?.name || "Document Viewer"}
+            </DialogTitle>
+            <DialogDescription className="flex items-center gap-4 text-sm">
+              <span>Size: {currentDocument?.size ? formatFileSize(currentDocument.size) : "Unknown"}</span>
+              {currentDocument?.encoding && (
+                <span>Encoding: {currentDocument.encoding}</span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="overflow-auto p-6 bg-muted/20">
+            {currentDocument ? (
+              <div className="bg-background rounded-lg border p-4">
+                <pre className="whitespace-pre-wrap break-words text-sm font-mono leading-relaxed text-foreground max-w-full overflow-x-auto">
+                  {currentDocument.content}
+                </pre>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                <div className="text-center">
+                  <FileText className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                  <p>No document content available</p>
+                </div>
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter className="p-6 pt-4 border-t">
+            <Button
+              variant="outline"
+              onClick={() => setDocumentViewerOpen(false)}
+              className="h-10 text-base rounded-lg"
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={eraseConfirmOpen} onOpenChange={setEraseConfirmOpen}>
         <DialogContent className="rounded-lg">
           <DialogHeader>
@@ -910,6 +1011,19 @@ export function DocumentationModal() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* GitHub Project Viewer */}
+      {selectedGithubProject && (
+        <GitHubProjectViewer
+          projectId={selectedGithubProject.id}
+          projectName={selectedGithubProject.name}
+          isOpen={githubProjectViewerOpen}
+          onClose={() => {
+            setGithubProjectViewerOpen(false);
+            setSelectedGithubProject(null);
+          }}
+        />
+      )}
     </>
   );
 }

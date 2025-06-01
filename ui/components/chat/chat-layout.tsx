@@ -12,7 +12,7 @@ interface SidebarStateDetail {
   width: number
 }
 
-type ActiveSidebar = "python" | "code" | "test-runner" | null
+type ActiveSidebar = "python" | "code" | "test-runner" | "bash" | null
 
 export function ChatLayout() {
   const { language, isLoading } = useChat()
@@ -108,6 +108,58 @@ export function ChatLayout() {
       }
     }
 
+    const handleBashShellState = (event: CustomEvent<SidebarStateDetail>) => {
+      if (event.detail && typeof event.detail.isOpen === "boolean" && typeof event.detail.width === "number") {
+        const { isOpen, width } = event.detail
+
+        if (isOpen) {
+          window.dispatchEvent(
+            new CustomEvent("code-editor-close", {
+              detail: { forced: true },
+            }),
+          )
+
+          window.dispatchEvent(
+            new CustomEvent("python-shell-close", {
+              detail: { forced: true },
+            }),
+          )
+
+          window.dispatchEvent(
+            new CustomEvent("html-preview-close", {
+              detail: { forced: true },
+            }),
+          )
+
+          window.dispatchEvent(
+            new CustomEvent("node-test-runner-close", {
+              detail: { forced: true },
+            }),
+          )
+
+          setTimeout(() => {
+            setActiveSidebar("bash")
+            setSidebarWidth(width)
+            setMainContentWidth(calculateMainContentWidth())
+
+            if (layoutRef.current) {
+              layoutRef.current.style.paddingRight = `${width}px`
+              document.documentElement.style.setProperty("--right-sidebar-width", `${width}px`)
+            }
+          }, 50)
+        } else if (activeSidebar === "bash") {
+          setActiveSidebar(null)
+          setSidebarWidth(0)
+          setMainContentWidth(calculateMainContentWidth())
+
+          if (layoutRef.current) {
+            layoutRef.current.style.paddingRight = "0px"
+            document.documentElement.style.setProperty("--right-sidebar-width", "0px")
+          }
+        }
+      }
+    }
+
     const handleCodeEditorState = (event: CustomEvent<SidebarStateDetail>) => {
       if (event.detail && typeof event.detail.isOpen === "boolean" && typeof event.detail.width === "number") {
         const { isOpen, width } = event.detail || {}
@@ -153,6 +205,7 @@ export function ChatLayout() {
 
       window.dispatchEvent(new CustomEvent("python-shell-close", { detail: { forced: true } }))
       window.dispatchEvent(new CustomEvent("code-editor-close", { detail: { forced: true } }))
+      window.dispatchEvent(new CustomEvent("bash-shell-close", { detail: { forced: true } }))
     }
 
     const handleSidebarResize = () => {
@@ -188,25 +241,25 @@ export function ChatLayout() {
             }),
           )
 
-          if (layoutRef.current) {
-            layoutRef.current.style.paddingRight = `${width}px`
-            document.documentElement.style.setProperty("--right-sidebar-width", `${width}px`)
-          }
-          
-          setIsResizing(true)
-          setActiveSidebar("test-runner")
-          setSidebarWidth(width)
-          setMainContentWidth(calculateMainContentWidth())
-          
           setTimeout(() => {
-            window.dispatchEvent(new Event('resize'))
-            window.dispatchEvent(new CustomEvent("sidebar-resize"))
-            setIsResizing(false)
-          }, 150)
+            setActiveSidebar("test-runner")
+            setSidebarWidth(width)
+            setMainContentWidth(calculateMainContentWidth())
+
+            if (layoutRef.current) {
+              layoutRef.current.style.paddingRight = `${width}px`
+              document.documentElement.style.setProperty("--right-sidebar-width", `${width}px`)
+            }
+          }, 50)
         } else if (activeSidebar === "test-runner") {
+          setActiveSidebar(null)
+          setSidebarWidth(0)
+          setMainContentWidth(calculateMainContentWidth())
+
           if (layoutRef.current) {
             layoutRef.current.style.paddingRight = "0px"
             document.documentElement.style.setProperty("--right-sidebar-width", "0px")
+            console.log("test-runner closed 3")
           }
           
           setIsResizing(true)
@@ -229,7 +282,7 @@ export function ChatLayout() {
     window.addEventListener("sidebar-resize", handleSidebarResize)
     window.addEventListener("resize", handleWindowResize)
     window.addEventListener("node-test-runner-state", handleNodeTestRunnerState as EventListener)
-
+    window.addEventListener("bash-shell-state", handleBashShellState as EventListener)
     setMainContentWidth(calculateMainContentWidth())
 
     const resizeObserver = new ResizeObserver(() => {
@@ -247,9 +300,16 @@ export function ChatLayout() {
       window.removeEventListener("sidebar-resize", handleSidebarResize)
       window.removeEventListener("resize", handleWindowResize)
       window.removeEventListener("node-test-runner-state", handleNodeTestRunnerState as EventListener)
+      window.removeEventListener("bash-shell-state", handleBashShellState as EventListener)
       resizeObserver.disconnect()
     }
   }, [activeSidebar, sidebarWidth, leftSidebarWidth])
+
+
+  useEffect(() => {
+    setMainContentWidth(calculateMainContentWidth())
+  }, [sidebarWidth])
+
 
   return (
    <div
@@ -261,7 +321,7 @@ export function ChatLayout() {
 
     >
       <ChatHeader />
-      <div className="flex-1 overflow-y-auto scrollbar-hide  w-full  max-w-full">
+      <div className="flex-1 overflow-y-auto scrollbar-hide relative w-full  max-w-full">
         <ChatMessageList 
           language={language} 
           isLoading={isLoading}

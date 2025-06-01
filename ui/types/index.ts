@@ -98,6 +98,7 @@ export interface Message {
   role: MessageRole
   content: string
   dataImage?: string
+  isStreaming?: boolean
 }
 
 export interface ChatContextType {
@@ -140,6 +141,8 @@ export interface ChatContextType {
   removePinnedFile: (path: string) => void
   clearPinnedFiles: () => void
   getTotalPinnedChars: () => number
+  isPreview: boolean
+  setIsPreview: React.Dispatch<React.SetStateAction<boolean>>
 }
 
 export interface ValidationResult {

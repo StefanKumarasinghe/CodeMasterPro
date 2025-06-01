@@ -58,7 +58,7 @@ export const readFileAsText = (file: File): Promise<string> =>
 export const detectLanguage = (fileName: string): string => {
   const ext = fileName.slice(fileName.lastIndexOf(".")).toLowerCase()
   const map: Record<string, string> = {
-    ".js": "javascript",
+    ".js": "js",
     ".jsx": "jsx",
     ".ts": "typescript",
     ".tsx": "tsx",
@@ -93,7 +93,7 @@ export const detectLanguage = (fileName: string): string => {
 }
 
 const ALLOWED_LANGUAGES = [
-  "javascript",
+  "js",
   "typescript",
   "python",
   "java",
@@ -134,7 +134,7 @@ export const formatCode = async (code: string, language: string): Promise<string
 
   try {
     const parserMap: Record<string, string> = {
-      javascript: "babel",
+      js: "babel",
       jsx: "babel",
       typescript: "typescript",
       tsx: "typescript",
@@ -221,7 +221,7 @@ export const isSupportedFile = (fileName: string): boolean =>
 
 export const getLanguageFriendlyName = (lang: string): string => {
   const names: Record<string, string> = {
-    javascript: "JavaScript",
+    js: "JavaScript",
     jsx: "React JSX",
     typescript: "TypeScript",
     tsx: "React TSX",

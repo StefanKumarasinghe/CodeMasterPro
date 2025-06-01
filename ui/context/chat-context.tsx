@@ -24,7 +24,6 @@ import { v4 as uuidv4 } from "uuid";
 import { autoSaveCurrentChat } from "@/utils/chat-utils";
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
-
 const MAX_PINNED_FILES = 5;
 const MAX_PINNED_CHARS = 80000;
 
@@ -34,6 +33,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [hasMounted, setHasMounted] = useState(false);
   const [preferences, setPreferences] = useState<Preferences>(DEFAULT_PREFERENCES);
   const [freeModel, setFreeModel] = useState<string>("");
+  const [isPreview, setIsPreview] = useState<boolean>(false);
   const [memoryState, setMemoryState] = useState<MemoryState>({
     noComments: false,
     forgetMemory: false,
@@ -42,19 +42,19 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [activeView, setActiveView] = useState<ActiveView>("chat");
   const [customPrompt, setCustomPrompt] = useState<string>("");
   const [personalInfo, setPersonalInfo] = useState<string>("");
-  const [error] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [chatId, setChatId] = useState<string>(uuidv4());
   const [lastAutoSave, setLastAutoSave] = useState<Date | null>(null);
   const [mcp, setMcp] = useState<string>("auto");
-  const [modelType, setModelType] = useState<string>("fast");
+  const [modelType, setModelType] = useState<string>("auto");
   const [providerName, setProviderName] = useState<string>("gemini");
-  const [pinnedFiles, setPinnedFiles] = useState<Array<{
+  const [pinnedFiles, setPinnedFiles] = useState<{
     path: string;
     name: string;
     charCount?: number;
-  }>>([]);
+  }[]>([]);
 
   const isLoading = isProcessing;
 
@@ -203,7 +203,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           role: "user",
           content:
             messageInput.length > 50000
-              ? "Large message detected. Using CodeMasterProAnalyst for processing."
+              ? "Hey, I've got your message. It's a bit long, so I'll need a moment to process it. Please hold tight!"
               : messageInput,
         });
 
@@ -244,6 +244,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             case 400:
               const errorData = await response.json();
               errorMessage = errorData.text || "Bad request. Please try again.";
+              break;
+            case 499:
+              errorMessage = "I have stopped processing your request";
               break;
           }
           toast.error(errorMessage);
@@ -507,6 +510,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       removePinnedFile,
       clearPinnedFiles,
       getTotalPinnedChars,
+      isPreview,
+      setIsPreview,
     }),
     [
       messages,
@@ -548,6 +553,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       removePinnedFile,
       clearPinnedFiles,
       getTotalPinnedChars,
+      isPreview,
+      setIsPreview,
     ]
   );
 

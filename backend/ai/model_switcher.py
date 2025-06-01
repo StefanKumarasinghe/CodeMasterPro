@@ -1,20 +1,21 @@
 from Model.ModelClass import ModelFactory
-from ai.structured_output import ValidationChainOutput, DocumentationChainOutput, RankedQuestionsOutput, LinkCategoriesOutput, RefineLocalSearchOutput, NodeReflectionOutput
-from Prompts.prompts import process_prompt, refinement_prompt, node_reflection_prompt, summarize_file_chain_prompt, relevance_chain_prompt, link_chain_prompt, pip_install_prompt, code_analysis_prompt, user_intent_prompt, refine_search, refine_local_search, validate_gemini_prompt, rank_chain_prompt, refine_stack_search, convert_to_markdown, cleaned_search_result_prompt, reword_prompt, runnable_prompt, feedback_chain_python, process_summary_prompt, validation_prompt, user_behavior_prompt, final_code_prompt, reasoning_prompt, tool_prompt, analyse_changes_python_prompt, quick_answer_chain_prompt, analyse_bandit_prompt, analyse_compute_chain_prompt, strategy_prompt, file_format_prompt, memory_analyzer_prompt, github_select_prompt, github_reword_prompt, reference_check_chain_prompt, get_code_completion_prompt, context_chain_prompt, reference_github_check_chain_prompt, analyse_node_prompt, self_bash_correction_chain_prompt, analyse_bash_chain_prompt, enforce_rules_chain_prompt
+from ai.structured_output import ValidationChainOutput, DocumentationChainOutput, RankedQuestionsOutput, LinkCategoriesOutput, RefineLocalSearchOutput, NodeReflectionOutput, UserBehaviorOutput
+from Prompts.prompts import process_prompt, node_reflection_prompt, summarize_file_chain_prompt, relevance_chain_prompt, link_chain_prompt, pip_install_prompt, code_analysis_prompt, user_intent_prompt, refine_search, refine_local_search, validate_gemini_prompt, rank_chain_prompt, refine_stack_search, convert_to_markdown, cleaned_search_result_prompt, reword_prompt, runnable_prompt, feedback_chain_python, process_summary_prompt, validation_prompt, user_behavior_prompt, final_code_prompt, reasoning_prompt, tool_prompt, analyse_changes_python_prompt, quick_answer_chain_prompt, analyse_bandit_prompt, analyse_compute_chain_prompt, strategy_prompt, file_format_prompt, memory_analyzer_prompt, github_select_prompt, github_reword_prompt, reference_check_chain_prompt, get_code_completion_prompt, context_chain_prompt, reference_github_check_chain_prompt, analyse_node_prompt, self_bash_correction_chain_prompt, analyse_bash_chain_prompt, enforce_rules_chain_prompt, recommendation_prompt
 
 model_factory = ModelFactory()
 
-def get_model(provider_name: str, model_type: str):
+def get_model(provider_name: str, model_type: str, temperature: float = None):
     provider = model_factory.get_provider(provider_name)
     if not provider:
         raise ValueError(f"Provider '{provider_name}' not found.")
-    return provider.get_model(model_type)
+    return provider.get_model(model_type, temperature=temperature)
 
-def create_dynamic_chain(prompt, model_name, model_type, structured_model=False, model_output=None):
+def create_dynamic_chain(prompt, model_name, model_type, structured_model=False, model_output=None, temperature: float = None):
     try:
-        model = get_model(model_name, model_type)
+        model = get_model(model_name, model_type, temperature=temperature)
         if structured_model:
             model = model.with_structured_output(model_output)
+            
         return prompt | model
     except Exception as e:
         print(f"Error creating chain with {model_name} for {model_type}: {e}")
@@ -132,16 +133,16 @@ def process_summary_chain(model_type: str, provider_type: str):
         print(f"[Process Summary Chain Error] Failed to build process summary chain: {e}")
         return None     
     
-def validation_chain(model_type: str, provider_type: str):
+def validation_chain(model_type: str, provider_type: str, temperature: float = None):
     try:
-        return create_dynamic_chain(validation_prompt, provider_type,  model_type, True, ValidationChainOutput)
+        return create_dynamic_chain(validation_prompt, provider_type, model_type, True, ValidationChainOutput, temperature=temperature)
     except Exception as e:
         print(f"[Validation Chain Error] Failed to build validation chain: {e}")
         return None
     
 def user_behavior_chain(model_type: str, provider_type: str):
     try:
-        return create_dynamic_chain(user_behavior_prompt, provider_type,  model_type)
+        return create_dynamic_chain(user_behavior_prompt, provider_type,  model_type, True, UserBehaviorOutput)
     except Exception as e:
         print(f"[User Behavior Chain Error] Failed to build user behavior chain: {e}")
         return None
@@ -252,20 +253,14 @@ def choose_file_name_chain(model_type: str, provider_type: str):
         print(f"[Choose File Name Chain Error] Failed to build choose file name chain: {e}")
         return None
 
-def get_process_chain(model_type: str, provider_type: str):
+def get_process_chain(model_type: str, provider_type: str, temperature: float = None):
     try:
-        return create_dynamic_chain(process_prompt, provider_type,  model_type)
+        return create_dynamic_chain(process_prompt, provider_type, model_type, temperature=temperature)
     except Exception as e:
         print(f"[Process Chain Error] Failed to build process chain: {e}")
         return None
 
-def get_refinement_chain(model_type: str, provider_type: str):
-    try:
-        return create_dynamic_chain(refinement_prompt, provider_type,  model_type)
-    except Exception as e:
-        print(f"[Refinement Chain Error] Failed to build refinement chain: {e}")
-        return None
-    
+
 def relevance_chain_ai(model_type: str, provider_type: str):
     try:
         return create_dynamic_chain(relevance_chain_prompt, provider_type,  model_type)
@@ -283,7 +278,10 @@ def summarize_file_chain(model_type: str, provider_type: str):
 
 def node_reflection_chain(model_type: str, provider_type: str):
     try:
-        return create_dynamic_chain(node_reflection_prompt, provider_type,  model_type, True, NodeReflectionOutput)
+        chain = create_dynamic_chain(node_reflection_prompt, provider_type, model_type, True, NodeReflectionOutput)
+        if not chain:
+            raise ValueError("Failed to create node reflection chain")
+        return chain
     except Exception as e:
         print(f"[Node Reflection Chain Error] Failed to build node reflection chain: {e}")
         return None
@@ -316,4 +314,12 @@ def enforce_rules_chain(model_type: str, provider_type: str):
         return None
     except Exception as e:
         print(f"[Enforce Rules Chain Error] Failed to build enforce rules chain: {e}")
+        return None
+    
+
+def recommendation_chain(model_type: str, provider_type: str):
+    try:
+        return create_dynamic_chain(recommendation_prompt, provider_type, model_type)
+    except Exception as e:
+        print(f"[Recommendation Chain Error] Failed to build recommendation chain: {e}")
         return None

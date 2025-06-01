@@ -1,11 +1,10 @@
 import httpx
 import asyncio
 from bs4 import BeautifulSoup
-import json
 from typing import List, Dict, Any, Optional
 from functools import lru_cache
 
-from ai.model_switcher import rank_chain, refine_search_stack_chain, cleaned_search_result_chain
+from ai.model_switcher import refine_search_stack_chain, cleaned_search_result_chain
 from utils.invoke_retry import invoke_with_retry
 import config.tars as gemini
 

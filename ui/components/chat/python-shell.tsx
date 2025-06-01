@@ -70,6 +70,12 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
         }),
       )
 
+      window.dispatchEvent(
+        new CustomEvent("bash-shell-close", {
+          detail: { forced: true },
+        }),
+      )
+
       setTimeout(() => {
         window.dispatchEvent(
           new CustomEvent("python-shell-state", {
@@ -174,8 +180,6 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
   }
 
   const terminateSession = async () => {
-    if (!sessionId) return
-
     try {
       await fetch(`${API_ENDPOINT}/close_python_session`, {
         method: "POST",
@@ -193,6 +197,7 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
     } catch (error) {
       console.error("Failed to terminate session:", error)
     }
+    hideProgressIndicator()
   }
 
   const runCode = async () => {
@@ -219,10 +224,6 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
           session_id: sessionId,
         }),
       })
-
-      if (!response.ok) {
-        throw new Error("Failed to run code")
-      }
 
       const data = await response.json()
       const result: PythonOutput = {
@@ -306,9 +307,9 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
   }
 
   const handleClose = () => {
-    if (!isOpen) {
-      terminateSession()
-    }
+
+    terminateSession()
+
     
     window.dispatchEvent(
       new CustomEvent("python-shell-state", {
@@ -395,7 +396,7 @@ export function PythonShell({ code, isOpen, onClose }: PythonShellProps) {
     <div
       ref={shellRef}
       className={cn(
-        "border-l border-zinc-700 shadow-xl flex flex-col bg-zinc-900 transition-all duration-300",
+        "border-l border-zinc-700 shadow-xl flex overflow-x-hidden flex-col bg-zinc-900 transition-all duration-300",
         isOpen ? "fixed z-50 top-0 right-0 h-full w-full md:w-[400px] min-w-[350px]" : "hidden",
       )}
     >

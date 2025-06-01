@@ -38,8 +38,12 @@ export function HtmlPreview({
       setIsFullscreen(false);
       setRenderError(null);
       setLoadingState("loading");
+    } else if (isConfirmed) {
+      setLoadingState("loading");
+      setRenderError(null);
+      setRefreshKey(prev => prev + 1);
     }
-  }, [isOpen]);
+  }, [isOpen, isConfirmed]);
 
   useEffect(() => {
     if (headerRef.current) {
@@ -99,6 +103,35 @@ export function HtmlPreview({
             <base target="_blank">
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1">
+            <script>
+              // Ensure DOM is fully loaded before running any scripts
+              document.addEventListener('DOMContentLoaded', function() {
+                // Notify parent when loaded
+                window.parent.postMessage('iframe-loaded', '*');
+                
+                // Run any scripts in the content
+                const scripts = document.querySelectorAll('script:not([src])');
+                scripts.forEach(script => {
+                  if (script.textContent) {
+                    try {
+                      const newScript = document.createElement('script');
+                      newScript.textContent = script.textContent;
+                      script.parentNode.replaceChild(newScript, script);
+                    } catch (err) {
+                      console.error('Error executing script:', err);
+                    }
+                  }
+                });
+
+                // Handle external scripts
+                const externalScripts = document.querySelectorAll('script[src]');
+                externalScripts.forEach(script => {
+                  const newScript = document.createElement('script');
+                  newScript.src = script.src;
+                  script.parentNode.replaceChild(newScript, script);
+                });
+              });
+            </script>
           </head>
           <body>
             <div id="html-content-container">
@@ -156,8 +189,7 @@ export function HtmlPreview({
             </AlertDescription>
           </Alert>
           <p className="text-sm text-muted-foreground mb-4">
-            Only run HTML from sources you trust. CodeMasterPro cannot guarantee the
-            safety of the code.
+            Sometimes, a "BIG" HTML page may take a while to load even though it looks blank. Please be patient.
           </p>
           <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-0">
             <Button variant="outline" onClick={onClose} className="sm:mr-auto">

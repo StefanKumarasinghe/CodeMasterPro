@@ -24,7 +24,7 @@ import time
 import hashlib
 from fastapi import BackgroundTasks
 
-# Configuration constants
+
 INDEX_STORE_PATH = "index_store/"
 RESOURCES_FOLDER = "resources"
 MIN_QUERY_LENGTH = 3
@@ -43,13 +43,65 @@ CHUNK_SIZES = {
     0: (2500, 400)        
 }
 
-
 SCORING_WEIGHTS = {
     "semantic": 0.60,
     "keyword": 0.20,
     "structure": 0.12,
     "quality": 0.08
 }
+
+
+class ChainManager:
+    _instance = None
+    _lock = threading.Lock()
+    
+    def __new__(cls):
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = super(ChainManager, cls).__new__(cls)
+                cls._instance._chains = {}
+                cls._instance._initialized = False
+            return cls._instance
+    
+    def _initialize_chains(self):
+        if self._initialized:
+            return
+            
+        try:
+            self._chains['refine_search'] = refine_search_local_chain(
+                model_type=gemini.modelType, 
+                provider_type=gemini.providerName
+            )
+            self._chains['clean_results'] = cleaned_search_result_chain(
+                model_type=gemini.modelType, 
+                provider_type=gemini.providerName
+            )
+            self._chains['reference_check'] = reference_check_chain(
+                model_type=gemini.modelType, 
+                provider_type=gemini.providerName
+            )
+            self._chains['link_analysis'] = link_chain(
+                model_type=gemini.modelType, 
+                provider_type=gemini.providerName
+            )
+            self._initialized = True
+            gemini.logger.info("All chains initialized successfully")
+        except Exception as e:
+            gemini.logger.error(f"Failed to initialize chains: {e}")
+            raise
+    
+    def get_chain(self, chain_type: str):
+        if not self._initialized:
+            self._initialize_chains()
+        return self._chains.get(chain_type)
+    
+    def reinitialize(self):
+        with self._lock:
+            self._chains.clear()
+            self._initialized = False
+            self._initialize_chains()
+
+chain_manager = ChainManager()
 
 
 class LRUCache:
@@ -79,6 +131,7 @@ class LRUCache:
 
 query_cache = LRUCache(capacity=200, ttl=7200)  
 
+
 class VectorDBManager:
     _instance = None
     _lock = threading.Lock()
@@ -105,7 +158,6 @@ class VectorDBManager:
                     allow_dangerous_deserialization=True
                 )
                 self.last_loaded = current_time
-                # Load metadata
                 meta_path = os.path.join(INDEX_STORE_PATH, "metadata.json")
                 if os.path.exists(meta_path):
                     with open(meta_path, 'r') as f:
@@ -125,6 +177,30 @@ class VectorDBManager:
 
 vector_db_manager = VectorDBManager()
 
+
+class TfidfManager:
+    _instance = None
+    _lock = threading.Lock()
+    
+    def __new__(cls):
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = super(TfidfManager, cls).__new__(cls)
+                cls._instance.vectorizer = TfidfVectorizer(
+                    max_features=10000,
+                    min_df=1,
+                    max_df=0.95,
+                    ngram_range=(1, 2),
+                    sublinear_tf=True
+                )
+                cls._instance.fitted = False
+            return cls._instance
+    
+    def get_vectorizer(self):
+        return self.vectorizer
+
+tfidf_manager = TfidfManager()
+
 @asynccontextmanager
 async def log_execution_time(operation_name: str):
     start_time = time.time()
@@ -142,13 +218,7 @@ async def compute_semantic_scores(pairs: List[Tuple[str, str]]) -> np.ndarray:
     docs = [d for q, d in pairs]
     all_texts = queries + docs
     
-    vectorizer = TfidfVectorizer(
-        max_features=10000,
-        min_df=2,
-        max_df=0.85,
-        ngram_range=(1, 2),
-        sublinear_tf=True
-    )
+    vectorizer = tfidf_manager.get_vectorizer()
     
     try:
         vectors = vectorizer.fit_transform(all_texts)
@@ -249,23 +319,17 @@ def get_vectorstore(force_reload=False) -> Optional[FAISS]:
 async def build_index(background_tasks: Optional[BackgroundTasks] = None) -> str:
     async def _build_index_task():
         gemini.logger.info("Building vector index...")
-        set_update("Starting document indexing process...")
-        
         try:
             os.makedirs(INDEX_STORE_PATH, exist_ok=True)
             docs = await load_documents_from_folder(RESOURCES_FOLDER)
             if not docs:
-                set_update("No documents found to index.")
                 return "No documents to index."
-            
-            set_update(f"Processing {len(docs)} documents...")
-            
+
             async with Pool() as pool:
                 chunks_lists = await pool.map(_split_document, docs)
             
             chunks = [chunk for sublist in chunks_lists for chunk in sublist]
             gemini.logger.info(f"Created {len(chunks)} chunks from {len(docs)} documents")
-            set_update(f"Created {len(chunks)} chunks for indexing...")
             
             code_chunks = [c for c in chunks if any(
                 c.metadata.get('source', '').endswith(ext) 
@@ -287,7 +351,6 @@ async def build_index(background_tasks: Optional[BackgroundTasks] = None) -> str
             for name, create_fn, optimize_fn in index_strategies:
                 try:
                     gemini.logger.info(f"Attempting to create {name} index...")
-                    set_update(f"Creating {name} index...")
                     gemini.resource_vectorstore = create_fn(chunks)
                     optimize_fn(gemini.resource_vectorstore)
                     gemini.logger.info(f"Successfully created {name} index")
@@ -296,7 +359,6 @@ async def build_index(background_tasks: Optional[BackgroundTasks] = None) -> str
                     gemini.logger.error(f"Failed to create {name} index: {e}")
             
             if gemini.resource_vectorstore is None:
-                set_update("Failed to build index with any strategy.")
                 return "Failed to build index with any strategy."
             
             try:
@@ -314,15 +376,12 @@ async def build_index(background_tasks: Optional[BackgroundTasks] = None) -> str
                 vector_db_manager.save_metadata()
                 
                 gemini.logger.info(f"Index saved to {INDEX_STORE_PATH}")
-                set_update("Indexing completed successfully.")
                 return f"Index built successfully with {len(chunks)} chunks"
             except Exception as e:
                 gemini.logger.error(f"Failed to save index: {e}")
-                set_update("Index built but could not be saved to disk.")
                 return "Index built but could not be saved to disk."
         except Exception as e:
             gemini.logger.error(f"Indexing failed: {e}")
-            set_update(f"Indexing failed: {str(e)}")
             return f"Indexing failed: {str(e)}"
     
     if background_tasks:
@@ -330,8 +389,6 @@ async def build_index(background_tasks: Optional[BackgroundTasks] = None) -> str
         return "Indexing started in background. Check logs for progress."
     else:
         return await _build_index_task()
-
-
 
 async def web_search(query: str, msg: MessageRequest) -> dict:
     cache_key = f"web_{hashlib.md5(query.encode()).hexdigest()}"
@@ -347,7 +404,7 @@ async def web_search(query: str, msg: MessageRequest) -> dict:
         if not links:
             raise ValueError("No results from Brave Search")
         
-        set_update("Analyzing search results for relevant information...")
+        set_update(f"Analyzing search results, I am using the links {links}", msg.chatId)
         
         chain_inputs = {
             "query": query, 
@@ -362,19 +419,18 @@ async def web_search(query: str, msg: MessageRequest) -> dict:
         }
         
         async with log_execution_time("Link analysis"):
-            output = await invoke_with_retry(
-                link_chain(model_type=gemini.modelType, provider_type=gemini.providerName), 
-                chain_inputs
-            )
+            link_analysis_chain = chain_manager.get_chain('link_analysis')
+            output = await invoke_with_retry(link_analysis_chain, chain_inputs)
 
         links = str(output.documentation) + str(output.example)
-        print(links)
+        set_update(f"I am using the links {links}", msg.chatId)
         
         web_results = extract_all_articles(output)
         
         async with log_execution_time("Result cleaning"):
+            clean_results_chain = chain_manager.get_chain('clean_results')
             processed_results = await invoke_with_retry(
-                cleaned_search_result_chain(model_type=gemini.modelType, provider_type=gemini.providerName), 
+                clean_results_chain, 
                 {"query": query, "answer": str(web_results)}
             )
         
@@ -484,15 +540,12 @@ async def compute_document_scores(
     if not refined_docs:
         return []
     
-        
     if keywords is None:
         keywords = [term for term in query.lower().split() if len(term) > 3]
     
-
     pairs = [(query, doc.page_content) for doc in refined_docs]
     semantic_scores = await compute_semantic_scores(pairs)
     
- 
     keyword_scores = []
     for doc in refined_docs:
         content = doc.page_content.lower()
@@ -556,7 +609,6 @@ async def compute_document_scores(
             
         structure_scores.append(structure_score)
     
- 
     quality_scores = []
     for doc in refined_docs:
         content = doc.page_content.lower()
@@ -595,7 +647,6 @@ async def compute_document_scores(
 
     return list(zip(refined_docs, final_scores, semantic_scores))
 
-
 async def local_search(query: str, k: int = 3, min_relevance_threshold: float = 20.0) -> str:
     cache_key = f"local_{hashlib.md5(query.encode()).hexdigest()}"
     cached_result = query_cache.get(cache_key)
@@ -609,21 +660,14 @@ async def local_search(query: str, k: int = 3, min_relevance_threshold: float = 
     
     try:
         async with log_execution_time("Query analysis"):
-            query_analysis = await invoke_with_retry(
-                refine_search_local_chain(model_type=gemini.modelType, provider_type=gemini.providerName),
-                {"query": query}
-            )
-            
-
+            refine_search_chain = chain_manager.get_chain('refine_search')
+            query_analysis = await invoke_with_retry(refine_search_chain, {"query": query})
             
             try:
-                
                 expanded_query = query_analysis.expanded_query
                 keywords = query_analysis.keywords
                 domain = query_analysis.domain
-
             except Exception as e:
-
                 gemini.logger.warning(f"Query analysis parsing failed: {e}")
                 expanded_query = query
                 keywords = [term for term in query.lower().split() if len(term) > 3]
@@ -645,16 +689,13 @@ async def local_search(query: str, k: int = 3, min_relevance_threshold: float = 
         if not search_results:
             return f"No relevant resources found for '{query}'."
         
-
         refined_docs = []
         for doc, score in search_results:
             doc.metadata['domain_match'] = domain and domain in doc.metadata.get('source', '').lower()
             refined_docs.append(doc)
         
-
         async with log_execution_time("Document scoring"):
             scored_docs = await compute_document_scores(query, refined_docs, keywords)
-            
             scored_docs.sort(key=lambda x: -x[1])
         
         if not scored_docs:
@@ -662,7 +703,6 @@ async def local_search(query: str, k: int = 3, min_relevance_threshold: float = 
         
         relevant_docs = []
         for doc, combined_score, semantic_score in scored_docs[:k]:
-
             if combined_score < min_relevance_threshold and len(relevant_docs) > 0:
                 continue
                 
@@ -687,9 +727,7 @@ async def local_search(query: str, k: int = 3, min_relevance_threshold: float = 
             result += f"{doc['content']}\n\n"
             result += "---\n\n"
         
-
         query_cache.put(cache_key, result)
-        
         return result
         
     except Exception as e:
@@ -702,29 +740,23 @@ async def search_resources_web(query: str, msg: MessageRequest, k: int = 3) -> s
         
     if len(query) > MAX_QUERY_LENGTH:
         query = query[:MAX_QUERY_LENGTH]
-
-    
-    set_update("Searching web resources...")
     
     try:
-
         web_result = str(await web_search(query, msg))
-        set_update("Web search completed successfully.")
+        set_update(f"I am searching the web for relevant resources... and I have found some. {web_result[:500]}", msg.chatId)
         return web_result
     except ValueError as e:
         gemini.logger.warning(f"Web search failed: {e}")
-        set_update("Web search failed. Falling back to local search...")
-        
+
         try:
             local_result = await local_search(query, k, min_relevance_threshold=-5.0)
-            set_update("Local search completed.")
+            set_update(f"Since I couldn't find what I needed on the web, I am searching the local resources for relevant resources... and I have found some. {local_result[:500]}", msg.chatId)
             return local_result
         except Exception as local_err:
             gemini.logger.error(f"Local search fallback failed: {local_err}")
-            set_update("All search methods failed.")
             return f"Web search error: {e}. Local search also failed."
 
-async def search_resources_local(query: str, k: int = 3) -> str:
+async def search_resources_local(query: str, k: int = 3, chat_id: str = None) -> str:
     if not query or len(query.strip()) < MIN_QUERY_LENGTH:
         return "Query is too short. Please provide a more detailed question."
         
@@ -733,16 +765,11 @@ async def search_resources_local(query: str, k: int = 3) -> str:
 
     
     try:
-
-        set_update("Searching local resources...")
-  
         result = await local_search(query, k, min_relevance_threshold=-5.0)
 
         if not result or "No relevant resources found" in result:
-            set_update("No relevant local resources found.")
             return None
-        
-        set_update("Verifying relevance of search results...")
+
         
         try:
             relevance = await invoke_with_retry(
@@ -752,15 +779,12 @@ async def search_resources_local(query: str, k: int = 3) -> str:
                 ), 
                 {"query": query, "result": result}
             )
-            
+            if chat_id:
+                set_update(f"Analyzing local resources... I have found some relevant resources. {result[:500]}", chat_id)
             relevance_status = relevance.content.strip().lower()
-
-            
             if relevance_status == "incorrect":
-                set_update("Search results deemed not relevant.")
                 return None
             elif relevance_status == "correct" or relevance_status == "partially correct":
-                set_update("Relevant local resources found.")
                 return result
             else:
 
@@ -773,5 +797,4 @@ async def search_resources_local(query: str, k: int = 3) -> str:
             
     except Exception as e:
         gemini.logger.error(f"Search error: {str(e)}", exc_info=True)
-        set_update(f"Search error: {str(e)}")
         return f"An error occurred during search: {str(e)}"

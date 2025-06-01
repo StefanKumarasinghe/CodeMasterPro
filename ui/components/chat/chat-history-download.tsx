@@ -21,10 +21,10 @@ export function ChatHistoryDownload({ messages }: ChatHistoryDownloadProps) {
   const formatChatHistoryAsMarkdown = (messages: Message[]): string => {
     if (messages.length === 0) return "# Chat History\n\nNo messages yet.";
     const date = new Date();
-    let markdown = `# TARS Chat History\n\n`;
+    let markdown = `#Chat History\n\n`;
     markdown += `*Generated on ${formatDate(date)}*\n\n`;
     messages.forEach((message, index) => {
-      const role = message.role === "user" ? "## You" : "## TARS";
+      const role = message.role === "user" ? "## You" : "## CodeMasterPro";
       markdown += `${role}\n\n${message.content}\n\n`;
       if (index < messages.length - 1) {
         markdown += `---\n\n`;
@@ -36,81 +36,110 @@ export function ChatHistoryDownload({ messages }: ChatHistoryDownloadProps) {
   const formatChatHistoryAsHTML = (messages: Message[]): string => {
     if (messages.length === 0)
       return "<h1>Chat History</h1><p>No messages yet.</p>";
+  
     const date = new Date();
     let html = `
     <!DOCTYPE html>
     <html lang="en">
     <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CodeMasterPro Chat History</title>
-    <style>
-      body {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-        line-height: 1.6;
-        color: #333;
-        max-width: 800px;
-        margin: 0 auto;
-        padding: 20px;
-      }
-      h1 {
-        color: #6366f1;
-        border-bottom: 2px solid #6366f1;
-        padding-bottom: 10px;
-      }
-      .meta {
-        color: #666;
-        font-style: italic;
-        margin-bottom: 30px;
-      }
-      .message {
-        margin-bottom: 30px;
-        border-bottom: 1px solid #eee;
-        padding-bottom: 20px;
-      }
-      .message:last-child {
-        border-bottom: none;
-      }
-      .role {
-        font-weight: bold;
-        color: #6366f1;
-        margin-bottom: 10px;
-      }
-      .user {
-        color: #3b82f6;
-      }
-      .assistant {
-        color: #10b981;
-      }
-      pre {
-        background-color: #f7f7f7;
-        padding: 10px;
-        border-radius: 5px;
-        overflow-x: auto;
-      }
-      code {
-        font-family: 'Courier New', Courier, monospace;
-      }
-    </style>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <title>CodeMasterPro Chat History</title>
+      <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;600&display=swap" rel="stylesheet">
+      <style>
+        body {
+          font-family: 'Quicksand', sans-serif;
+          background: #f9fafb;
+          color: #1f2937;
+          max-width: 800px;
+          margin: 40px auto;
+          padding: 30px;
+          border-radius: 16px;
+          box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+          background-color: #ffffff;
+        }
+        h1 {
+          color: #4f46e5;
+          font-size: 2em;
+          margin-bottom: 10px;
+          border-bottom: 3px solid #4f46e5;
+          padding-bottom: 10px;
+        }
+        .meta {
+          font-size: 0.95em;
+          color: #6b7280;
+          margin-bottom: 20px;
+        }
+        .chat-container {
+          max-height: 500px;
+          overflow-y: auto;
+          padding-right: 10px;
+        }
+        .message {
+          padding: 20px;
+          margin-bottom: 20px;
+          background: #f3f4f6;
+          border-radius: 12px;
+          border-left: 6px solid #4f46e5;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+        }
+        .role {
+          font-weight: 600;
+          margin-bottom: 10px;
+        }
+        .user {
+          color: #2563eb;
+        }
+        .assistant {
+          color: #10b981;
+        }
+        pre {
+          background: #f1f5f9;
+          padding: 12px;
+          border-radius: 8px;
+          overflow-x: auto;
+        }
+        code {
+          font-family: 'Courier New', Courier, monospace;
+          font-size: 0.95em;
+          color: #1e293b;
+        }
+  
+        /* Smooth scroll */
+        .chat-container::-webkit-scrollbar {
+          width: 8px;
+        }
+        .chat-container::-webkit-scrollbar-thumb {
+          background-color: #d1d5db;
+          border-radius: 6px;
+        }
+      </style>
     </head>
     <body>
-    <h1>CodeMasterPro Chat History</h1>
-    <div class="meta">Generated on ${formatDate(date)}</div>`;
+      <h1>CodeMasterPro Chat History</h1>
+      <div class="meta">Generated on ${formatDate(date)}</div>
+      <div class="chat-container">
+    `;
+  
     messages.forEach((message) => {
       const roleClass = message.role === "user" ? "user" : "assistant";
-      const roleName = message.role === "user" ? "You" : "TARS";
-      html += `  <div class="message">
-    <div class="role ${roleClass}">${roleName}</div>
-    <div class="content">${formatMessageContent(message.content)}</div>
-    </div>`;
+      const roleName = message.role === "user" ? "You" : "CodeMasterPro";
+      html += `
+        <div class="message">
+          <div class="role ${roleClass}">${roleName}</div>
+          <div class="content">${formatMessageContent(message.content)}</div>
+        </div>
+      `;
     });
-
-    html += `</body>
+  
+    html += `
+      </div> <!-- end chat-container -->
+    </body>
     </html>`;
-
+  
     return html;
   };
-
+  
   const formatMessageContent = (content: string): string => {
     let formatted = content.replace(
       /```(\w+)?\n([\s\S]*?)```/g,
@@ -145,7 +174,7 @@ export function ChatHistoryDownload({ messages }: ChatHistoryDownloadProps) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `tars-chat-history-${new Date()
+    a.download = `chat-history-${new Date()
       .toISOString()
       .slice(0, 10)}.${fileExtension}`;
     document.body.appendChild(a);
@@ -161,7 +190,7 @@ export function ChatHistoryDownload({ messages }: ChatHistoryDownloadProps) {
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         <Button variant="ghost" size="sm" className="gap-1">
-          <Download style={{ height: "1.2rem", width: "1.2rem" }}  />
+          <Download  className="text-muted-foreground h-4 w-4 hover:text-primary hover:bg-muted-foreground/10 rounded-md" />
         </Button>
       </DialogTrigger>
       <DialogContent>

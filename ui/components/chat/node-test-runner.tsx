@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect, useCallback } from "react"
-import { Maximize2, Minimize2, Play, Square, ChevronRight, Package, Clock, MessageSquare, Copy, Rocket, XCircle, CheckCircle, StopCircle } from "lucide-react"
+import { Maximize2, Minimize2, Play, Square, ChevronRight, Package, Clock, MessageSquare, Copy, Rocket, XCircle, CheckCircle, StopCircle, Wrench } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { API_ENDPOINT } from "@/config/constants"
 import { toast } from "@/utils/toast-util"
@@ -28,6 +28,7 @@ interface TestOutput {
   stdout: string
   stderr: string
   process_id?: string
+  port?: number
 }
 
 type OutputItem = {
@@ -47,35 +48,74 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
   const [testCode, setTestCode] = useState("")
   const [framework, setFramework] = useState("jest")
   const [activeProcessId, setActiveProcessId] = useState<string | null>(null)
+  const [autoFix, setAutoFix] = useState(false)
+  const [currentPort, setCurrentPort] = useState<number | null>(null)
   const eventSourceRef = useRef<EventSource | null>(null)
   const outputRef = useRef<HTMLDivElement>(null)
   const { handleSubmit } = useChat()
   const instanceId = useRef(`node-test-runner-${Date.now()}`)
 
   const dispatchStateEvent = useCallback((open: boolean, maximized: boolean) => {
-    
     const width = open ? (maximized ? window.innerWidth : 400) : 0
-    
-    
     document.documentElement.style.setProperty("--right-sidebar-width", `${width}px`)
-    
-    
     window.dispatchEvent(
       new CustomEvent("node-test-runner-state", {
         detail: { isOpen: open, width: width, instanceId: instanceId.current },
       }),
     )
-    
-    
     window.dispatchEvent(new Event('resize'))
-    
-    
     setTimeout(() => {
       window.dispatchEvent(new CustomEvent("sidebar-resize"))
     }, 50)
   }, [])
 
+  const saveSessionState = useCallback(() => {
+    if (activeProcessId) {
+      const sessionState = {
+        activeProcessId,
+        selectedDirectory,
+        runCommand,
+        output,
+        isRunning,
+        isMaximized,
+        instanceId: instanceId.current
+      }
+      localStorage.setItem('nodeTestRunnerSession', JSON.stringify(sessionState))
+    } else {
+      localStorage.removeItem('nodeTestRunnerSession')
+    }
+  }, [activeProcessId, selectedDirectory, runCommand, output, isRunning, isMaximized])
+
+  useEffect(() => {
+    try {
+      const savedSession = localStorage.getItem('nodeTestRunnerSession')
+      if (savedSession) {
+        const sessionState = JSON.parse(savedSession)
+        
+        if (sessionState.activeProcessId) {
+          setActiveProcessId(sessionState.activeProcessId)
+          setSelectedDirectory(sessionState.selectedDirectory || '')
+          setRunCommand(sessionState.runCommand || 'dev')
+          setOutput(sessionState.output || [])
+          setIsRunning(sessionState.isRunning || false)
+          setIsMaximized(sessionState.isMaximized || false)
+          instanceId.current = sessionState.instanceId
+          
+          setupEventSource(sessionState.activeProcessId)
+        }
+      }
+    } catch (error) {
+      console.error('Error restoring session:', error)
+      localStorage.removeItem('nodeTestRunnerSession')
+    }
+  }, [])
+
+  useEffect(() => {
+    saveSessionState()
+  }, [activeProcessId, selectedDirectory, runCommand, output, isRunning, isMaximized, saveSessionState])
+
   const handleClose = useCallback(() => {
+    localStorage.removeItem('nodeTestRunnerSession')
     dispatchStateEvent(false, isMaximized)
     onClose()
   }, [onClose, dispatchStateEvent, isMaximized])
@@ -94,56 +134,95 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
     }
   }, [codeSnippet])
 
-useEffect(() => {
-  if (isOpen) {
-    window.dispatchEvent(
-      new CustomEvent("code-editor-close", { detail: { forced: true } }),
-    )
-    window.dispatchEvent(
-      new CustomEvent("python-shell-close", { detail: { forced: true } })
-    )
-    window.dispatchEvent(
-      new CustomEvent("html-preview-close", { detail: { forced: true } })
-    )
+  useEffect(() => {
+    if (isOpen) {
+      window.dispatchEvent(
+        new CustomEvent("code-editor-close", { detail: { forced: true } }),
+      )
+      window.dispatchEvent(
+        new CustomEvent("python-shell-close", { detail: { forced: true } })
+      )
+      window.dispatchEvent(
+        new CustomEvent("html-preview-close", { detail: { forced: true } })
+      )
+      window.dispatchEvent(
+        new CustomEvent("bash-shell-close", { detail: { forced: true } })
+      )
 
-    dispatchStateEvent(true, isMaximized)
-  } else {
-    dispatchStateEvent(false, isMaximized)
-  }
+      window.dispatchEvent(
+        new CustomEvent("node-test-runner-state", {
+          detail: { isOpen: true, width: 400, instanceId: instanceId.current },
+        }),
+      )
 
-  const handleForcedClose = (event: CustomEvent) => {
-    if (event.detail?.forced) {
-      handleClose()
+      dispatchStateEvent(true, isMaximized)
+    } else {
+      dispatchStateEvent(false, isMaximized)
     }
-  }
 
-  const handleNewRunner = (event: CustomEvent) => {
-    if (event.detail?.isOpen && event.detail?.instanceId !== instanceId.current) {
-      onClose() 
+    const handleForcedClose = (event: CustomEvent) => {
+      if (event.detail?.forced) {
+        handleClose()
+      }
     }
-  }
 
-  const handleCodeEditorState = (event: CustomEvent) => {
-    if (event.detail?.isOpen) {
-      handleClose()
+    const handleNewRunner = (event: CustomEvent) => {
+      if (event.detail?.isOpen && event.detail?.instanceId !== instanceId.current) {
+        onClose() 
+      }
     }
-  }
 
-  window.addEventListener("node-test-runner-close", handleForcedClose as EventListener)
-  window.addEventListener("node-test-runner-state", handleNewRunner as EventListener)
-  window.addEventListener("code-editor-state", handleCodeEditorState as EventListener)
+    const handleCodeEditorState = (event: CustomEvent) => {
+      if (event.detail?.isOpen) {
+        handleClose()
+      }
+    }
 
-  return () => {
-    window.removeEventListener("node-test-runner-close", handleForcedClose as EventListener)
-    window.removeEventListener("node-test-runner-state", handleNewRunner as EventListener)
-    window.removeEventListener("code-editor-state", handleCodeEditorState as EventListener)
-  }
-}, [isOpen, isMaximized, onClose, handleClose, dispatchStateEvent])
+    window.addEventListener("node-test-runner-close", handleForcedClose as EventListener)
+    window.addEventListener("node-test-runner-state", handleNewRunner as EventListener)
+    window.addEventListener("code-editor-state", handleCodeEditorState as EventListener)
 
+    return () => {
+      window.removeEventListener("node-test-runner-close", handleForcedClose as EventListener)
+      window.removeEventListener("node-test-runner-state", handleNewRunner as EventListener)
+      window.removeEventListener("code-editor-state", handleCodeEditorState as EventListener)
+    }
+  }, [isOpen, isMaximized, onClose, handleClose, dispatchStateEvent])
 
+  const stopRunningProcess = useCallback(() => {
+    if (activeProcessId) {
+      fetch(`${API_ENDPOINT}/terminate_node_app/${activeProcessId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ process_id: activeProcessId })
+      })
+      .then(async (response) => {
+        const result = await response.json();
+        if (result.success) {
+          setOutput(prev => [...prev, { type: "system", content: "Process terminated by user." }]);
+          setActiveProcessId(null);
+          setIsRunning(false);
+          hideProgressIndicator();
+          localStorage.removeItem('nodeTestRunnerSession');
+          if (eventSourceRef.current) {
+            eventSourceRef.current.close();
+            eventSourceRef.current = null;
+          }
+        } else {
+          toast.error("Application has terminated");
+        }
+      })
+      .catch(error => {
+        console.error('Error terminating process:', error);
+        setOutput(prev => [...prev, { type: "error", content: `Failed to terminate process: ${error.message}` }]);
+      });
+    }
+  }, [activeProcessId, setOutput, setActiveProcessId, setIsRunning]);
 
   useEffect(() => {
-     dispatchStateEvent(isOpen, isMaximized)
+    dispatchStateEvent(isOpen, isMaximized)
   }, [isMaximized, isOpen, dispatchStateEvent])
 
   const setupEventSource = useCallback((processId: string) => {
@@ -153,170 +232,228 @@ useEffect(() => {
 
     const newEventSource = new EventSource(`${API_ENDPOINT}/node_app_output/${processId}`)
 
-    const handleMessage = (event: MessageEvent) => {
-      try {
-        const data = JSON.parse(event.data)
-        if (data.type === "heartbeat") return
+    const eventTypes = ["stdout", "stderr", "system", "error", "complete", "heartbeat"]
+    eventTypes.forEach(eventType => {
+      newEventSource.addEventListener(eventType, (event: MessageEvent) => {
+        try {
+          const data = JSON.parse(event.data)
+          
+          if (eventType === "heartbeat" && data.content === "alive") {
+            return
+          }
 
-        if (data.type === "complete") {
-          setOutput(prev => [...prev, { type: "system", content: data.content }])
-          newEventSource.close()
-          eventSourceRef.current = null
-          setActiveProcessId(null)
-          setIsRunning(false)
-          hideProgressIndicator()
-          return
+          if (eventType === "complete") {
+            setOutput(prev => [...prev, { type: "system", content: data.content }])
+            newEventSource.close()
+            eventSourceRef.current = null
+            setActiveProcessId(null)
+            setIsRunning(false)
+            hideProgressIndicator()
+            localStorage.removeItem('nodeTestRunnerSession')
+            return
+          }
+
+          setOutput(prev => {
+            const newOutput = [...prev, { 
+              type: eventType as OutputItem['type'], 
+              content: data.content 
+            }]
+            return newOutput
+          })
+        } catch (error) {
+          console.error(`Error handling ${eventType} event:`, error)
         }
+      })
+    })
 
-        setOutput(prev => [...prev, { type: data.type as OutputItem['type'], content: data.content }])
-      } catch (error) {
-        console.error(`Error parsing event data:`, error)
-      }
+    newEventSource.onopen = () => {
+      console.log("EventSource connection opened")
+      setIsRunning(true)
     }
 
-    newEventSource.addEventListener("message", handleMessage)
+    newEventSource.onerror = async (errorEvent) => {
+      console.error("EventSource error:", errorEvent)
+      
+      if ((errorEvent.target as EventSource).readyState === EventSource.CLOSED) {
+        console.log("EventSource connection closed normally")
+        return
+      }
 
-    newEventSource.onerror = (error) => {
-      console.error("EventSource error:", error)
+      try {
+        const response = await fetch(`${API_ENDPOINT}/check_process/${processId}`)
+        const result = await response.json()
+        
+        if (!result.is_running) {
+          setActiveProcessId(null)
+          setIsRunning(false)
+          localStorage.removeItem('nodeTestRunnerSession')
+          return
+        }
+      } catch (error) {
+        console.error("Error checking process status:", error)
+      }
+
       setOutput(prev => [...prev, {
         type: "error",
-        content: "Connection error. Output streaming stopped."
+        content: "Connection error. Attempting to reconnect..."
       }])
-      newEventSource.close()
-      eventSourceRef.current = null
-      setActiveProcessId(null)
-      setIsRunning(false)
-      hideProgressIndicator()
+
+      setTimeout(() => {
+        if (eventSourceRef.current === newEventSource) {
+          console.log("Attempting to reconnect EventSource")
+          setupEventSource(processId)
+        }
+      }, 2000)
     }
 
     eventSourceRef.current = newEventSource
-  }, [])
 
-  const runOperation = useCallback(async (operationType: "test" | "run", command: string, params: URLSearchParams, endpoint: string, description: string) => {
-    if (isRunning) return
-
-    if (isOperationInProgress()) {
-      toast.error("Please wait for the current operation to complete before starting a new one.")
-      return
-    }
-
-    setIsRunning(true)
-    setOutput(prev => [...prev, { type: "command", content: `${description}: ${command}` }, {type: "loading", content: "..."}])
-    showProgressIndicator(`Running ${operationType === "test" ? "tests" : "app"}: ${command}`)
-
-    try {
-      const response = await fetch(`${API_ENDPOINT}${endpoint}?${params.toString()}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: endpoint === "/test_javascript_code" ? JSON.stringify({
-          code,
-          test_code: testCode || undefined,
-          framework
-        }) : endpoint === "/run_node_app" ? JSON.stringify({
-          directory: selectedDirectory || undefined,
-          run_command: command
-        }) : undefined,
-      })
-
-      setOutput(prev => prev.filter(item => item.type !== "loading"))
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`HTTP error! Status: ${response.status} - ${errorText || response.statusText}`)
-      }
-
-      const result = await response.json()
-
-      if (endpoint === "/run_node_app" && result.process_id) {
-        setActiveProcessId(result.process_id)
-        setupEventSource(result.process_id)
-        setOutput(prev => [...prev, {
-          type: "system",
-          content: `Started process ${result.process_id}. Streaming output...`
-        }])
-      } else {
-        setOutput(prev => [...prev, { type: "result", content: result }])
-        setIsRunning(false)
-        hideProgressIndicator()
-      }
-    } catch (error) {
-      console.error(`Error running ${operationType}:`, error)
-      setOutput(prev => [
-        ...prev.filter(item => item.type !== "loading"),
-        {
-          type: "system",
-          content: `Operation failed: ${error instanceof Error ? error.message : String(error)}`
-        }
-      ])
-      setIsRunning(false)
-      hideProgressIndicator()
-    }
-  }, [isRunning, code, testCode, framework, selectedDirectory, setupEventSource])
-
-  const stopRunningProcess = useCallback(async () => {
-    if (!activeProcessId) return
-
-    if (isOperationInProgress() && !isRunning) {
-      toast.error("Please wait for the current operation to complete before stopping this process.")
-      return
-    }
-
-    showProgressIndicator("Stopping process...")
-
-    try {
-      const response = await fetch(`${API_ENDPOINT}/terminate_node_app`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ process_id: activeProcessId })
-      })
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`HTTP error! Status: ${response.status} - ${errorText || response.statusText}`)
-      }
-
-      const result = await response.json()
-      setOutput(prev => [...prev, { type: "system", content: result.message || "Process terminated" }])
-
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close()
-        eventSourceRef.current = null
-      }
-
-      setActiveProcessId(null)
-      setIsRunning(false)
-      hideProgressIndicator()
-    } catch (error) {
-      console.error("Error stopping process:", error)
-      setOutput(prev => [...prev, {
-        type: "error",
-        content: `Failed to stop process: ${error instanceof Error ? error.message : String(error)}`
-      }])
-      hideProgressIndicator()
-    }
-  }, [activeProcessId, isRunning])
-
-  useEffect(() => {
-    const currentEventSource = eventSourceRef.current
-    const currentProcessId = activeProcessId
 
     return () => {
-      if (currentEventSource) {
-        currentEventSource.close()
-      }
-
-      if (currentProcessId) {
-        fetch(`${API_ENDPOINT}/terminate_node_app`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ process_id: currentProcessId })
-        }).catch(error => {
-          console.error("Error terminating process on unmount:", error)
-        })
+      if (eventSourceRef.current === newEventSource) {
+        newEventSource.close()
+        eventSourceRef.current = null
       }
     }
-  }, [activeProcessId])
+  }, [])
 
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      saveSessionState()
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+
+    return () => {
+      saveSessionState()
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+    }
+  }, [saveSessionState])
+
+  const runOperation = useCallback(
+    async (
+      operationType: "test" | "run" | "fix",
+      command: string,
+      params: URLSearchParams,
+      endpoint: string,
+      description: string
+    ) => {
+      if (isRunning) return;
+
+      if (isOperationInProgress()) {
+        toast.error("Please wait for the current operation to complete before starting a new one.");
+        return;
+      }
+
+      setIsRunning(true);
+      setOutput((prev) => [
+        ...prev,
+        { type: "command", content: `${description}: ${command}` },
+        { type: "loading", content: "..." },
+      ]);
+      showProgressIndicator(`Running ${operationType === "test" ? "tests" : operationType === "fix" ? "auto-fix" : "app"}: ${command}`);
+
+      try {
+        const body = endpoint === "/test_javascript_code"
+          ? JSON.stringify({
+              code,
+              test_code: testCode || undefined,
+              framework,
+            })
+          : endpoint === "/run_node_app"
+          ? JSON.stringify({
+              directory: selectedDirectory || undefined,
+              run_command: command,
+            })
+          : endpoint === "/fix_node_code"
+          ? JSON.stringify({
+              code: code || undefined,
+              directory: selectedDirectory || undefined,
+              recent_messages: output
+                .filter(item => typeof item.content === "string")
+                .map(item => item.content as string),
+              run_command: command
+            })
+          : undefined;
+
+        const response = await fetch(`${API_ENDPOINT}${endpoint}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body,
+        });
+
+        const responseText = await response.text();
+
+        setOutput((prev) => prev.filter((item) => item.type !== "loading"));
+
+        if (!response.ok) {
+          toast.error(
+            `Request failed with status ${response.status}.\nDetails: ${responseText}`
+          );
+        }
+
+        const result = JSON.parse(responseText);
+
+        if (endpoint === "/run_node_app") {
+          if (result.success === false) {
+            toast.error(result.error || "Unknown failure during node app run.");
+          }
+
+          if (!result.process_id) {
+            toast.error("No process_id returned from server.");
+          }
+
+          setActiveProcessId(result.process_id);
+          setupEventSource(result.process_id);
+          setOutput((prev) => [
+            ...prev,
+            {
+              type: "system",
+              content: result.message || `Started process ${result.process_id}. Streaming output...`,
+            },
+          ]);
+        } else if (endpoint === "/fix_node_code") {
+          if (result.success) {
+            setCurrentPort(result.port);
+            setOutput((prev) => [
+              ...prev,
+              {
+                type: "system",
+                content: `Auto-fix successful! Application running on port ${result.port}`,
+              },
+            ]);
+          } else {
+            setOutput((prev) => [
+              ...prev,
+              {
+                type: "error",
+                content: result.error || "Auto-fix failed with unknown error",
+              },
+            ]);
+          }
+          setIsRunning(false);
+          hideProgressIndicator();
+        } else {
+          setOutput((prev) => [...prev, { type: "result", content: result }]);
+          setIsRunning(false);
+          hideProgressIndicator();
+        }
+      } catch (error) {
+        console.error(`Error running ${operationType}:`, error);
+        setOutput((prev) => [
+          ...prev.filter((item) => item.type !== "loading"),
+          {
+            type: "error",
+            content: `Operation failed: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ]);
+        setIsRunning(false);
+        hideProgressIndicator();
+      }
+    },
+    [isRunning, code, testCode, framework, selectedDirectory, setupEventSource, output]
+  );
+  
   const runAppTests = useCallback(() => {
     const params = new URLSearchParams()
     if (selectedDirectory) {
@@ -332,13 +469,22 @@ useEffect(() => {
       params.append("directory", selectedDirectory)
     }
     params.append("run_command", runCommand)
-    runOperation("run", `npm ${runCommand}`, params, "/run_node_app", `Running npm ${runCommand}`)
+    runOperation("run", runCommand, params, "/run_node_app", `Running npm run ${runCommand}`)
   }, [selectedDirectory, runCommand, runOperation])
 
   const runSnippetTests = useCallback(() => {
     const params = new URLSearchParams()
     runOperation("test", `Testing with ${framework}`, params, "/test_javascript_code", `Testing code snippet`)
   }, [framework, runOperation])
+
+  const runAutoFix = useCallback(() => {
+    const params = new URLSearchParams()
+    if (selectedDirectory) {
+      params.append("directory", selectedDirectory)
+    }
+    params.append("run_command", runCommand)
+    runOperation("fix", runCommand, params, "/fix_node_code", `Running auto-fix with npm run ${runCommand}`)
+  }, [selectedDirectory, runCommand, runOperation])
 
   const clearOutput = useCallback(() => {
     setOutput([])
@@ -404,12 +550,10 @@ useEffect(() => {
   const handleMaximizeToggle = useCallback(() => {
     setIsMaximized(prev => {
       const newState = !prev;
-      dispatchStateEvent(isOpen, newState);
       return newState;
     });
-  }, [isOpen, dispatchStateEvent])
+  }, [isOpen])
 
-  if (!isOpen) return null
 
   return (
     <div
@@ -488,6 +632,23 @@ useEffect(() => {
                    />
                 </div>
              </div>
+          </div>
+          <div className="flex items-center gap-2 mb-2">
+            <label className="text-sm flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={autoFix}
+                onChange={(e) => setAutoFix(e.target.checked)}
+                disabled={isRunning}
+                className="rounded border-gray-400"
+              />
+              <span className="text-sm text-muted-foreground">Enable auto-fix</span>
+            </label>
+            {currentPort && (
+              <Badge variant="secondary" className="ml-auto">
+                Port: {currentPort}
+              </Badge>
+            )}
           </div>
           <div className="flex-1 border rounded-md bg-black text-gray-200 font-mono text-sm min-h-[40vh] max-h-[80vh] overflow-x-auto">
             <ScrollArea className="flex-1 h-full">
@@ -571,15 +732,28 @@ useEffect(() => {
                     Stop App
                   </Button>
                 ) : (
-                  <Button
-                    onClick={runApplication}
-                    disabled={!selectedDirectory || isRunning || isOperationInProgress()}
-                    variant="default"
-                    className={cn("w-full", isRunning ? "opacity-70 cursor-not-allowed" : "")}
-                  >
-                    <Rocket className="h-4 w-full mr-2" />
-                    Run App
-                  </Button>
+                  <>
+                    <Button
+                      onClick={runApplication}
+                      disabled={isRunning || isOperationInProgress()}
+                      variant="default"
+                      className={cn("w-full", isRunning ? "opacity-70 cursor-not-allowed" : "")}
+                    >
+                      <Rocket className="h-4 w-4 mr-2" />
+                      Run App
+                    </Button>
+                    {autoFix && (
+                      <Button
+                        onClick={runAutoFix}
+                        disabled={isRunning || isOperationInProgress()}
+                        variant="secondary"
+                        className={cn("w-full", isRunning ? "opacity-70 cursor-not-allowed" : "")}
+                      >
+                        <Wrench className="h-4 w-4 mr-2" />
+                        Auto-Fix & Run
+                      </Button>
+                    )}
+                  </>
                 )}
             </div>
         </TabsContent>

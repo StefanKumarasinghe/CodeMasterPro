@@ -22,8 +22,10 @@ declare global {
     'code-editor-state': CustomEvent<SidebarStateDetail>;
     'sidebar-resize': CustomEvent<SidebarStateDetail>;
     'python-shell-state': CustomEvent<SidebarStateDetail>;
+    'bash-shell-state': CustomEvent<SidebarStateDetail>;
     'code-editor-close': CustomEvent<{ forced: boolean }>;
     'python-shell-close': CustomEvent<{ forced: boolean }>;
+    'bash-shell-close': CustomEvent<{ forced: boolean }>;
     'html-preview-close': CustomEvent<{ forced: boolean }>;
     'node-test-runner-close': CustomEvent<{ forced: boolean }>;
     'progress-indicator-start': CustomEvent<{ operationText?: string }>;
@@ -64,7 +66,7 @@ export default function Layout({ children }: { children: ReactNode }) {
                 <Sidebar side="left" resizable={true}>
                   <SidebarHeader className="border-b">
                     <div className="flex items-center justify-between p-3">
-                      <div className="text-md items-center">️<Flame className="w-8 h-8 text-red-500  inline " /> CodeMasterPro</div>
+                      <div className="text-md items-center">️<Flame className=" text-red-500  inline " /> CodeMasterPro</div>
                     </div>
                   </SidebarHeader>
                   <SidebarContent>
@@ -73,7 +75,7 @@ export default function Layout({ children }: { children: ReactNode }) {
                     </div>
                   </SidebarContent>
                   <SidebarFooter className="border-t p-3">
-                    <p className="text-xs text-muted-foreground">© 2025 CodeMasterPro. All rights reserved.</p>
+                    <p className="text-xs text-muted-foreground">© 2025 CodeMasterPro. All rights reserved. v3.1.1</p>
                   </SidebarFooter>
                 </Sidebar>
                 <SidebarInset>

@@ -14,7 +14,6 @@ from ai.model_switcher import github_select_chain
 from utils.invoke_retry import invoke_with_retry
 import config.tars as gemini
 from pathlib import Path
-from utils.context import build_index
 
 TMP_REPO_DIR = os.getenv("TMP_REPO_DIR", "git_tmp")
 INDEX_DIR = os.getenv("INDEX_DIR", "git_index")
@@ -284,27 +283,57 @@ class RepoAnalyzer:
     def get_file_splitter(self, file_path, file_content):
         ext = os.path.splitext(file_path)[1].lower()
         
-        if ext in ['.js', '.jsx', '.ts', '.tsx']:
+        if ext in ['.js', '.jsx']:
             return RecursiveCharacterTextSplitter.from_language(
-                language="javascript",
-                chunk_size=750,
-                chunk_overlap=150,
-                separators=["\n\n", "\n", ".", " ", ""]
-            )
-        
-        if ext in CODE_EXTS:
-            lang = CODE_EXTS[ext]
-            return RecursiveCharacterTextSplitter.from_language(
-                language=lang,
+                language="js",
                 chunk_size=750,
                 chunk_overlap=150
             )
         
+        if ext in ['.ts', '.tsx']:
+            return RecursiveCharacterTextSplitter.from_language(
+                language="ts",
+                chunk_size=750,
+                chunk_overlap=150
+            )
+        
+        if ext in CODE_EXTS:
+            lang = CODE_EXTS[ext]
+            
+            lang_mapping = {
+                'javascript': 'js',
+                'typescript': 'ts',
+                'python': 'python',
+                'java': 'java',
+                'cpp': 'cpp',
+                'c': 'c',
+                'csharp': 'csharp',
+                'go': 'go',
+                'rust': 'rust',
+                'ruby': 'ruby',
+                'php': 'php',
+                'swift': 'swift',
+                'kotlin': 'kotlin',
+                'scala': 'scala',
+                'html': 'html',
+                'lua': 'lua',
+                'perl': 'perl',
+                'powershell': 'powershell'
+            }
+            
+            langchain_lang = lang_mapping.get(lang)
+            if langchain_lang:
+                return RecursiveCharacterTextSplitter.from_language(
+                    language=langchain_lang,
+                    chunk_size=750,
+                    chunk_overlap=150
+                )
+        
         if ext in MARKDOWN_EXTS:
-            return RecursiveCharacterTextSplitter(
+            return RecursiveCharacterTextSplitter.from_language(
+                language="markdown",
                 chunk_size=1000,
-                chunk_overlap=200,
-                separators=["\n## ", "\n### ", "\n#### ", "\n\n", "\n", ".", " "]
+                chunk_overlap=200
             )
             
         return CharacterTextSplitter(
@@ -312,6 +341,7 @@ class RepoAnalyzer:
             chunk_overlap=150,
             separator="\n"
         )
+
 
     def should_process_file(self, file_path):
         parts = Path(file_path).parts
@@ -819,21 +849,18 @@ async def analyze_javascript_code(code_text):
         temp_file = f.name
     
     try:
-
         splitter = RecursiveCharacterTextSplitter.from_language(
-            language="javascript",
+            language="js",  
             chunk_size=1000,
             chunk_overlap=200
         )
         
-
         with open(temp_file, 'r', encoding='utf-8') as f:
             content = f.read()
         
         metadata = {"language": "javascript", "filename": "analysis.js"}
         docs = splitter.create_documents([content], metadatas=[metadata])
         
-
         embedding_model = gemini.embedding_model
         embeddings = embedding_model.embed_documents([doc.page_content for doc in docs])
 
@@ -846,8 +873,8 @@ async def analyze_javascript_code(code_text):
             "structure": docs[0].page_content[:500] + "..." if docs else ""
         }
     finally:
-
         os.unlink(temp_file)
+
 
 async def reindex_all_github_projects(repo_dir=TMP_REPO_DIR):
     analyzer = RepoAnalyzer()
@@ -877,6 +904,146 @@ async def read_file_content_from_github_directory(file_path):
     except Exception as e:
         logger.error(f"Error reading file {file_path}: {e}")
         return f"Error reading file: {str(e)}"
+
+async def get_github_project_structure(project_id: str):
+    """Get the file tree structure of a GitHub project"""
+    try:
+        project_path = os.path.join(TMP_REPO_DIR, project_id)
+        if not os.path.exists(project_path):
+            raise Exception(f"Project '{project_id}' not found")
+        
+        def build_tree(path, relative_path=""):
+            items = []
+            try:
+                for item_name in sorted(os.listdir(path)):
+                    if item_name.startswith('.') and item_name in {'.git', '.gitignore', '.github'}:
+                        continue
+                    
+                    item_path = os.path.join(path, item_name)
+                    relative_item_path = os.path.join(relative_path, item_name) if relative_path else item_name
+                    
+                    if os.path.isdir(item_path):
+                        # Skip common directories we don't want to show
+                        if item_name in IGNORE_DIRS:
+                            continue
+                        
+                        children = build_tree(item_path, relative_item_path)
+                        items.append({
+                            "name": item_name,
+                            "type": "directory",
+                            "path": relative_item_path,
+                            "children": children
+                        })
+                    else:
+                        # Get file info
+                        try:
+                            file_size = os.path.getsize(item_path)
+                            file_ext = os.path.splitext(item_name)[1].lower()
+                            
+                            # Skip binary files
+                            if file_ext in BINARY_EXTS:
+                                continue
+                            
+                            # Skip large files
+                            if file_size > MAX_FILE_SIZE_KB * 1024:
+                                continue
+                            
+                            items.append({
+                                "name": item_name,
+                                "type": "file",
+                                "path": relative_item_path,
+                                "size": file_size,
+                                "extension": file_ext,
+                                "language": CODE_EXTS.get(file_ext, "text")
+                            })
+                        except OSError:
+                            continue
+            except PermissionError:
+                pass
+            
+            return items
+        
+        file_tree = build_tree(project_path)
+        
+        # Get project analysis
+        analyzer = RepoAnalyzer()
+        analysis = await analyzer.analyze_repo_structure(project_path)
+        
+        return {
+            "project_id": project_id,
+            "file_tree": file_tree,
+            "analysis": analysis
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting project structure for {project_id}: {e}")
+        raise Exception(f"Failed to get project structure: {str(e)}")
+
+async def get_github_project_file_content(project_id: str, file_path: str):
+    """Get the content of a specific file in a GitHub project"""
+    try:
+        # Security check: prevent path traversal attacks
+        if ".." in file_path or file_path.startswith("/"):
+            raise Exception("Invalid file path")
+        
+        project_path = os.path.join(TMP_REPO_DIR, project_id)
+        if not os.path.exists(project_path):
+            raise Exception(f"Project '{project_id}' not found")
+        
+        full_file_path = os.path.join(project_path, file_path)
+        
+        # Ensure the file is within the project directory
+        if not full_file_path.startswith(project_path):
+            raise Exception("Invalid file path")
+        
+        if not os.path.exists(full_file_path):
+            raise Exception(f"File '{file_path}' not found in project")
+        
+        if not os.path.isfile(full_file_path):
+            raise Exception(f"'{file_path}' is not a file")
+        
+        # Get file info
+        file_size = os.path.getsize(full_file_path)
+        file_ext = os.path.splitext(file_path)[1].lower()
+        
+        # Check if file is too large
+        if file_size > MAX_FILE_SIZE_KB * 1024:
+            raise Exception(f"File is too large ({file_size / 1024:.1f}KB > {MAX_FILE_SIZE_KB}KB)")
+        
+        # Try to read as text with different encodings
+        encodings = ['utf-8', 'utf-16', 'latin-1', 'cp1252']
+        content = None
+        encoding_used = None
+        
+        for encoding in encodings:
+            try:
+                with open(full_file_path, 'r', encoding=encoding) as f:
+                    content = f.read()
+                    encoding_used = encoding
+                    break
+            except UnicodeDecodeError:
+                continue
+        
+        if content is None:
+            # If all text encodings fail, try reading as binary and decode what we can
+            with open(full_file_path, 'rb') as f:
+                raw_content = f.read()
+                content = raw_content.decode('utf-8', errors='replace')
+                encoding_used = 'binary'
+        
+        return {
+            "project_id": project_id,
+            "file_path": file_path,
+            "content": content,
+            "size": file_size,
+            "extension": file_ext,
+            "language": CODE_EXTS.get(file_ext, "text"),
+            "encoding": encoding_used
+        }
+        
+    except Exception as e:
+        logger.error(f"Error reading file {file_path} from project {project_id}: {e}")
+        raise Exception(f"Failed to read file: {str(e)}")
 
 
 

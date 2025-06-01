@@ -4,7 +4,7 @@ from utils.faiss import build_index
 from rich.console import Console
 from ai.process import process_message
 from utils.updates import event_generator
-from fastapi import FastAPI, Request, HTTPException, UploadFile, File, Form, Body
+from fastapi import FastAPI, Request, HTTPException, UploadFile, File, Form, Body, Query
 from typing import List, Optional
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,18 +27,30 @@ import asyncio
 import config.tars as gemini
 from utils.background import periodic_assessment_task, run_memory_task
 from utils.shell import run_python_code, init_python_session, close_python_session
-from utils.node import run_node_tests, test_javascript_code, run_node_app_with_streaming, get_process_output, terminate_process
+from utils.node import (
+    run_node_tests,
+    test_javascript_code,
+    run_node_app_with_streaming,
+    get_process_output,
+    terminate_process,
+)
 import os
 import langchain
 from ai.memory import ChatMemoryManager
-from utils.documentation import add_documentation, get_documentation, delete_document
+from utils.documentation import add_documentation, get_documentation, delete_document, get_document_content
 from sse_starlette.sse import EventSourceResponse
 from contextlib import asynccontextmanager
 from utils.env_change import get_api_key, save_api_key
 from utils.context import CODESPACE_DIR, upload_project, clear_project, get_project_status, index_status, reindex_project, clone_personal_github_repo, get_project_files_and_folders, get_content_of_file, upload_folder
-from utils.github import delete_all_cloned_repos, list_cloned_repos, delete_cloned_repo, reindex_all_github_projects
+from utils.github import delete_all_cloned_repos, list_cloned_repos, delete_cloned_repo, reindex_all_github_projects, get_github_project_structure, get_github_project_file_content
 from pydantic import BaseModel
 import time
+from Model.InitBashSessionRequest import InitBashSessionRequest
+from Model.BashCommandRequest import BashCommandRequest
+from Model.CloseBashSessionRequest import CloseBashSessionRequest
+from utils.bash_session import run_bash_command, close_bash_session, init_bash_session
+from utils.recommendation import get_recommendation
+
 
 RESOURCES_DIR = Path("resources")
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
@@ -53,14 +65,17 @@ class JavaScriptTestRequest(BaseModel):
     test_code: Optional[str] = None
     framework: Optional[str] = "jest"
 
-# Add a new model for Node.js application running
 class NodeAppRequest(BaseModel):
     directory: Optional[str] = None
     run_command: str = "start"
 
-# Add a new model for process termination
 class ProcessTerminateRequest(BaseModel):
     process_id: str
+
+class RecommendationRequest(BaseModel):
+    query: str
+    history: Optional[List[str]] = []
+    recent_messages: Optional[List[str]] = []
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -89,9 +104,9 @@ async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
     return JSONResponse({"detail": "Rate limit exceeded"}, status_code=429)
 
 @app.get("/chat/stream")
-async def stream_endpoint():
+async def stream_endpoint(chat_id: str = Query(..., description="Chat ID for the streaming session")):
     try:
-        return EventSourceResponse(event_generator())
+        return EventSourceResponse(event_generator(chat_id=chat_id))
     except Exception as e:
         gemini.logger.error(f"Error in stream_endpoint: {e}")
         raise HTTPException(status_code=500, detail="Failed to stream events.")
@@ -276,6 +291,15 @@ async def get_documentation_endpoint(request: Request):
         gemini.logger.error(f"Error in get_documentation: {e}")
         raise HTTPException(status_code=500, detail="Failed to retrieve documentation.")
 
+@app.get("/get_document_content/{document_id}")
+@limiter.limit("20/minute")
+async def get_document_content_endpoint(request: Request, document_id: str):
+    try:
+        return await get_document_content(document_id)
+    except Exception as e:
+        gemini.logger.error(f"Error in get_document_content: {e}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve document content.")
+
 @app.delete("/remove_documentation", response_model=DeletionResponse)
 @limiter.limit("10/minute")
 async def delete_documents_endpoint(
@@ -386,6 +410,8 @@ async def delete_cloned_repos_endpoint(request: Request, repo_names_body: RepoNa
         except Exception as e:
             gemini.logger.error(f"Error deleting repo '{repo_name}': {e}")
             results.append({"repo_name": repo_name, "success": False, "message": f"Error: {e}"})
+    
+    return results
 
 @app.post("/clone_personal_github_repo")
 @limiter.limit("10/minute")
@@ -421,6 +447,24 @@ async def reindex_github_projects_endpoint(request: Request):
         gemini.logger.error(f"Error in reindex_github_projects: {e}")
         raise HTTPException(status_code=500, detail="Failed to reindex github projects.")
     
+@app.get("/get_github_project_structure/{project_id}")
+@limiter.limit("20/minute")
+async def get_github_project_structure_endpoint(request: Request, project_id: str):
+    try:
+        return await get_github_project_structure(project_id)
+    except Exception as e:
+        gemini.logger.error(f"Error in get_github_project_structure: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get project structure: {str(e)}")
+
+@app.get("/get_github_project_file/{project_id}")
+@limiter.limit("30/minute")
+async def get_github_project_file_endpoint(request: Request, project_id: str, file_path: str):
+    try:
+        return await get_github_project_file_content(project_id, file_path)
+    except Exception as e:
+        gemini.logger.error(f"Error in get_github_project_file: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get file content: {str(e)}")
+    
 @app.get("/project_files/")
 @limiter.limit("20/minute")
 async def get_project_files_endpoint(request: Request, path: Optional[str] = None, recursive: bool = True):
@@ -444,7 +488,6 @@ async def get_file_content_endpoint(request: Request, file_path: str):
         content = get_content_of_file(file_path)
         
         if isinstance(content, dict) and not content.get("success", True):
-            # Handle error case
             gemini.logger.warning(f"Error getting file content: {content.get('error')}")
             raise HTTPException(status_code=404, detail=content.get("error", "File not found"))
             
@@ -508,7 +551,6 @@ async def test_javascript_code_endpoint(request: Request, test_request: JavaScri
 @limiter.limit("10/minute")
 async def run_node_app_endpoint(request: Request, app_request: NodeAppRequest):
     try:
-        # Generate a unique process ID
         process_id = f"node-app-{int(time.time())}"
         
         return await run_node_app_with_streaming(
@@ -528,14 +570,54 @@ async def stream_node_app_output(request: Request, process_id: str):
         gemini.logger.error(f"Error in stream_node_app_output: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to stream output: {str(e)}")
 
-@app.post("/terminate_node_app")
+@app.post("/terminate_node_app/{process_id}")
 @limiter.limit("10/minute")
-async def terminate_node_app_endpoint(request: Request, terminate_request: ProcessTerminateRequest):
+async def terminate_node_app_endpoint(request: Request, process_id: str):
     try:
-        return terminate_process(terminate_request.process_id)
+        result = terminate_process(process_id)
+        if not result["success"]:
+            raise HTTPException(status_code=400, detail=result["error"])
+        return result
     except Exception as e:
         gemini.logger.error(f"Error in terminate_node_app: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to terminate process: {str(e)}")
+
+@app.post("/init_bash_session")
+@limiter.limit("10/minute")
+async def init_bash_session_endpoint(request: Request, bash_request: InitBashSessionRequest):
+    try:
+        return await init_bash_session(request, bash_request)
+    except Exception as e:
+        gemini.logger.error(f"Error in init_bash_session: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to initialize bash session: {str(e)}")
+
+@app.post("/run_bash_command")
+@limiter.limit("30/minute")
+async def run_bash_command_endpoint(request: Request, bash_request: BashCommandRequest):
+    try:
+        return await run_bash_command(request, bash_request)
+    except Exception as e:
+        gemini.logger.error(f"Error in run_bash_command: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to run bash command: {str(e)}")
+       
+@app.post("/close_bash_session")
+@limiter.limit("10/minute")
+async def close_bash_session_endpoint(request: Request, bash_request: CloseBashSessionRequest):
+    try:
+        return await close_bash_session(request, bash_request)
+    except Exception as e:
+        gemini.logger.error(f"Error in close_bash_session: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to close bash session: {str(e)}")
+
+@app.post("/get_recommendation")
+@limiter.limit("30/minute")
+async def get_recommendation_endpoint(request: Request, data: RecommendationRequest):
+    try:
+        suggestions = await get_recommendation(data.query, data.history, data.recent_messages)
+        return {"suggestions": suggestions}
+    except Exception as e:
+        gemini.logger.error(f"Error in get_recommendation: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get recommendations: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

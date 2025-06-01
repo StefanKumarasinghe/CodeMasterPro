@@ -8,7 +8,7 @@ ProviderType = Literal["gemini", "chatgpt", "claude"]
 PROVIDER_DEFAULTS = {
     "gemini": {
         "lite": {"temperature": 0.5, "max_tokens": 100000},
-        "super-lite": {"temperature": 0.3, "max_tokens": 100000},
+        "super-lite": {"temperature": 1.0, "max_tokens": 100000},
         "fast": {"temperature": 0.6, "max_tokens": 100000},
         "summary": {"temperature": 1.0, "max_tokens": 100000},
         "code": {"temperature": 0.8, "max_tokens": 100000},
@@ -83,7 +83,7 @@ class ModelProvider:
     def __init__(self, provider_type: ProviderType):
         self.provider_type = provider_type
 
-    def get_model(self, model_type: str, **kwargs):
+    def get_model(self, model_type: str, temperature: float = None, **kwargs):
         raise NotImplementedError("Subclasses must implement get_model")
 
     def get_defaults(self, model_type: str) -> dict:
@@ -93,11 +93,13 @@ class GeminiProvider(ModelProvider):
     def __init__(self):
         super().__init__("gemini")
 
-    def get_model(self, model_type: str, **kwargs):
+    def get_model(self, model_type: str, temperature: float = None, **kwargs):
         model_name = MODEL_NAMES["gemini"].get(model_type)
         if not model_name:
             return None
         config = self.get_defaults(model_type)
+        if temperature is not None:
+            config["temperature"] = temperature
         config.update(kwargs)
         return ChatGoogleGenerativeAI(model=model_name, **config)
 
@@ -105,11 +107,13 @@ class ChatGPTProvider(ModelProvider):
     def __init__(self):
         super().__init__("chatgpt")
 
-    def get_model(self, model_type: str, **kwargs):
+    def get_model(self, model_type: str, temperature: float = None, **kwargs):
         model_name = MODEL_NAMES["chatgpt"].get(model_type)
         if not model_name:
             return None
         config = self.get_defaults(model_type)
+        if temperature is not None:
+            config["temperature"] = temperature
         config.update(kwargs)
         return ChatOpenAI(model_name=model_name, **config)
 
@@ -117,11 +121,13 @@ class ClaudeProvider(ModelProvider):
     def __init__(self):
         super().__init__("claude")
 
-    def get_model(self, model_type: str, **kwargs):
+    def get_model(self, model_type: str, temperature: float = None, **kwargs):
         model_name = MODEL_NAMES["claude"].get(model_type)
         if not model_name:
             return None
         config = self.get_defaults(model_type)
+        if temperature is not None:
+            config["temperature"] = temperature
         config.update(kwargs)
         return ChatAnthropic(model=model_name, **config)
 

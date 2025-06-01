@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, useCallback, useMemo } from "react"
 import { Editor, type Monaco } from "@monaco-editor/react"
 import { Button } from "@/components/ui/button"
 import { API_ENDPOINT } from "@/config/constants"
-import { Copy, Download, Save, Maximize, Minimize, Loader2, X, Code, SparkleIcon } from "lucide-react"
+import { Copy, Download, Save, Maximize, Minimize, Loader2, X, Code, SparkleIcon, Play } from "lucide-react"
 import { toast } from "@/utils/toast-util"
 import { useTheme } from "next-themes"
 import { cn } from "@/lib/utils"
@@ -25,9 +25,9 @@ interface CodeEditorCanvasProps {
 
 const extensionToMonacoLanguage: { [key: string]: string } = {
   py: "python",
-  js: "javascript",
+  js: "js",
   ts: "typescript",
-  jsx: "javascript",
+  jsx: "js",
   tsx: "typescript",
   html: "html",
   css: "css",
@@ -58,7 +58,7 @@ const extensionToMonacoLanguage: { [key: string]: string } = {
 
 const monacoLanguageToDisplayName: { [key: string]: string } = {
   python: "Python",
-  javascript: "JavaScript",
+  js: "JavaScript",
   typescript: "TypeScript",
   html: "HTML",
   css: "CSS",
@@ -252,7 +252,11 @@ export const CodeEditorCanvas: React.FC<CodeEditorCanvasProps> = ({
         detail: { forced: true },
       }),
     )
-
+    window.dispatchEvent(
+      new CustomEvent("bash-shell-close", {
+        detail: { forced: true },
+      }),
+    )
     window.dispatchEvent(
       new CustomEvent("code-editor-close", {
         detail: { forced: true },
@@ -416,9 +420,6 @@ export const CodeEditorCanvas: React.FC<CodeEditorCanvasProps> = ({
       setSelectedLanguage(monacoId)
       localStorage.setItem("editor-monaco-language", monacoId)
       setKey((prev) => prev + 1)
-    } else {
-      console.error("Attempted to set unknown language:", monacoId)
-      toast.error("Invalid language selected.")
     }
   }, [])
 
@@ -468,12 +469,6 @@ export const CodeEditorCanvas: React.FC<CodeEditorCanvasProps> = ({
   }, [code, selectedLanguage, filename])
 
   if (!isOpen) return null
-
-  const containerClasses = cn(
-    "border-l shadow-xl flex flex-col transition-all duration-300",
-    actualTheme === "dark" ? "bg-zinc-900 border-zinc-700" : "bg-zinc-50 border-zinc-300",
-    isOpen ? "fixed z-50 top-0 right-0 h-full" : "hidden",
-  )
 
   const headerClasses = cn(
     "flex flex-col border-b",
@@ -549,60 +544,62 @@ export const CodeEditorCanvas: React.FC<CodeEditorCanvasProps> = ({
             </Button>
           </div>
         </div>
-        {!safeView && (
-          <>
-            <div
-              className={cn(
-                "flex flex-wrap items-center gap-1 p-2 border-t",
-                actualTheme === "dark" ? "border-zinc-700" : "border-zinc-300",
-              )}
-            >
-              <Select value={selectedLanguage} onValueChange={handleLanguageChange}>
-                <SelectTrigger className={selectTriggerClasses}>
-                  <SelectValue placeholder="Select Language">
-                    {monacoLanguageToDisplayName[selectedLanguage] || "Select Language"}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent className={selectContentClasses}>
-                  {availableLanguages.map(({ monacoId, displayName }) => (
-                    <SelectItem key={monacoId} value={monacoId} className={selectItemClasses}>
-                      {displayName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+        <div
+          className={cn(
+            "flex flex-wrap items-center gap-1 p-2 border-t",
+            actualTheme === "dark" ? "border-zinc-700" : "border-zinc-300",
+          )}
+        >
+          {!safeView && (
+            <Select value={selectedLanguage} onValueChange={handleLanguageChange}>
+              <SelectTrigger className={selectTriggerClasses}>
+          <SelectValue placeholder="Select Language">
+            {monacoLanguageToDisplayName[selectedLanguage] || "Select Language"}
+          </SelectValue>
+              </SelectTrigger>
+              <SelectContent className={selectContentClasses}>
+          {availableLanguages.map(({ monacoId, displayName }) => (
+            <SelectItem key={monacoId} value={monacoId} className={selectItemClasses}>
+              {displayName}
+            </SelectItem>
+          ))}
+              </SelectContent>
+            </Select>
+          )}
 
-              <Button variant="ghost" size="sm" onClick={handleCopy} className={buttonClasses()}>
-                <Copy className="h-4 w-4 mr-2" />
-                Copy
-              </Button>
-              <Button variant="ghost" size="sm" onClick={handleDownload} className={buttonClasses()}>
-                <Download className="h-4 w-4 mr-2" />
-                Download
-              </Button>
-              <Button variant="ghost" size="sm" onClick={ModifyCode} className={buttonClasses()}>
-                <SparkleIcon className="h-4 w-4 mr-2" />
-                Modify
-              </Button>
+          <Button variant="ghost" size="sm" onClick={handleCopy} className={buttonClasses()}>
+            <Copy className="h-4 w-4 mr-2" />
+            Copy
+          </Button>
+          <Button variant="ghost" size="sm" onClick={handleDownload} className={buttonClasses()}>
+            <Download className="h-4 w-4 mr-2" />
+            Download
+          </Button>
+          <Button variant="ghost" size="sm" onClick={ModifyCode} className={buttonClasses()}>
+            <SparkleIcon className="h-4 w-4 mr-2" />
+            Modify
+          </Button>
+          {!safeView && (
+            <>
               <Button variant="ghost" size="sm" onClick={toggleFullScreen} className={buttonClasses()}>
-                {isFullScreen ? <Minimize className="h-4 w-4 mr-2" /> : <Maximize className="h-4 w-4 mr-2" />}
-                {isFullScreen ? "Minimize" : "Maximize"}
+          {isFullScreen ? <Minimize className="h-4 w-4 mr-2" /> : <Maximize className="h-4 w-4 mr-2" />}
+          {isFullScreen ? "Minimize" : "Maximize"}
               </Button>
               {onSave && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleSave}
-                  disabled={isSaving || !isDirty}
-                  className={buttonClasses()}
-                >
-                  {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
-                  Save {isDirty && " - Modified"}
-                </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleSave}
+            disabled={isSaving || !isDirty}
+            className={buttonClasses()}
+          >
+            {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+            Save {isDirty && " - Modified"}
+          </Button>
               )}
-            </div>
-          </>
-        )}
+            </>
+          )}
+        </div>
       </div>
       <div className="flex-1 overflow-hidden">
         <Editor

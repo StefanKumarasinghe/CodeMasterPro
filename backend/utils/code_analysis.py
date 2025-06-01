@@ -46,6 +46,7 @@ async def analyze_chunk(
     code_analysis_chain: Any,
     intent: str,
     format_rules: str,
+    chat_id: str,
 ) -> Tuple[Optional[str], Optional[str]]:
     backoff_delay = 1
     retries = 0
@@ -70,14 +71,14 @@ async def analyze_chunk(
 
         result = await invoke_with_retry(code_analysis_chain, prompt_input)
         raw_output = result.content
-        set_update(f"Analyzing chunk {index}...{raw_output[:200]}")
+        set_update(f"Analyzing chunk {index}...{raw_output[:200]}", chat_id)
 
         score = await validate_output(focus_chunk, raw_output, intent)
         
         if score > SCORE_THRESHOLD:
             break
             
-        set_update(f"Retrying chunk {index}...{raw_output[:200]}")
+        set_update(f"Retrying chunk {index}...{raw_output[:200]}", chat_id)
         past_results = raw_output
 
         if len(current_refs) > 1:
@@ -98,21 +99,22 @@ async def analyze_chunk(
 
     return lang, cleaned_code
 
-async def analyze_user_intent(intent: str) -> str:
+async def analyze_user_intent(intent: str, chat_id: str) -> str:
     prompt_input = {"query": intent}
     result = await invoke_with_retry(
         user_intent_chain(model_type=gemini.modelType, provider_type=gemini.providerName), 
         prompt_input
     )
+    set_update(f"Understanding intent...{result.content[:200]}", chat_id)
     return result.content.strip()
 
 async def process_chunk_batch(batch_data):
     batch_results = []
     for data in batch_data:
-        i, focus_chunk, reference_chunks, prior_results, request_data, code_analysis_chain, intent, format_rules = data
+        i, focus_chunk, reference_chunks, prior_results, request_data, code_analysis_chain, intent, format_rules, chat_id = data
         current_lang, cleaned_code = await analyze_chunk(
             i, focus_chunk, reference_chunks, prior_results, 
-            request_data, code_analysis_chain, intent, format_rules
+            request_data, code_analysis_chain, intent, format_rules, chat_id
         )
         batch_results.append((i, current_lang, cleaned_code))
     return batch_results
@@ -120,14 +122,14 @@ async def process_chunk_batch(batch_data):
 async def code_analysis(
     code_input: str,
     request_data: Any,
-    code_analysis_chain: Any
+    code_analysis_chain: Any,
+    chat_id: str = None
 ) -> str:
     code_sample = code_input[:100] + "..." + code_input[-100:] if len(code_input) > 200 else code_input
-    intent = await analyze_user_intent(code_sample)
-    set_update(f"Understanding intent...{intent[:200]}")
+    intent = await analyze_user_intent(code_sample, chat_id or "default")
     code_chunks = await break_code_into_chunks(code_input)
     gemini.logger.info(f"Split input into {len(code_chunks)} chunks")
-    set_update(f"Processing {len(code_chunks)} chunks...")
+    set_update(f"Processing {len(code_chunks)} chunks... how long will this take?", chat_id or "default")
 
     results = []
     detected_langs = {}
@@ -142,7 +144,7 @@ async def code_analysis(
     for i, focus_chunk in enumerate(code_chunks):
         refs = reference_chunks[i+1:i+1+REFERENCE_WINDOW_SIZE]
         chunked_data.append((i, focus_chunk, refs, prior_results.copy(), 
-                            request_data, code_analysis_chain, intent, format_rules))
+                            request_data, code_analysis_chain, intent, format_rules, chat_id or "default"))
     
     batches = [chunked_data[i:i+batch_size] for i in range(0, len(chunked_data), batch_size)]
     all_results = []
@@ -162,8 +164,7 @@ async def code_analysis(
             detected_langs[lang] = detected_langs.get(lang, 0) + 1
     
     detected_lang = max(detected_langs.items(), key=lambda x: x[1])[0] if detected_langs else "output"
-    set_update(f"Finalizing output from {len(results)} chunks...")
-    
+
     final_combined_output = "\n".join(results)
     output_format = request_data.outputFormat.strip()
 

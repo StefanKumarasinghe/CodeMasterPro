@@ -399,7 +399,7 @@ export function ChatHistory() {
                   key={chat.id}
                   className={cn(
                     "p-3 rounded-md border hover:bg-accent/50 cursor-pointer transition-colors",
-                    fontScale > 1 ? "space-y-1.5" : "space-y-0.5" // Add more spacing for larger font sizes
+                    fontScale > 1 ? "space-y-1.5" : "space-y-0.5" 
                   )}
                   onClick={() => viewChat(chat)}
                 >
@@ -422,7 +422,7 @@ export function ChatHistory() {
                         className="h-6 w-6"
                         onClick={(e) => downloadChat(chat, e)}
                       >
-                        <Download className="h-3.5 w-3.5" />
+                        <Download className="" />
                         <span className="sr-only">Download</span>
                       </Button>
                       <Button

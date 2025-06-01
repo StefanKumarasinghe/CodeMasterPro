@@ -2,7 +2,6 @@ import os
 import httpx
 import asyncio
 from typing import List, Dict
-from functools import lru_cache
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from ai.model_switcher import rank_chain, cleaned_search_result_chain, refine_search_chain, reference_check_chain
@@ -119,7 +118,8 @@ async def rank_reddit_posts(posts: List[Dict[str, str]], query: str) -> List[Dic
             ),
             {"query": query, "questions": post_texts}
         )
-        ranked_indices = result.ranked_questions
+        # Extract the question IDs and convert them to indices
+        ranked_indices = [int(q.question_id) - 1 for q in result.ranked_questions]
         return [posts[i] for i in ranked_indices if i < len(posts)]
     except Exception as e:
         gemini.logger.error(f"[ERROR] Ranking failed: {e}")

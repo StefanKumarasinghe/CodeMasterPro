@@ -6,8 +6,6 @@ import { useRef, useEffect, useState, useCallback } from "react"
 import ChatMessage from "./chat-message"
 import { ChatWelcome } from "./chat-welcome"
 import { useChat } from "@/context/chat-context"
-import { Button } from "@/components/ui/button"
-import { ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ChatProgressBar } from "./chat-progress-bar"
 import { useInView } from "react-intersection-observer"
@@ -44,11 +42,150 @@ interface ChatMessageListProps {
   isResizing?: boolean
 }
 
+interface StreamUpdate {
+  id: string
+  message: string
+  timestamp: number
+}
+
+const TypewriterText: React.FC<{ 
+  text: string; 
+  delay?: number; 
+  onComplete?: () => void;
+  shouldAccelerate?: boolean;
+}> = ({ 
+  text, 
+  delay = 30,
+  onComplete,
+  shouldAccelerate = false
+}) => {
+  const [displayedText, setDisplayedText] = useState("")
+  const [currentIndex, setCurrentIndex] = useState(0)
+  const [currentDelay, setCurrentDelay] = useState(delay)
+  const timerRef = useRef<NodeJS.Timeout | null>(null)
+
+  useEffect(() => {
+    if (shouldAccelerate) {
+      setCurrentDelay(5)
+    } else {
+      setCurrentDelay(delay)
+    }
+  }, [shouldAccelerate, delay])
+
+  useEffect(() => {
+    if (currentIndex < text.length) {
+      timerRef.current = setTimeout(() => {
+        setDisplayedText(prev => prev + text[currentIndex])
+        setCurrentIndex(prev => prev + 1)
+      }, currentDelay)
+      return () => {
+        if (timerRef.current) {
+          clearTimeout(timerRef.current)
+        }
+      }
+    } else if (onComplete) {
+      onComplete()
+    }
+  }, [currentIndex, text, currentDelay, onComplete])
+
+  useEffect(() => {
+    setDisplayedText("")
+    setCurrentIndex(0)
+  }, [text])
+
+  return (
+    <span className="inline-block">
+      {displayedText}
+      {currentIndex < text.length && (
+        <span className="animate-pulse text-xs text-primary">|</span>
+      )}
+    </span>
+  )
+}
+
+const StreamUpdatesList: React.FC<{ updates: StreamUpdate[] }> = ({ updates }) => {
+  const [currentUpdateIndex, setCurrentUpdateIndex] = useState(0)
+  const [completedUpdates, setCompletedUpdates] = useState<Set<string>>(new Set())
+  const [pendingUpdates, setPendingUpdates] = useState<StreamUpdate[]>([])
+
+  useEffect(() => {
+    const newUpdates = updates.filter(update => !completedUpdates.has(update.id))
+    if (newUpdates.length > 0) {
+      setPendingUpdates(prev => [...prev, ...newUpdates])
+    }
+  }, [updates, completedUpdates])
+
+  const handleUpdateComplete = useCallback((updateId: string) => {
+    setCompletedUpdates(prev => new Set([...prev, updateId]))
+    setPendingUpdates(prev => prev.filter(update => update.id !== updateId))
+    setCurrentUpdateIndex(prev => prev + 1)
+  }, [])
+
+  const visibleUpdates = updates.slice(0, currentUpdateIndex + 1)
+  const currentUpdate = pendingUpdates[0]
+  const hasMorePending = pendingUpdates.length > 1
+
+  return (
+    <div className="space-y-2 mt-3">
+      {visibleUpdates.map((update, index) => {
+        const isCurrentlyTyping = currentUpdate?.id === update.id
+        const shouldAccelerate = isCurrentlyTyping && hasMorePending
+        
+        return (
+          <div
+            key={update.id}
+            className="transform transition-all duration-500 ease-out"
+            style={{
+              animation: `slideInUp 0.6s ease-out ${index * 0.1}s both`,
+            }}
+          >
+            <div className="flex-shrink-0 text-xs ml-3 my-2 text-muted-foreground/60">
+                {new Date(update.timestamp).toLocaleTimeString([], { 
+                  hour: '2-digit', 
+                  minute: '2-digit',
+                  second: '2-digit'
+                })}
+            </div>
+            <div className="flex items-start gap-3 p-4 bg-gradient-to-r from-indigo-50 via-purple-50 to-pink-50 dark:from-slate-800/50 dark:via-slate-700/50 dark:to-slate-800/50 rounded-lg border border-primary/10 shadow-sm backdrop-blur-sm">
+              <div className="flex-1 min-w-0 text-sm">
+                {completedUpdates.has(update.id) ? (
+                  <span>{update.message}</span>
+                ) : isCurrentlyTyping ? (
+                  <TypewriterText 
+                    text={update.message}
+                    delay={20}
+                    shouldAccelerate={shouldAccelerate}
+                    onComplete={() => handleUpdateComplete(update.id)}
+                  />
+                ) : (
+                  <span>{update.message}</span>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      })}
+      <style jsx>{`
+        @keyframes slideInUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px) scale(0.95);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+      `}</style>
+    </div>
+  )
+}
+
 export function ChatMessageList({
   language,
   isLoading,
 }: ChatMessageListProps) {
-  const { messages, preferences, handleCodeAction, setMemoryState, language: contextLanguage } = useChat()
+  const { messages, preferences, handleCodeAction, setMemoryState, language: contextLanguage, chatId } = useChat()
 
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const scrollViewportRef = useRef<HTMLDivElement | null>(null)
@@ -62,7 +199,7 @@ export function ChatMessageList({
     triggerOnce: false,
     threshold: 0.1,
   })
-  const [updateMessage, setUpdateMessage] = useState("")
+  const [streamUpdates, setStreamUpdates] = useState<StreamUpdate[]>([])
   const loadingIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const streamSourceRef = useRef<EventSource | null>(null)
   const [lazyLoadingTriggered, setLazyLoadingTriggered] = useState(false)
@@ -97,30 +234,59 @@ export function ChatMessageList({
     setIsAutoScrollEnabled(isNearBottom)
   }, [setShowScrollButton, setIsAutoScrollEnabled, scrollViewportRef])
 
-  const streamUpdates = useCallback(() => {
+  const handleStreamUpdates = useCallback(() => {
     if (streamSourceRef.current) {
       streamSourceRef.current.close()
     }
-    const source = new EventSource(`${API_ENDPOINT}/chat/stream`)
+    const source = new EventSource(`${API_ENDPOINT}/chat/stream?chat_id=${chatId}`)
     streamSourceRef.current = source
 
+    let lastMessage = ""
+    let lastTimestamp = 0
+
     source.onmessage = (event) => {
-      const update = event.data
-      if (typeof update === "string" && update.length > 0) {
-        setUpdateMessage(update)
+      const updateText = event.data
+      const currentTime = Date.now()
+      
+      if (typeof updateText === "string" && updateText.length > 0 && 
+          (updateText !== lastMessage || currentTime - lastTimestamp > 2000)) {
+        lastMessage = updateText
+        lastTimestamp = currentTime
+        
+        const newUpdate: StreamUpdate = {
+          id: `update-${currentTime}-${Math.random().toString(36).substr(2, 9)}`,
+          message: updateText,
+          timestamp: currentTime
+        }
+        
+        setStreamUpdates(prev => {
+          const filtered = prev.filter(update => 
+            !(update.message === updateText && Math.abs(update.timestamp - currentTime) < 2000)
+          )
+          return [...filtered, newUpdate]
+        })
+        
+        setTimeout(() => {
+          scrollToBottom()
+        }, 100)
       }
     }
 
     source.onerror = () => {
       source.close()
       streamSourceRef.current = null
-      setUpdateMessage("Stream error: Could not connect to updates.")
+      const errorUpdate: StreamUpdate = {
+        id: `error-${Date.now()}`,
+        message: "Connection interrupted. Reconnecting...",
+        timestamp: Date.now()
+      }
+      setStreamUpdates(prev => [...prev, errorUpdate])
     }
 
     return () => {
       source.close()
     }
-  }, [])
+  }, [scrollToBottom])
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -186,8 +352,8 @@ export function ChatMessageList({
   useEffect(() => {
     let cleanupStream: (() => void) | undefined
     if (isLoading) {
-      setUpdateMessage("Peeking into CodeMasterPro's brain...")
-      cleanupStream = streamUpdates()
+      setStreamUpdates([])
+      cleanupStream = handleStreamUpdates()
       let index = 0
       if (loadingIntervalRef.current) clearInterval(loadingIntervalRef.current)
       setLoadingMessage(LOADING_MESSAGES[index])
@@ -198,14 +364,14 @@ export function ChatMessageList({
     } else {
       if (loadingIntervalRef.current) clearInterval(loadingIntervalRef.current)
       if (streamSourceRef.current) streamSourceRef.current.close()
-      setUpdateMessage("")
+      setStreamUpdates([])
     }
 
     return () => {
       if (loadingIntervalRef.current) clearInterval(loadingIntervalRef.current)
       if (cleanupStream) cleanupStream()
     }
-  }, [isLoading, streamUpdates])
+  }, [isLoading, handleStreamUpdates])
 
   const handleClearMemory = useCallback(() => {
     setMemoryState((prev) => ({ ...prev, forgetMemory: true }))
@@ -238,11 +404,8 @@ export function ChatMessageList({
       setEditorVisible(false)
     }
     
-    
-    const handleNodeTestRunnerState = () => {
-      
+    const handleShellState = () => {
       window.dispatchEvent(new Event('resize'))
-      
       
       setTimeout(() => {
         if (messageListRef.current) {
@@ -256,14 +419,18 @@ export function ChatMessageList({
     window.addEventListener("editor-resize", handleEditorPositionChange as EventListener)
     window.addEventListener("editor-interaction-end", handleEditorInteractionEnd as EventListener)
     window.addEventListener("code-editor-close", handleCodeEditorClose as EventListener)
-    window.addEventListener("node-test-runner-state", handleNodeTestRunnerState as EventListener)
+    window.addEventListener("node-test-runner-state", handleShellState as EventListener)
+    window.addEventListener("python-shell-state", handleShellState as EventListener)
+    window.addEventListener("bash-shell-state", handleShellState as EventListener)
 
     return () => {
       window.removeEventListener("editor-position-change", handleEditorPositionChange as EventListener)
       window.removeEventListener("editor-resize", handleEditorPositionChange as EventListener)
       window.removeEventListener("editor-interaction-end", handleEditorInteractionEnd as EventListener)
       window.removeEventListener("code-editor-close", handleCodeEditorClose as EventListener)
-      window.removeEventListener("node-test-runner-state", handleNodeTestRunnerState as EventListener)
+      window.removeEventListener("node-test-runner-state", handleShellState as EventListener)
+      window.removeEventListener("python-shell-state", handleShellState as EventListener)
+      window.removeEventListener("bash-shell-state", handleShellState as EventListener)
     }
   }, [])
 
@@ -301,16 +468,9 @@ export function ChatMessageList({
         />
       )}
       
-   
-
-
-      <ScrollArea className="flex-1 px-2 sm:px-4 py-4" ref={scrollAreaRef}>
+      <ScrollArea className="flex-1 pt-4" ref={scrollAreaRef}>
         <div
-          className="space-y-6 pb-6 w-full mx-auto px-3"
-          style={{
-            maxWidth: "calc(100% - 1.5rem)",
-            transition: "max-width 0.3s ease-in-out",
-          }}
+          className="space-y-6 pb-6 max-w-4xl mx-auto px-3"
         >
           {loadedMessages.length > 0 ? (
             <>
@@ -330,15 +490,23 @@ export function ChatMessageList({
           )}
 
           {isLoading && (
-            <div className="gap-1 text-muted-foreground  text-xs md:text-sm">
-              <div className="flex items-center gap-2">
-                <div className="h-3 w-3 rounded-full bg-primary animate-pulse" />
-                <span>{loadingMessage}</span>
+            <div className="space-y-4 max-w-2xl mr-auto">
+              <div className="flex items-center gap-3 p-4 bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 dark:from-slate-900/50 dark:via-slate-800/50 dark:to-slate-900/50 rounded-lg border border-primary/20 shadow-sm">
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <div className="h-3 w-3 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 animate-pulse" />
+                    <div className="absolute inset-0 h-3 w-3 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 animate-ping opacity-75" />
+                  </div>
+                  <span className="text-sm font-medium text-muted-foreground">
+                    <TypewriterText text={loadingMessage} delay={20} />
+                  </span>
+                </div>
               </div>
-              {updateMessage && (
-                <span className="p-3 my-2 bg-gray-100 dark:bg-gray-700 rounded-md items-center gap-2 text-muted-foreground md:max-w-[60%] inline-flex break-words">
-                  <span className="text-black dark:text-green-200 text-xs md:text-sm">{updateMessage}</span>
-                </span>
+              
+              {streamUpdates.length > 0 && (
+                <div className="pl-4 border-l-2 border-gradient-to-b from-blue-500 to-purple-500">
+                  <StreamUpdatesList updates={streamUpdates} />
+                </div>
               )}
             </div>
           )}
@@ -352,19 +520,6 @@ export function ChatMessageList({
           <div ref={messagesEndRef} />
         </div>
       </ScrollArea>
-
-      <Button
-        variant="default"
-        size="icon"
-        className={cn(
-          "absolute bottom-4 right-4 rounded-full h-9 w-9 font-bold shadow-md transition-opacity duration-200",
-          showScrollButton ? "opacity-100" : "opacity-0 pointer-events-none",
-        )}
-        onClick={scrollToBottom}
-        aria-label="Scroll to bottom"
-      >
-        <ChevronDown className="h-5 w-5" />
-      </Button>
     </div>
   )
 }

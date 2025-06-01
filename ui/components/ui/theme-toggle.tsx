@@ -35,7 +35,7 @@ export function ThemeToggle() {
         className={theme === "dark" ? "bg-accent text-accent-foreground" : ""}
         aria-label="Dark mode"
       >
-        <Moon style={{ height: "1.2rem", width: "1.2rem" }} className="text-gray-500 dark:text-white" />
+        <Moon style={{ height: "1.2rem", width: "1.2rem" }} className="text-yellow-500 dark:text-yellow-300" />
       </Button>
     </div>
   )

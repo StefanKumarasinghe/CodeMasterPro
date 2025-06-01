@@ -1,12 +1,10 @@
 "use client";
 
-import type React from "react";
-import { useEffect, useRef, useState, useCallback, memo } from "react";
+import React, { useEffect, useRef, useState, useCallback, memo } from "react";
 import ReactMarkdown from "react-markdown";
-import { useTheme } from "next-themes";
 import remarkGfm from "remark-gfm";
 import { QuickActionBar } from "./quick-action-bar";
-import {Copy,Check,Download,ExternalLink,ArrowDown,Play,Shield,Edit} from "lucide-react";
+import {Copy,Check,Download,ExternalLink,ArrowDown,Play,Shield,Edit, FileText, Eye} from "lucide-react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import {oneDark,oneLight} from "react-syntax-highlighter/dist/esm/styles/prism";
 import { Button } from "@/components/ui/button";
@@ -18,6 +16,7 @@ import { CodeSast } from "./code-sast";
 import Markdown from "react-markdown";
 import { CodeEditorCanvas } from "@/components/canvas/code-editor-canvas";
 import { NodeTestRunner } from "./node-test-runner";
+import { BashShell } from "@/components/chat/bash-shell"
 
 type TextBlockProps = {
   content: string;
@@ -54,19 +53,53 @@ interface PreformattedCodeProps {
   customStyle?: React.CSSProperties;
 }
 
-const PreformattedCode = ({
+const PreformattedCode = React.forwardRef<HTMLDivElement, PreformattedCodeProps>(({
   code,
   language = "plaintext",
   darkMode = true,
   className,
   customStyle
-}: PreformattedCodeProps) => {
+}, ref) => {
   const syntaxStyle = darkMode ? oneDark : oneLight;
   const lowerCasedLang = language.toLowerCase();
   const plainTextLangs = ["block", "plaintext", "text", "general", "output", ""];
+  const contextLangTags = ["context"];
 
   if (plainTextLangs.includes(lowerCasedLang)) {
-    return <p className={cn("p-4 rounded-md my-4 whitespace-pre-wrap break-words font-scale-base", className)} style={{border: "1px solid #374151", borderRadius: "0 0 0.375rem 0.375rem", ...customStyle}}>{code}</p>;
+    return (
+      <div
+        ref={ref}
+        className={cn(
+          "p-4 rounded-md my-4 whitespace-pre-wrap break-words font-scale-base",
+          className
+        )}
+        style={{
+          border: "1px solid #374151",
+          borderRadius: "0 0 0.375rem 0.375rem",
+          ...customStyle
+        }}
+      >
+        {code}
+      </div>
+    );
+  } else if (contextLangTags.includes(lowerCasedLang)) {
+    return (
+      <div
+        ref={ref}
+        className={cn(
+          "p-4 rounded-md my-4 whitespace-pre-wrap break-words font-scale-base flex items-start gap-2 bg-muted/40",
+          className
+        )}
+        style={{
+          border: "1px solid #374151",
+          borderRadius: "0 0 0.375rem 0.375rem",
+          ...customStyle
+        }}
+      >
+        <FileText className="mt-1 w-4 h-4 shrink-0 text-muted-foreground" />
+        {code.slice(0, 100)}...
+      </div>
+    );
   } else {
     return (
       <SyntaxHighlighter
@@ -75,7 +108,7 @@ const PreformattedCode = ({
         showLineNumbers={false}
         wrapLines={true}
         PreTag="div"
-        className="overflow-x-auto m-0 text-xs md:text-base max-w-prose scrollbar-hide"
+        className={cn("overflow-x-auto m-0 text-xs md:text-base max-w-prose scrollbar-hide", className)}
         customStyle={{
           margin: 0,
           border: darkMode ? "1px solid #374151" : "1px solid rgb(105, 105, 105)",
@@ -83,15 +116,17 @@ const PreformattedCode = ({
           fontSize: "inherit",
           transition: "font-size 0.3s ease-in-out",
           boxSizing: "border-box",
-          ...customStyle,
           maxWidth: "100%",
+          ...customStyle
         }}
       >
-        {code?.trim()}
+        {code}
       </SyntaxHighlighter>
     );
   }
-};
+});
+
+PreformattedCode.displayName = "PreformattedCode";
 
 const normalizeLang = (lang: string): string => {
   const map: Record<string, string> = {
@@ -194,117 +229,136 @@ const TextBlock = memo(({ content, imageData }: TextBlockProps) => {
       )}
 
       <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={{
-          h1: ({ node, ...props }) => (
-            <h1 {...props} className="text-lg md:text-2xl font-bold mt-6 mb-4 max-w-full overflow-hidden break-words" />
-          ),
-          h2: ({ node, ...props }) => (
-            <h2 {...props} className="text-md md:text-xl font-bold mt-5 mb-3 max-w-full overflow-hidden dark:text-green-400 break-words" />
-          ),
-          h3: ({ node, ...props }) => (
-            <h3 {...props} className="text-md md:text-lg  font-bold mt-4 mb-2 max-w-full overflow-hidden  dark:text-green-400 break-words" />
-          ),
-          h4: ({ node, ...props }) => (
-            <h4 {...props} className=" text-xs md:text-base dark:text-red-400 font-semibold mt-3 mb-2 max-w-full overflow-hidden break-words" />
-          ),
-          p: ({ node, ...props }) => (
-            <p {...props} className="my-2 mb-3 text-xs md:text-base leading-relaxed break-words max-w-full overflow-hidden" />
-          ),
-          ul: ({ node, ...props }) => (
-            <ul {...props} className="list-disc pl-6 ml-4 my-3 max-w-full overflow-hidden" />
-          ),
-          ol: ({ node, ...props }) => (
-            <ol {...props} className="list-decimal pl-6 ml-4 my-3 max-w-full overflow-hidden" />
-          ),
-          li: ({ node, ...props }) => <li {...props} className="mb-3 max-w-full text-xs md:text-base overflow-hidden break-words" />,
-          blockquote: ({ node, ...props }) => (
-            <blockquote
+      remarkPlugins={[remarkGfm]}
+      components={{
+        h1: ({ node, ...props }) => (
+          <h1 {...props} className="text-2xl md:text-3xl font-bold tracking-tight mt-8 mb-4 text-primary break-words" />
+        ),
+        h2: ({ node, ...props }) => (
+          <h2 {...props} className="text-xl md:text-2xl font-semibold mt-6 mb-3 text-green-600 dark:text-green-400 break-words" />
+        ),
+        h3: ({ node, ...props }) => (
+          <h3 {...props} className="text-lg md:text-xl font-semibold mt-5 mb-2 text-blue-600 dark:text-blue-300 break-words" />
+        ),
+        h4: ({ node, ...props }) => (
+          <h4 {...props} className="text-base md:text-lg font-medium mt-4 mb-2 text-red-500 dark:text-red-300 break-words" />
+        ),
+        p: ({ node, ...props }) => (
+          <p {...props} className="text-base leading-relaxed my-3 text-gray-700 dark:text-gray-200 break-words" />
+        ),
+        ul: ({ node, ...props }) => (
+          <ul {...props} className="list-disc pl-6 ml-2 my-4 space-y-2 text-base text-gray-700 dark:text-gray-200" />
+        ),
+        ol: ({ node, ...props }) => (
+          <ol {...props} className="list-decimal pl-6 ml-2 my-4 space-y-2 text-base text-gray-700 dark:text-gray-200" />
+        ),
+        li: ({ node, ...props }) => (
+          <li {...props} className="break-words" />
+        ),
+        blockquote: ({ node, ...props }) => (
+          <blockquote
+            {...props}
+            className="border-l-4 border-blue-400 bg-blue-50 dark:bg-blue-900/20 pl-4 pr-2 py-2 my-4 italic text-gray-800 dark:text-gray-300"
+          />
+        ),
+        code({ node, className, children, ...props }) {
+          const content = children?.toString() || '';
+          const parts = content.split(/(`[^`\s](?:.*?[^\s])?`)/g);
+          return (
+            <span className="text-base" {...props}>
+              {parts.map((part, i) =>
+                /^`[^`\s](?:.*?[^\s])?`$/.test(part) ? (
+                  <code
+                    key={i}
+                    className="bg-gray-100 dark:bg-zinc-800 text-pink-600 dark:text-pink-400 px-1.5 py-0.5 rounded font-mono text-sm"
+                  >
+                    {part.slice(1, -1)}
+                  </code>
+                ) : (
+                  part
+                )
+              )}
+            </span>
+          );
+        },
+        pre: ({ node, ...props }) => (
+          <p
+            {...props}
+            className="text-base"
+          />
+        ),
+        a: ({ node, ...props }) => (
+          <a
+            {...props}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
+          >
+            {props.children}
+            <ExternalLink className="h-4 w-4 inline" />
+          </a>
+        ),
+        table: ({ node, ...props }) => (
+          <div className="overflow-x-auto my-6 scrollbar-hide"
+          style={{ boxShadow: 'inset -10px 0 20px -10px rgba(0,0,0,0.2)' }}
+          >
+            <table
               {...props}
-              className="border-l-4 text-xs md:text-base border-primary/30 pl-4 italic my-3 text-muted-foreground"
-            />
-          ),
-          code({ node, className, children, ...props }) {
-            const content = children?.toString() || '';
-            const parts = content.split(/(`[^`\s](?:.*?[^\s])?`)/g);
-            return (
-              <span className="text-md" {...props}>
-                {parts.map((part, i) =>
-                  /^`[^`\s](?:.*?[^\s])?`$/.test(part) ? (
-                    <code
-                      key={i}
-                      className="bg-zinc-100 dark:bg-zinc-800 text-xs md:text-base text-pink-600 dark:text-pink-400 px-1.5 py-0.5 rounded font-mono  font-scale-sm"
-                    >
-                      {part.slice(1, -1)}
-                    </code>
-                  ) : (
-                    part
-                  )
-                )}
-              </span>
-            );
-          },
-          a: ({ node, ...props }) => (
-            <a
-              {...props}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-primary hover:underline text-xs md:text-base inline-flex items-center gap-1"
+              className="table-auto w-full border-collapse text-left text-sm md:text-base"
+              style={{ tableLayout: 'auto', minWidth: '600px' }}
             >
               {props.children}
-              <ExternalLink className="h-3 w-3 inline" />
-            </a>
-          ),
-          table: ({ node, ...props }) => (
-            <div className="overflow-x-auto my-4">
-              <table
-                {...props}
-                className="border-collapse table-auto w-full text-xs md:text-base"
-              />
-            </div>
-          ),
-          thead: ({ node, ...props }) => (
-            <thead {...props} className="bg-muted" />
-          ),
-          tbody: ({ node, ...props }) => <tbody {...props} />,
-          tr: ({ node, ...props }) => (
-            <tr {...props} className="border-b border-border" />
-          ),
-          th: ({ node, ...props }) => (
-            <th {...props} className="border px-4 py-2 text-left font-bold" />
-          ),
-          td: ({ node, ...props }) => (
-            <td {...props} className="border px-4 py-2" />
-          ),
-          hr: ({ node, ...props }) => (
-            <hr {...props} className="border-t border-border my-4" />
-          ),
-          img: ({ node, ...props }) => (
-            <img
-              {...props}
-              className="max-w-full h-auto rounded-md my-4"
-              onError={handleError}
-            />
-          ),
-          strong: ({ node, ...props }) => (
-            <strong {...props} className="font-semibold" />
-          ),
-          em: ({ node, ...props }) => (
-            <em {...props} className="italic" />
-          ),
-          del: ({ node, ...props }) => (
-            <del {...props} className="line-through" />
-          ),
-          mark: ({ node, ...props }) => (
-            <mark {...props} className="bg-yellow-200" />
-          ),
-          pre: ({ node, ...props }) => (
-            <p {...props} className="my-2 mb-3 ml-4 text-xs md:text-base leading-relaxed break-words max-w-full overflow-hidden" />
-          ),
-        }}
-      >
-        {content}
-      </ReactMarkdown>
+            </table>
+          </div>
+        ),
+        thead: ({ node, ...props }) => (
+          <thead {...props} className="bg-gray-100 dark:bg-zinc-700 font-semibold" />
+        ),
+        tbody: ({ node, ...props }) => <tbody {...props} />,
+        tr: ({ node, ...props }) => (
+          <tr {...props} className="border-b dark:border-zinc-700" />
+        ),
+        th: ({ node, ...props }) => (
+          <th
+            {...props}
+            className="border px-4 py-2 font-semibold bg-gray-50 dark:bg-zinc-800"
+            style={{ minWidth: '120px', whiteSpace: 'nowrap' }}
+          />
+        ),
+        td: ({ node, ...props }) => (
+          <td
+            {...props}
+            className="border px-4 py-2 text-gray-800 dark:text-gray-200"
+            style={{ minWidth: '120px', whiteSpace: 'normal' }}
+          />
+        ),        
+        hr: ({ node, ...props }) => (
+          <hr {...props} className="border-t my-6 border-gray-300 dark:border-gray-600" />
+        ),
+        img: ({ node, ...props }) => (
+          <img
+            {...props}
+            className="max-w-full h-auto rounded-lg shadow-sm my-4 border border-gray-200 dark:border-gray-700"
+            onError={handleError}
+          />
+        ),
+        strong: ({ node, ...props }) => (
+          <strong {...props} className="font-bold text-gray-900 dark:text-white" />
+        ),
+        em: ({ node, ...props }) => (
+          <em {...props} className="italic" />
+        ),
+        del: ({ node, ...props }) => (
+          <del {...props} className="line-through text-gray-500" />
+        ),
+        mark: ({ node, ...props }) => (
+          <mark {...props} className="bg-yellow-200 px-1 rounded-sm" />
+        ),
+      }}
+    >
+      {content}
+    </ReactMarkdown>
+
     </div>
   );
 });
@@ -339,14 +393,9 @@ const CodeBlock = memo(
     const [showSastAnalysis, setShowSastAnalysis] = useState(false);
     const [showTestRunner, setShowTestRunner] = useState(false);
     const [showEditor, setShowEditor] = useState(false);
+    const [showBashShell, setShowBashShell] = useState(false);
     const codeBlockRef = useRef<HTMLDivElement>(null);
     const [blockWidth, setBlockWidth] = useState<number | null>(null);
-    const [containerWidth, setContainerWidth] = useState(0);
-  
-    const { theme } = useTheme();
-    const isSystemDark = typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const actualDarkMode = theme === "dark" || (theme === "system" && isSystemDark);
-
     const isHtml = isHtmlCode(code, lang);
     const isJavaScript = lang === "javascript" || lang === "typescript" || lang === "jsx" || lang === "tsx" || lang === "js" || lang === "ts";
     const languageExtensions = {
@@ -424,6 +473,11 @@ const CodeBlock = memo(
         }),
       );
       window.dispatchEvent(
+        new CustomEvent("bash-shell-close", {
+          detail: { forced: true },
+        }),
+      );
+      window.dispatchEvent(
         new CustomEvent("node-test-runner-close", {
           detail: { forced: true },
         }),
@@ -439,12 +493,32 @@ const CodeBlock = memo(
       }, 100);
     };
 
+    const handleBashExecution = () => {
+      window.dispatchEvent(
+        new CustomEvent("python-shell-close", {
+          detail: { forced: true },
+        }),
+      );
+      window.dispatchEvent(
+        new CustomEvent("code-editor-close", {
+          detail: { forced: true },
+        }),
+      );
+      window.dispatchEvent(
+        new CustomEvent("html-preview-close", {
+          detail: { forced: true },
+        }),
+      );
+      setTimeout(() => {
+        setShowBashShell(true);
+      }, 100);
+    };
 
     return (
       <div
         ref={codeBlockRef}
         className={cn(
-          "relative mb-0 mt-0 group shadow-md rounded-md  text-xs md:text-base",
+          "relative mb-0 mt-0 group shadow-md rounded-md text-xs md:text-base",
           isInteractive &&
             "hover:ring-1 hover:ring-primary/50 transition-all duration-200 md:w-[600px] w-[300px]"
         )}
@@ -470,8 +544,8 @@ const CodeBlock = memo(
           </div>
         )}
 
-        <div className="bg-zinc-800  text-zinc-300 text-xs px-4 py-2 flex justify-between items-center font-mono overflow-x-auto scrollbar-hide">
-          <div className="flex bg-zinc-800 border-2 md:text-base text-xs border-zinc-700  items-center gap-2">
+        <div className="bg-zinc-800 text-zinc-300 text-xs px-4 py-2 flex justify-between items-center font-mono overflow-x-auto scrollbar-hide">
+          <div className="flex bg-zinc-800 border-2 md:text-base text-xs border-zinc-700 items-center gap-2">
             {fileName ? (
               <span className="px-2 font-scale-sm">
                 {fileName} <span className="opacity-50 px-2">({lang})</span>
@@ -497,7 +571,24 @@ const CodeBlock = memo(
                 size="sm"
                 className="h-6 px-2 text-emerald-400  text-xs"
                 onClick={() => {
-                  setShowHtmlPreview(true);
+                  window.dispatchEvent(
+                    new CustomEvent("python-shell-close", {
+                      detail: { forced: true },
+                    }),
+                  );
+                  window.dispatchEvent(
+                    new CustomEvent("code-editor-close", {
+                      detail: { forced: true },
+                    }),
+                  );
+                  window.dispatchEvent(
+                    new CustomEvent("bash-shell-close", {
+                      detail: { forced: true },
+                    }),
+                  );
+                  setTimeout(() => {
+                    setShowHtmlPreview(true);
+                  }, 100);
                 }}
               >
                 <Play className="h-3.5 w-3.5 mr-1" />
@@ -519,6 +610,17 @@ const CodeBlock = memo(
                 Run
               </Button>
             )}
+            {(lang === "bash" || lang === "shell") && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-amber-400 text-xs"
+                onClick={handleBashExecution}
+              >
+                <Play className="h-3.5 w-3.5 mr-1" />
+                Run
+              </Button>
+            )}
             
             {isJavaScript && (
               <Button
@@ -528,6 +630,11 @@ const CodeBlock = memo(
                 onClick={() => {
                   window.dispatchEvent(
                     new CustomEvent("python-shell-close", {
+                      detail: { forced: true },
+                    }),
+                  );
+                  window.dispatchEvent(
+                    new CustomEvent("bash-shell-close", {
                       detail: { forced: true },
                     }),
                   );
@@ -630,17 +737,22 @@ const CodeBlock = memo(
             </span>
           </div>
         </div>
-        <PreformattedCode
-          code={code}
-          language={lang}
-          darkMode={actualDarkMode}
-          className="font-scale-base"
-          customStyle={{
-            fontSize: "inherit",
-            maxWidth: "100%",
-            transition: "font-size 0.3s ease-in-out",
-          }}
-        />
+        <div 
+          className="relative"
+        >
+          <PreformattedCode
+            code={code}
+            language={lang}
+            darkMode={true}
+            className={cn(
+              "p-4 overflow-x-auto",
+              isInteractive && "cursor-pointer"
+            )}
+            customStyle={{
+              cursor: isInteractive ? "pointer" : "default"
+            }}
+          />
+        </div>
         {showHtmlPreview && (
           <HtmlPreview
             htmlContent={code}
@@ -652,7 +764,9 @@ const CodeBlock = memo(
           <PythonShell
             code={code}
             isOpen={showPythonShell}
-            onClose={() => setShowPythonShell(false)}
+            onClose={() => {
+              setShowPythonShell(false);
+            }}
           />
         )}
         {showSastAnalysis && (
@@ -679,6 +793,13 @@ const CodeBlock = memo(
             onSave={handleCodeSave}
           />
         )}
+        {showBashShell && (
+          <BashShell
+            isOpen={showBashShell}
+            onClose={() => setShowBashShell(false)}
+            initialCode={code}
+          />
+        )}
       </div>
     );
   }
@@ -687,21 +808,37 @@ const CodeBlock = memo(
 CodeBlock.displayName = "CodeBlock";
 TextBlock.displayName = "TextBlock";
 
-function MessageContent({
+const MessageContent = ({
   content: initialContent,
   imageData,
   showLineNumbers,
   onCodeAction,
   isInteractive,
   onContentUpdate,
-}: MessageContentProps) {
+}: MessageContentProps) => {
   const [content, setContent] = useState(initialContent);
+  const [currentPythonCode, setCurrentPythonCode] = useState("");
+  const [showPythonShell, setShowPythonShell] = useState(false);
   const textRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   const [safeMode, setSafeMode] = useState(false);
   const [safeModeContent, setSafeModeContent] = useState("");
   const [showLongContentWarning, setShowLongContentWarning] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [showSafeMode, setShowSafeMode] = useState(false);
+  const [safeModeCode, setSafeModeCode] = useState("");
+  const [safeModeLanguage, setSafeModeLanguage] = useState("");
+  const [showHtmlPreview, setShowHtmlPreview] = useState(false);
+  const [currentHtmlCode, setCurrentHtmlCode] = useState("");
+  
+  const handleSafeMode = (code: string, language: string) => {
+    setSafeModeCode(code);
+    setSafeModeLanguage(language);
+    setShowSafeMode(true);
+    if (language === "html") {
+      setCurrentHtmlCode(code);
+    }
+  }
   
   const [hasRenderError, setHasRenderError] = useState(false);
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
@@ -1105,12 +1242,45 @@ function MessageContent({
     };
   }, [onCodeAction, content]);
 
-  const multilineRegex = /^[ \t]*(\`{3,})[ \t]*([^\`\r\n]*?)[ \t]*\n([\s\S]*?)(\1)[ \t]*$/gm;
+  const normalizeIndentation = (code: string, fenceIndent: string): string => {
+    if (!code) return '';
+    
+
+    const lines = code.split('\n');
+    
+    const nonEmptyLines = lines.filter(line => line.trim().length > 0);
+    if (nonEmptyLines.length === 0) return '';
+    
+    const indentations = nonEmptyLines.map(line => {
+      const match = line.match(/^[ \t]*/);
+      return match ? match[0] : '';
+    });
+    
+    const minLength = Math.min(...indentations.map(indent => indent.length));
+    
+    const commonIndent = indentations.length > 0 ? indentations[0].slice(0, minLength) : '';
+    
+    return lines
+      .map(line => {
+        if (!line.trim()) return '';
+        if (line.startsWith(commonIndent)) {
+          return line.slice(commonIndent.length);
+        }
+        const currentIndent = line.match(/^[ \t]*/)?.[0] || '';
+        if (currentIndent.length > commonIndent.length) {
+          const extraIndent = currentIndent.length - commonIndent.length;
+          return ' '.repeat(extraIndent) + line.slice(currentIndent.length);
+        }
+        return line.trim();
+      })
+      .join('\n');
+  };
+
+  const multilineRegex = /^([ \t]*)\`{3,}[ \t]*([^\`\r\n]*?)[ \t]*\n([\s\S]*?)(\1)\`{3,}[ \t]*$/gm;
   
-  const unclosedCodeBlockRegex = /^[ \t]*(\`{3,})[ \t]*([^\`\r\n]*?)[ \t]*\n([\s\S]*?)($)/gm;
+  const unclosedCodeBlockRegex = /^([ \t]*)\`{3,}[ \t]*([^\`\r\n]*?)[ \t]*\n([\s\S]*?)($)/gm;
   
   const inlineSameLineRegex = /(\`{3,})[ \t]*([^\s\`\r\n]+)[ \t]+([\s\S]*?)[ \t]*\1/g;
-
   const parts: React.ReactNode[] = [];
   const safeContent = typeof content === "string" ? content : "";
 
@@ -1118,9 +1288,9 @@ function MessageContent({
   let match: RegExpExecArray | null;
   let partKeyIndex = 0;
   let codeBlockRenderIndex = 0;
-  
+
   while ((match = multilineRegex.exec(safeContent)) !== null) {
-    const [fullMatch, openingFence, langAndFileRaw = "", rawCodeContent] = match;
+    const [fullMatch, fenceIndent, langAndFileRaw = "", rawCodeContent] = match;
 
     if (match.index > lastIndex) {
       const beforeCode = safeContent.slice(lastIndex, match.index);
@@ -1149,9 +1319,8 @@ function MessageContent({
             lang = langAndFile;
         }
     }
-
     const normalizedLang = normalizeLang(lang || "output");
-    let code = rawCodeContent.replace(/\n$/, '');
+    let code = normalizeIndentation(rawCodeContent, fenceIndent);
     if (!fileName && code.startsWith("File:")) {
       const firstLineBreak = code.indexOf("\n");
       if (firstLineBreak !== -1) {
@@ -1159,19 +1328,102 @@ function MessageContent({
         code = code.substring(firstLineBreak + 1);
       }
     }
-
+    const ContextLangTags=["context"]
+    const SpecialLangTags=["python", "javascript", "typescript", "java", "html", "css", "rust", "c", "c++", "c#", "go", "kotlin", "swift", "ruby", "php", "perl", "scala", "haskell", "erlang", "elixir", "dart", "typescript", "javascript", "python", "java", "c#", "go", "kotlin", "swift", "ruby", "php", "perl", "scala", "haskell", "erlang", "elixir", "dart"]
     code = code.trim();
 
-    if (normalizedLang === "codeandexplanation") {
+    if (ContextLangTags.includes(normalizedLang)) 
+    {
+        parts.push(
+          <div key={`context-${codeBlockRenderIndex}`} className="h-[170px] flex justify-center p-3 border-2 border-red-500 border-dashed overflow-hidden ml-auto">
+            <div
+              className="m-5 mb-3 hover:bg-zinc-800 hover:text-white bg-zinc-100 mx-auto rounded-md dark:bg-zinc-800 text-dark dark:text-white ml-4 break-words max-w-full overflow-hidden"
+              style={{
+                width: "200px",
+                height: "283px",
+                border: "1px solid #374151",
+                fontSize: "8px",
+                wordSpacing: "0.02em",
+                lineHeight: "1.1",
+                padding: "8px",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "flex-start",
+                fontFamily: "monospace",
+                transform: "rotate(-4deg)", 
+                transformOrigin: "top left", 
+                overflow: "hidden",
+                cursor: "pointer",
+              }}
+              onClick={() => {
+                handleSafeMode(code, lang);
+              }}
+            >
+              <div className="mt-1 whitespace-pre-wrap overflow-hidden text-[7px] leading-tight">
+                {code.slice(0, 400)}...
+              </div>
+            </div>
+          </div>
+        );
+    } else if (code.length > 1000 && SpecialLangTags.includes(normalizedLang)) {
       parts.push(
-        <Markdown key={`part-${partKeyIndex++}`} remarkPlugins={[remarkGfm]}>
-          {code}
-        </Markdown>
+        <div key={`context-${codeBlockRenderIndex}`} className="h-[170px] flex justify-center px-3 py-2 border-2 border-blue-500 border-dashed overflow-hidden ml-auto">
+          <div
+            className="m-5 mb-3 hover:translate-x-1 hover:translate-y-1 hover:bg-zinc-800 hover:text-white bg-zinc-100 mx-auto rounded-md dark:bg-zinc-800 text-dark dark:text-white ml-4 break-words max-w-full overflow-hidden"
+            style={{
+              width: "200px",
+              height: "283px",
+              border: "1px solid #374151",
+              fontSize: "8px",
+              wordSpacing: "0.02em",
+              lineHeight: "1.1",
+              padding: "8px",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "flex-start",
+              fontFamily: "monospace",
+              transform: "rotate(-4deg)",
+              transformOrigin: "top left",
+              overflow: "hidden",
+              cursor: "pointer",
+              transition: "transform 0.3s ease",
+            }}
+            onClick={() => handleSafeMode(code, lang)}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = "rotate(0deg)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = "rotate(-4deg)";
+            }}
+          >
+            <div className="mt-1 whitespace-pre-wrap overflow-hidden text-[7px] leading-tight">
+              {code.slice(0, 400)}...
+            </div>
+          </div>
+          { normalizedLang === "python" &&  (
+          <Button variant="ghost" size="sm" className="ml-2 mt-3" onClick={() => {
+            setCurrentPythonCode(code);
+            setShowPythonShell(true);
+          }}>
+            <Play className="h-4 w-4 mr-2" />
+            Run Python
+          </Button>
+          )}
+          { normalizedLang === "html" && (
+          <Button variant="ghost" className="ml-2 mt-3" size="sm" onClick={() => {
+            setCurrentHtmlCode(code);
+            setShowHtmlPreview(true);
+          }}>
+            <Eye className="h-4 w-4 mr-2" />
+            Preview HTML
+          </Button>
+          )}
+        </div>
       );
-      codeBlockRenderIndex++;
-    } else {
-      parts.push(
-        <CodeBlock
+    }
+    else {
+        parts.push(
+          <CodeBlock
           key={`part-${partKeyIndex++}`}
           code={code}
           lang={normalizedLang}
@@ -1194,7 +1446,7 @@ function MessageContent({
   while ((match = unclosedCodeBlockRegex.exec(safeContent)) !== null) {
     if (match.index < lastIndex) continue;
     
-    const [fullMatch, openingFence, langAndFileRaw = "", rawCodeContent] = match;
+    const [fullMatch, fenceIndent, langAndFileRaw = "", rawCodeContent] = match;
 
     if (match.index > lastIndex) {
       const beforeCode = safeContent.slice(lastIndex, match.index);
@@ -1207,7 +1459,7 @@ function MessageContent({
 
     let lang = langAndFileRaw.trim() || "output";
     const normalizedLang = normalizeLang(lang);
-    let code = rawCodeContent.trim();
+    let code = normalizeIndentation(rawCodeContent, fenceIndent);
 
     parts.push(
       <CodeBlock
@@ -1346,6 +1598,33 @@ function MessageContent({
       ) : (
         <div className="text-muted-foreground p-3">No content to display.</div>
       )}
+      {showPythonShell && (
+        <PythonShell
+          code={currentPythonCode}
+          isOpen={showPythonShell}
+          onClose={() => {
+            setShowPythonShell(false);
+            setCurrentPythonCode("");
+          }}
+        />
+      )}
+      
+      {showSafeMode && (
+        <CodeEditorCanvas
+          code={safeModeCode}
+          safeView={true}
+          language={safeModeLanguage}
+          isOpen={showSafeMode}
+          onClose={() => setShowSafeMode(false)}
+        />
+      )}
+      {showHtmlPreview && (
+          <HtmlPreview
+            htmlContent={currentHtmlCode}
+            isOpen={showHtmlPreview}
+            onClose={() => setShowHtmlPreview(false)}
+          />
+       )}
     </div>
   );
 }

@@ -4,11 +4,10 @@ from typing import Any, Dict, Tuple, Optional
 from fastapi import HTTPException, Request, status
 from pydantic import ValidationError
 from difflib import SequenceMatcher
-
+import random
 from ai.memory import ChatMemoryManager
 from ai.model_switcher import (
     get_process_chain,
-    get_refinement_chain,
     strategy_chain,
     user_behavior_chain,
     validation_chain,
@@ -44,7 +43,7 @@ VALID_MCP_TYPES = {
 
 VALID_OUTPUT_FORMATS = {"codeonly", "explanationonly", "codeandexplanation"}
 VALID_PROVIDERS = {"gemini", "chatgpt", "claude"}
-VALID_MODELS = {"fast", "advanced", "pro", "quick-think"}
+VALID_MODELS = {"fast", "advanced", "pro", "quick-think", "auto"}
 
 MIN_MESSAGE_LENGTH = 3
 MAX_MESSAGE_LENGTH = 100_000
@@ -75,6 +74,9 @@ async def validate_request(payload: Dict[str, Any]) -> Tuple[Optional[MessageReq
                 None,
                 f"Message length is invalid. Must be between {MIN_MESSAGE_LENGTH} and {MAX_MESSAGE_LENGTH}",
             )
+        
+        if msg.freeModel not in VALID_MODELS:
+            msg.freeModel = random.choice(list(VALID_MODELS))
 
         output_format = msg.outputFormat.lower() if msg.outputFormat else ""
         if not output_format or not (
@@ -101,6 +103,7 @@ async def validate_request(payload: Dict[str, Any]) -> Tuple[Optional[MessageReq
                 None,
                 f"Invalid MCP type. Must be one of: {', '.join(VALID_MCP_TYPES)}",
             )
+        
 
         provider_name = msg.providerName.lower().strip()
         if provider_name not in VALID_PROVIDERS:
@@ -108,14 +111,6 @@ async def validate_request(payload: Dict[str, Any]) -> Tuple[Optional[MessageReq
                 None,
                 f"Invalid provider name. Must be one of: {', '.join(VALID_PROVIDERS)}",
             )
-
-        model_type = msg.modelType.lower().strip()
-        if model_type not in VALID_MODELS:
-            return (
-                None,
-                f"Invalid model type. Must be one of: {', '.join(VALID_MODELS)}",
-            )
-
         
         message_length = len(msg.message)
         provider = msg.providerName.lower().strip()
@@ -162,7 +157,6 @@ async def validate_request(payload: Dict[str, Any]) -> Tuple[Optional[MessageReq
 
 
 async def setup_model_config(model_type: str) -> Dict[str, Any]:
-    """Sets up model-specific configurations."""
     config = {"retry_chain": 1, "quick_think": False}
 
     if model_type == "advanced":
@@ -175,7 +169,6 @@ async def setup_model_config(model_type: str) -> Dict[str, Any]:
 
 
 async def get_memory_data(chatID: str) -> Tuple[Any, list, list, str, bool]:
-    """Retrieves and prepares memory data for a given chat ID."""
     mem = memory_manager.get_chat_memory(chatID)
     memory_data = mem.load_memory_variables({}) if mem else {}
     history = memory_data.get("history", [])
@@ -183,9 +176,7 @@ async def get_memory_data(chatID: str) -> Tuple[Any, list, list, str, bool]:
     last_message = recent_messages[-1].content if recent_messages else ""
     return mem, history, recent_messages, last_message, len(history) > 0
 
-
 async def execute_chains(tasks: Dict[str, asyncio.Task]) -> Dict[str, Any]:
-    """Executes multiple asynchronous tasks and captures results or exceptions."""
     results = await asyncio.gather(*tasks.values(), return_exceptions=True)
     results_map = {}
 
@@ -198,19 +189,17 @@ async def execute_chains(tasks: Dict[str, asyncio.Task]) -> Dict[str, Any]:
 
     return results_map
 
-
 async def handle_user_behavior(
-    user_behavior: Any, has_history: bool, last_message: str
+    user_behavior: Any, has_history: bool, last_message: str, msg: MessageRequest
 ) -> Optional[str]:
-    """Handles user behavior analysis and updates RL agent accordingly."""
     if not has_history or not last_message:
         return None
 
-    user_behavior_content = user_behavior.content.strip() if user_behavior else None
+    user_behavior_content = user_behavior.behavior.strip() if user_behavior else None
     if user_behavior_content not in ["positive", "negative", "neutral"]:
         return None
 
-    set_update(f"User Behavior: {user_behavior_content}")
+    set_update(f"The user seems to be {user_behavior_content} , about the previous response, this means that either the user is happy or unhappy with the previous response, and the RL agent will update its behavior accordingly", msg.chatId)
 
     action_idx = gemini.actions.index(
         "accept" if user_behavior_content == "positive" else "reject"
@@ -254,6 +243,7 @@ async def process_iteration(
 ) -> Tuple[Optional[str], Optional[str], Optional[int], str, str, str, str, bool]:
     iteration_start_time = asyncio.get_event_loop().time()
     try:
+
         iter_tasks = {}
         iter_tasks["draft"] = invoke_with_retry(
             get_process_chain(model_type=model_type, provider_type=provider_name),
@@ -297,51 +287,24 @@ async def process_iteration(
             )
 
         current_draft = draft_resp.content.strip()
-        set_update(f"Draft {i+1}: {current_draft[:300]}...")
+        set_update(f"This is the inital response from the model: {current_draft[:3000]}...", msg.chatId)
 
         reasoning_resp = iter_results.get("reasoning")
-        if reasoning_resp:
+        if reasoning_resp and current_reasoning and model_type == "advanced":
             try:
                 model_answer_from_reasoning = await process_reasoning_response(
-                    reasoning_resp, {"message": message_query}
+                    reasoning_resp, {"message": message_query}, msg.freeModel
                 )
-                set_update(f"Reasoning: {current_reasoning[:300]}...")
+                set_update(f"These are the reasoning steps to be fed back to the model and other 3rd party models to enable diverse and creative responses: {current_reasoning[:300]}...", msg.chatId)
                 if model_answer_from_reasoning:
-                    set_update(f"Reasoning Model Answer: {model_answer_from_reasoning[:300]}...")
+                    set_update(f"Hey, I am thinking, I got a response from one of the outside models, my collegues are quite excited about this response, they are saying that this response is quite good : {model_answer_from_reasoning}...", msg.chatId)
             except Exception as e:
                 gemini.logger.error(
                     f"Reasoning response processing failed in iteration {i + 1}: {e}"
                 )
 
-        if model_type == "fast":
-            try:
-                refine_resp = await invoke_with_retry(
-                    get_refinement_chain(model_type="fast", provider_type=provider_name),
-                    {
-                        "draft": current_draft,
-                        "query": message_query,
-                        "history": history,
-                    },
-                )
-                current_refined = refine_resp.content.strip()
-                set_update(f"Refined {i+1}: {current_refined[:300]}...")
-            except Exception as e:
-                gemini.logger.error(
-                    f"Refinement chain error in iteration {i + 1}: {e}"
-                )
-                current_refined = current_draft
 
-            return (
-                current_refined,
-                10,
-                current_reasoning,
-                feedback,
-                improvements,
-                model_answer_from_reasoning,
-                True,
-            )
-        else:
-            current_refined = current_draft
+        current_refined = current_draft
 
         val_resp = None
         current_val_score = 5
@@ -366,7 +329,7 @@ async def process_iteration(
                 if model_type == "advanced":
 
                     if tool_calls:
-                        set_update(f"Tool calls: {tool_calls}")
+                        set_update(f"Okay, I have to use some tools to get the best response, here are the tools that I am going to use: {tool_calls}", msg.chatId)
 
                     tools_response = await tool_results(
                         msg,
@@ -377,8 +340,9 @@ async def process_iteration(
                         request,
                     )
 
-                    if tools_response.get("results"):
-                        resources.context = tools_response.get("results")
+                    if tools_response:
+                        if tools_response.get("results"):
+                            resources.context = tools_response.get("results")
 
                 rl_agent = getattr(gemini, "rl_agent", None)
                 action = rl_agent.select_action() if rl_agent else "accept"
@@ -398,7 +362,8 @@ async def process_iteration(
                         gemini.logger.error(f"RL reward computation failed: {rl_e}")
 
                 set_update(
-                    f"Validation Score: {current_val_score} and rewarded the RL agent: {reward}"
+                    f"The validation score is {current_val_score} and the RL agent is rewarded with {reward}, is this good or bad?",
+                    msg.chatId
                 )
 
                 if current_val_score == 10 or (action == "accept" and current_val_score >= 8):
@@ -452,7 +417,6 @@ async def process_message(request: Request) -> Dict[str, Any]:
 
     try:
         payload = await request.json()
-        gemini.logger.info(f"Request payload keys: {payload.keys()}")
         if "pinnedFiles" in payload:
             gemini.logger.info(
                 f"Found pinnedFiles in payload: {payload['pinnedFiles']}"
@@ -479,7 +443,7 @@ async def process_message(request: Request) -> Dict[str, Any]:
 
     model_config = await setup_model_config(msg.modelType.lower().strip())
 
-    set_update(msg.message[:200])
+    set_update(f"The user is asking the following question, does the message make sense on its own or do I need to use memory and context to answer the question: {msg.message[:200]}...", msg.chatId)
 
     mem, history, recent_messages, last_message, has_history = (
         await get_memory_data(msg.chatId)
@@ -499,7 +463,7 @@ async def process_message(request: Request) -> Dict[str, Any]:
                 request,
                 mem,
             )
-
+    
     if (
         tool_result.get("result") is not None
         and not tool_result.get("continue", False)
@@ -514,6 +478,9 @@ async def process_message(request: Request) -> Dict[str, Any]:
             return {"result": tool_result["result"], "chatId": msg.chatId}
 
     tool_selector = tool_result.get("tooling")
+
+    if tool_selector and tool_result.get("result"):
+        set_update(f"I am using the {tool_selector} to get the best answer to your question. {tool_result.get('result')}", msg.chatId)
 
     resources = {
         "stackoverflow": tool_result.get("result")
@@ -537,7 +504,6 @@ async def process_message(request: Request) -> Dict[str, Any]:
         else None,
     }
     
-
     async with _processing_lock:
         try:
             tasks = {}
@@ -554,24 +520,29 @@ async def process_message(request: Request) -> Dict[str, Any]:
                     },
                 )
 
-            if has_history and last_message:
-                tasks["behavior"] = invoke_with_retry(
-                    user_behavior_chain(
-                        model_type="super-lite", provider_type=msg.providerName.lower().strip()
-                    ),
-                    {
-                        "query": msg.message,
-                        "response": last_message,
-                    },
-                )
+            tasks["behavior"] = invoke_with_retry(
+                user_behavior_chain(
+                    model_type="lite", provider_type=msg.providerName.lower().strip()
+                ),
+                {
+                    "query": msg.message,
+                    "response": last_message,
+                },
+            )
 
             results_map = await execute_chains(tasks)
 
             strategy = results_map.get("strategy")
-            strategy_content = strategy.content.strip() if strategy else None
+            strategy_content = strategy.content if strategy else None
+            if strategy_content:
+                set_update(f"Lets discuss the strategy: {strategy_content[:5000]}", msg.chatId)
             user_behavior = results_map.get("behavior")
+
+            if user_behavior.model_type and msg.modelType == "auto":
+                msg.modelType = user_behavior.model_type
+
             user_behavior_content = await handle_user_behavior(
-                user_behavior, has_history, last_message
+                user_behavior, has_history, last_message, msg
             )
 
             if not user_behavior_content:
@@ -584,10 +555,12 @@ async def process_message(request: Request) -> Dict[str, Any]:
             improvements = None
             best_avg_score = float("-inf")
 
+            if deep_think_world:
+                set_update(f"It seems like there is some context to this question, let me use the deep dive to my memoryto get the best answer to your question. {deep_think_world[:5000]}", msg.chatId)
+
             format_rules = get_format_rules(
                 msg.outputFormat.lower() if msg.outputFormat else ""
             )
-
 
             for i in range(model_config["retry_chain"]):
                 (
@@ -684,7 +657,7 @@ async def process_message(request: Request) -> Dict[str, Any]:
                 }
             )
 
-            final_answer = final_answer.content.strip()
+            final_answer = final_answer.content
 
 
             return {"result": final_answer, "chatId": msg.chatId}

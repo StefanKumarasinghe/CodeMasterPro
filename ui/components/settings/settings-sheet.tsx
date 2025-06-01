@@ -70,8 +70,9 @@ export default function SettingsSheet({
     <div className="flex items-center gap-1">
       <Sheet open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
         <SheetTrigger asChild>
-          <Button variant="ghost">
-            <Settings style={{ height: "1.2rem", width: "1.2rem" }}  />
+          <Button variant="ghost" className="h-9 w-9 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 hover:bg-primary/10 hover:text-primary hover:shadow-md group relative overflow-hidden"
+              >
+            <Settings className="h-4 w-4" />
           </Button>
         </SheetTrigger>
         <SheetContent className="w-full sm:w-[540px]">
@@ -85,7 +86,7 @@ export default function SettingsSheet({
                 <TabsTrigger value="integration"> Integrations </TabsTrigger>
                 <TabsTrigger value="settings"> Settings </TabsTrigger>
               </TabsList>
-              <TabsContent value="prompt" className="space-y-4 mt-4 flex-grow overflow-y-auto pr-2">
+              <TabsContent value="prompt" className="space-y-4 scrollbar-hide mt-4 flex-grow overflow-y-auto pr-2">
                 <PromptSettingsTab
                   customPrompt={customPrompt}
                   setCustomPrompt={setCustomPrompt}
@@ -95,10 +96,10 @@ export default function SettingsSheet({
                   setInputPreference={(value) => setPreferences({...preferences, inputPreference: value})}
                 />
               </TabsContent>
-              <TabsContent value="integration" className="flex-grow overflow-y-auto pr-2">
+              <TabsContent value="integration" className="space-y-4 scrollbar-hide flex-grow overflow-y-auto pr-2">
                 <ApiIntegrationContent />
               </TabsContent>
-              <TabsContent value="settings" className="space-y-6 mt-4 flex-grow overflow-y-auto pr-2">
+              <TabsContent value="settings" className="space-y-6 scrollbar-hide mt-4 flex-grow overflow-y-auto pr-2">
                 <GeneralSettingsTab
                   outputFormat={preferences.outputFormat}
                   setOutputFormat={(value) => setPreferences({...preferences, outputFormat: value})}
@@ -111,7 +112,7 @@ export default function SettingsSheet({
                 />
               </TabsContent>
             </Tabs>
-            <Button className="m-3" onClick={savePreferences}>
+            <Button className="my-3" onClick={savePreferences}>
               <Save className=" w-full h-4 w-4" />
               Save Preferences
             </Button>

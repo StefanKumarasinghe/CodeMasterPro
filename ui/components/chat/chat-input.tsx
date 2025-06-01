@@ -4,13 +4,13 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { API_ENDPOINT } from "@/config/constants"
-import { Send, FileUp, Upload, Code, Mic, Square, X, Github } from "lucide-react"
+import { Send, FileUp, Upload, Code, Square, Github, Terminal } from "lucide-react"
 import { OutputFormatToggle } from "./output-format-toggle"
 import { useState, useRef, useEffect, useCallback } from "react"
 import { useChat } from "@/context/chat-context"
 import { MCP_OPTIONS } from "@/config/constants"
 import type React from "react"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast-message"
 import { CodeTemplates } from "./code-templates"
@@ -19,6 +19,8 @@ import { cn } from "@/lib/utils"
 import { motion, AnimatePresence } from "framer-motion"
 import { FileAttachment } from "./file-attachment"
 import { ProjectModal } from "./project-modal"
+import { BashShell } from "./bash-shell"
+
 
 export function ChatInput() {
   const [showTemplates, setShowTemplates] = useState(false)
@@ -29,8 +31,6 @@ export function ChatInput() {
   const [charCount, setCharCount] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
   const [processingFile, setProcessingFile] = useState(false)
-  const [isRecording, setIsRecording] = useState(false)
-  const [recordingError, setRecordingError] = useState<string | null>(null)
   const { toast } = useToast()
 
   const [fileAttachments, setFileAttachments] = useState<
@@ -48,9 +48,11 @@ export function ChatInput() {
       fileName: string
       content: string
       language: string
+      isLargeText?: boolean
     }>
   >([])
 
+  const [showBashShell, setShowBashShell] = useState(false)
 
   const {
     language,
@@ -61,10 +63,27 @@ export function ChatInput() {
     isLoading,
     handleSubmit,
     handleCodeAction,
+    isPreview,
+    setIsPreview
   } = useChat()
 
   const [showProjectModal, setShowProjectModal] = useState(false)
   const [projectStatus, setProjectStatus] = useState({ has_project: false, has_index: false })
+  const [suggestion, setSuggestion] = useState("")
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false)
+  const suggestionTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const lastWordRef = useRef("")
+  const [textareaHeight, setTextareaHeight] = useState("auto")
+
+  const isAtWordBoundary = (text: string) => {
+    return text.endsWith(" ") || text.endsWith("\n")
+  }
+
+  const getDisplayValue = () => {
+    if (!suggestion || !messageInput) return messageInput
+    return messageInput + suggestion
+  }
+
   const cancelMessage = useCallback(() => {
     fetch(`${API_ENDPOINT}/cancel_message`, {
       method: "POST",
@@ -169,6 +188,7 @@ export function ChatInput() {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto"
       textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`
+      setTextareaHeight(`${textareaRef.current.scrollHeight}px`)
     }
   }, [messageInput, fileAttachments, codeAttachments])
 
@@ -231,77 +251,58 @@ export function ChatInput() {
     fetchProjectStatus()
   }, [])
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault()
-        if (messageInput.trim() || fileAttachments.length > 0 || codeAttachments.length > 0) {
-          submitMessage()
+  const fetchSuggestions = useCallback(async (input: string) => {
+    if (!input.trim() || input.length < 20) {
+      setSuggestion("")
+      return
+    }
+
+    if (!isAtWordBoundary(input)) {
+      return
+    }
+
+    try {
+      setIsLoadingSuggestions(true)
+      const response = await fetch(`${API_ENDPOINT}/get_recommendation`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: input,
+          history: [],
+          recent_messages: []
+        }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        const newSuggestion = data.suggestions?.[0] || ""
+        if (newSuggestion && newSuggestion !== input) {
+          setSuggestion(newSuggestion)
         }
       }
-    },
-    [messageInput, fileAttachments, codeAttachments],
-  )
-
-  const submitMessage = useCallback(() => {
-    if (messageInput.trim() || fileAttachments.length > 0 || codeAttachments.length > 0) {
-      const fileContent = fileAttachments.map((file) => file.content).join("\n\n")
-      const codeContent = codeAttachments
-        .map((code) => `File: ${code.fileName}\n\n\`\`\`${code.language}\n${code.content}\n\`\`\``)
-        .join("\n\n")
-      const fullMessage = [messageInput, fileContent, codeContent].filter(Boolean).join("\n\n")
-      handleSubmit(fullMessage)
-      setMessageInput("")
-      setFileAttachments([])
-      setCodeAttachments([])
-      setShowTemplates(false)
-    } else {
-      toast({
-        title: "Empty Message",
-        description: "Please enter a message or attach a file before sending",
-        variant: "destructive",
-      })
+    } catch (error) {
+      console.error('Error fetching suggestions:', error)
+    } finally {
+      setIsLoadingSuggestions(false)
     }
-  }, [messageInput, fileAttachments, codeAttachments, handleSubmit, toast])
+  }, [])
 
   const handleInputChange = useCallback(
     async (e: React.ChangeEvent<HTMLTextAreaElement>) => {
       const value = e.target.value
-      const newValue = value.substring(messageInput.length)
       setMessageInput(value)
-      if (newValue.length > 30 && isLikelyCode(newValue)) {
-        let detectedLanguage = "plaintext"
-        try {
-          detectedLanguage = detectCodeLanguage(newValue) || "plaintext"
-        } catch (err) {
-          console.warn("Language detection failed, defaulting to plaintext", err)
-        }
+      setSuggestion("")
 
-        let codeBlock = newValue; 
-        try {
-            if (preferences.inputPreference === "Autotag") {
-                const formattedCode = await formatCode(newValue, detectedLanguage);
-                codeBlock = "\n```" + detectedLanguage + "\n" + formattedCode + "\n```";
-            } else {
-                 codeBlock = "\n```" + detectedLanguage + "\n" + newValue + "\n```";
-            }
-            setMessageInput((prev) => prev.substring(0, prev.length - newValue.length) + codeBlock);
-            toast({
-                title: "Code Detected",
-                description: `Formatted as ${detectedLanguage}`,
-                duration: 3000,
-            });
-        } catch (err) {
-            console.warn("Formatting failed, inserting raw code:", err);
-            codeBlock = "\n```" + detectedLanguage + "\n" + newValue + "\n```";
-            setMessageInput((prev) => prev.substring(0, prev.length - newValue.length) + codeBlock);
-            toast({
-                title: "Code Detected",
-                description: `Added as ${detectedLanguage} (formatting skipped)`,
-                variant: "warning",
-                duration: 3000,
-            });
-        }
+      if (suggestionTimeoutRef.current) {
+        clearTimeout(suggestionTimeoutRef.current)
+      }
+
+      if (isAtWordBoundary(value)) {
+        suggestionTimeoutRef.current = setTimeout(() => {
+          fetchSuggestions(value)
+        }, 500)
       }
 
       if (value.length > 8000 && charCount <= 8000) {
@@ -313,13 +314,26 @@ export function ChatInput() {
         })
       }
     },
-    [messageInput, charCount, toast, preferences.inputPreference],
+    [charCount, toast, fetchSuggestions],
   )
-
 
   const handlePaste = useCallback(
     async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
       const pastedText = e.clipboardData.getData("text")
+      if (pastedText.length > 200) {
+        e.preventDefault()
+        const fileName = `pasted_content_${new Date().getTime()}.txt`
+        const detectedLang = detectCodeLanguage(pastedText) || "plaintext"
+        
+        setCodeAttachments(prev => [...prev, {
+          fileName,
+          content: pastedText,
+          language: detectedLang,
+          isLargeText: true 
+        }])
+        return
+      }
+
       if (isLikelyCode(pastedText)) {
         e.preventDefault() 
 
@@ -356,13 +370,6 @@ export function ChatInput() {
             const before = messageInput.slice(0, cursor);
             const after = messageInput.slice(cursor);
             setMessageInput(before + codeBlock + after);
-
-            toast({
-                title: "Code Detected",
-                description: `Added as ${detectedLanguage} (formatting skipped)`,
-                variant: "warning",
-                duration: 3000,
-            });
         }
       }
     },
@@ -413,112 +420,6 @@ export function ChatInput() {
     }
   }, [])
 
-  const startRecording = useCallback(() => {
-    if (!("webkitSpeechRecognition" in window) && !("SpeechRecognition" in window)) {
-      setRecordingError("Speech recognition is not supported in your browser")
-      toast({
-        title: "Not Supported",
-        description: "Speech recognition is not supported in your browser. Please type your message instead.",
-        variant: "destructive",
-      })
-      return
-    }
-    setIsRecording(true)
-    setRecordingError(null)
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-    const recognition = new SpeechRecognition()
-    recognition.continuous = true
-    recognition.interimResults = true
-    recognition.lang = "en-US"
-    recognition.onresult = (event: any) => {
-      let finalTranscript = ""
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript
-        } else {
-        }
-      }
-      if (finalTranscript) {
-        setMessageInput((prev) => {
-          const newValue = prev ? `${prev} ${finalTranscript}` : finalTranscript
-          setTimeout(() => {
-            if (textareaRef.current) {
-              textareaRef.current.selectionStart = textareaRef.current.value.length;
-              textareaRef.current.selectionEnd = textareaRef.current.value.length;
-            }
-          }, 0);
-          return newValue
-        })
-      }
-    }
-    recognition.onerror = (event: any) => {
-      setRecordingError(`Error: ${event.error}`)
-      setIsRecording(false)
-      toast({
-        title: "Recording Error",
-        description: `Error: ${event.error}. Please try again or type your message.`,
-        variant: "destructive",
-      })
-    }
-    recognition.onend = () => {
-      setIsRecording(false)
-    }
-
-    try {
-      recognition.start()
-      ;(window as any).speechRecognition = recognition
-      toast({
-        title: "Recording Started",
-        description: "Speak now. Your speech will be converted to text.",
-        duration: 3000,
-      })
-    } catch (error) {
-      console.error("Failed to start recording:", error);
-      setRecordingError("Failed to start recording")
-      setIsRecording(false)
-      toast({
-        title: "Recording Failed",
-        description: "Failed to start recording. Please try again or type your message.",
-        variant: "destructive",
-      })
-    }
-  }, [toast])
-
-  const stopRecording = useCallback(() => {
-    if ((window as any).speechRecognition) {
-      try {
-        (window as any).speechRecognition.stop()
-        toast({
-          title: "Recording Stopped",
-          description: "Speech recording has been stopped.",
-          duration: 2000,
-        })
-      } catch (error) {
-        console.warn("Failed to stop recording:", error)
-      } finally {
-        ;(window as any).speechRecognition = null;
-      }
-    }
-    setIsRecording(false)
-  }, [toast])
-
-
-  const applyCodeAction = useCallback(
-    (action: string) => {
-      if (messageInput.trim()) {
-        handleCodeAction(action, messageInput, language)
-        setMessageInput("")
-      } else {
-        toast({
-          title: "No Code Provided",
-          description: "Please enter or paste code first",
-          variant: "destructive",
-        })
-      }
-    },
-    [messageInput, handleCodeAction, language, toast],
-  )
-
   const isMac = typeof navigator !== "undefined" && navigator.platform.toUpperCase().indexOf("MAC") >= 0
   const removeFileAttachment = useCallback((index: number) => {
     setFileAttachments((prev) => prev.filter((_, i) => i !== index))
@@ -528,281 +429,402 @@ export function ChatInput() {
     setCodeAttachments((prev) => prev.filter((_, i) => i !== index))
   }, [])
 
+  const handleFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null
+    if (submitter && submitter.getAttribute('type') !== 'submit') {
+      return
+    }
+    if (isLoading || !messageInput.trim()) return
+    await submitMessage()
+  }
 
+  const handleFileContentChange = (newContent: string, index: number) => {
+    setFileAttachments(prev => prev.map((file, i) => 
+      i === index ? { ...file, content: newContent, contentLength: newContent.length } : file
+    ));
+  }
+
+  const handleCodeContentChange = (newContent: string, index: number) => {
+    setCodeAttachments(prev => prev.map((code, i) => 
+      i === index ? { ...code, content: newContent } : code
+    ));
+  }
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (suggestion && e.key === 'Tab') {
+        e.preventDefault()
+        setMessageInput(prev => prev + suggestion)
+        setSuggestion("")
+        return
+      }
+
+      if (!['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Tab'].includes(e.key)) {
+        setSuggestion("")
+      }
+
+      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault()
+        if (messageInput.trim() || fileAttachments.length > 0 || codeAttachments.length > 0) {
+          submitMessage()
+        }
+      }
+    },
+    [messageInput, fileAttachments, codeAttachments, suggestion],
+  )
+
+  const submitMessage = useCallback(() => {
+    if (isPreview) {
+      toast({
+        title: "Ensure that you have saved your changes",
+        description: "Preview mode is enabled. Please disable it to send messages.",
+        variant: "destructive",
+      })
+      return;
+    }
+    if (messageInput.trim() || fileAttachments.length > 0 || codeAttachments.length > 0) {
+      const fileContent = fileAttachments.map((file) => file.content).join("\n\n")
+      const codeContent = codeAttachments
+        .map((code) => {
+          if (code.isLargeText) {
+            return `\`\`\`context\n${code.content}\n\`\`\``
+          } else {
+            return `File: ${code.fileName}\n\n\`\`\`${code.language}\n${code.content}\n\`\`\``
+          }
+        })
+        .join("\n\n")
+      
+      const fullMessage = [messageInput, fileContent, codeContent].filter(Boolean).join("\n\n")
+      handleSubmit(fullMessage)
+      setMessageInput("")
+      setFileAttachments([])
+      setCodeAttachments([])
+      setShowTemplates(false)
+    } else {
+      toast({
+        title: "Empty Message",
+        description: "Please enter a message or attach a file before sending",
+        variant: "destructive",
+      })
+    }
+  }, [messageInput, fileAttachments, codeAttachments, handleSubmit, toast])
+
+  useEffect(() => {
+    return () => {
+      if (suggestionTimeoutRef.current) {
+        clearTimeout(suggestionTimeoutRef.current)
+      }
+    }
+  }, [])
 
   return (
-    <TooltipProvider> 
-      <div className="p-2 sm:p-4 border-t fixed bottom-0 left-0 right-0 bg-background md:relative ">
-        <div className="flex flex-col gap-1 mx-auto">
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-            <div className="flex flex-wrap items-center gap-1">
-              <Select value={mcp} onValueChange={setMcp}>
-                <SelectTrigger className="w-auto min-w-[3rem] h-8">
-                  {(() => {
-                    const selected = MCP_OPTIONS.find((opt) => opt.value === mcp)
-                    return selected ? <selected.icon className={`w-4 h-4 mx-2 ${selected.color}`} /> : <SelectValue placeholder="✨ MCP ✨" />
-                  })()}
-                </SelectTrigger>
-                <SelectContent>
-                  {MCP_OPTIONS.map(({ value, label, icon: Icon, color }) => (
-                    <SelectItem key={value} value={value}>
-                      <div className="flex items-center gap-2">
-                        <Icon className={`w-4 h-4 ${color}`} />
-                        <span>{label}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 px-2 text-xs gap-1"
-                    onClick={() => setShowTemplates(!showTemplates)}
-                  >
-                    <Code className="h-3.5 w-3.5 dark:text-blue-300 text-blue-500" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Browse code templates</p>
-                </TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 px-2 text-xs text-red-500 dark:text-red-300 gap-1"
-                    onClick={() => setShowProjectModal(true)}
-                  >
-                    <Github className="h-3.5 w-3.5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Manage project files</p>
-                </TooltipContent>
-              </Tooltip>
-            </div>
-            <div className="flex items-center gap-2">
-              {charCount > 0 && (
-                <Badge
-                  variant={charCount > 50000 ? "destructive" : charCount > 25000 ? "secondary" : "outline"} 
-                  className={cn(
-                    "h-6 px-2 text-xs transition-colors hidden md:block",
-                    charCount > 25000 && charCount <= 50000 && "bg-amber-500/20  text-amber-700 dark:text-amber-400 hover:bg-amber-500/20",
-                  )}
+    <div className="relative">
+      {showBashShell && (
+        <BashShell
+          isOpen={showBashShell}
+          onClose={() => setShowBashShell(false)}
+        />
+      )}
+      <div className="flex items-center gap-2 py-3">
+        <form onSubmit={handleFormSubmit} className="w-full max-w-4xl px-1 mx-auto">
+          <div className="flex flex-col gap-1 mx-auto">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+              <div className="flex flex-wrap items-center gap-1">
+                <Select 
+                  value={mcp} 
+                  onValueChange={setMcp} 
+                  onOpenChange={(open) => { 
+                    const event = window.event
+                    if (event && open) {
+                      event.preventDefault()
+                    }
+                  }}
                 >
-                  {charCount} / 100000
-                </Badge>
-              )}
+                  <SelectTrigger className="w-auto min-w-[3rem] h-8" onClick={(e) => e.preventDefault()}>
+                    {(() => {
+                      const selected = MCP_OPTIONS.find((opt) => opt.value === mcp)
+                      return selected ? <selected.icon className={`w-4 h-4 mx-2 ${selected.color}`} /> : <SelectValue placeholder="✨ MCP ✨" />
+                    })()}
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MCP_OPTIONS.map(({ value, label, icon: Icon, color }) => (
+                      <SelectItem key={value} value={value}>
+                        <div className="flex items-center gap-2">
+                          <Icon className={`w-4 h-4 ${color}`} />
+                          <span>{label}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
-              <OutputFormatToggle
-                value={preferences.outputFormat}
-                onChange={(value) => setPreferences({ ...preferences, outputFormat: value as typeof preferences.outputFormat })}
-              />
-            </div>
-          </div>
-          <div
-            ref={dropZoneRef}
-            className={cn(
-              "relative flex flex-col gap-2",
-              isDragging && "ring-2 ring-primary rounded-md",
-              isRecording && "ring-2 ring-red-500 rounded-md",
-            )}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-          >
-            <AnimatePresence>
-              {isDragging && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center rounded-md z-10"
-                >
-                  <div className="flex flex-col items-center gap-2 p-4 border-2 border-dashed border-primary rounded-md">
-                    <FileUp className="h-8 w-8 text-primary" />
-                    <p className="text-sm font-medium">Drop your file here</p>
-                    <p className="text-xs text-muted-foreground text-center">
-                      Supported file types: code, text, and configuration files
-                    </p>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-            <AnimatePresence>
-              {processingFile && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center rounded-md z-10"
-                >
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="h-8 w-8 border-2 border-t-transparent border-primary rounded-full animate-spin" />
-                    <p className="text-sm font-medium">Processing file...</p>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-            <AnimatePresence>
-              {isRecording && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="absolute right-14 top-2 z-10 flex items-center gap-2 bg-red-500/10 px-3 py-1 rounded-full"
-                >
-                  <motion.div
-                    animate={{ scale: [1, 1.2, 1] }}
-                    transition={{ repeat: Number.POSITIVE_INFINITY, duration: 1.5 }}
-                    className="h-2 w-2 rounded-full bg-red-500"
-                  />
-                  <span className="text-xs font-medium text-red-500">Recording...</span>
-                  <Button variant="ghost" size="icon" className="h-5 w-5 rounded-full" onClick={stopRecording}>
-                    <X className="h-3 w-3" />
-                  </Button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            <input
-              type="file"
-              ref={fileInputRef}
-              className="hidden"
-              onChange={handleFileInputChange}
-              multiple
-              accept={SUPPORTED_FILE_TYPES.join(",")}
-            />
-            {(fileAttachments.length > 0 || codeAttachments.length > 0) && (
-              <div className="flex flex-wrap gap-2 p-2 bg-muted/30 rounded-md">
-                {fileAttachments.map((file, index) => (
-                  <FileAttachment
-                    key={`file-${file.fileName}-${index}`}
-                    fileName={file.fileName}
-                    fileSize={file.fileSize}
-                    contentLength={file.contentLength}
-                    language={file.language}
-                    onRemove={() => removeFileAttachment(index)}
-                  />
-                ))}
-
-                {codeAttachments.map((code, index) => (
-                  <FileAttachment
-                    key={`code-${code.fileName}-${index}`}
-                    fileName={code.fileName}
-                    fileSize={code.content.length}
-                    contentLength={code.content.length}
-                    language={code.language}
-                    onRemove={() => removeCodeAttachment(index)}
-                  />
-                ))}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 px-2   border text-xs gap-1"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        setShowTemplates(!showTemplates)
+                      }}
+                    >
+                      <Code className="h-3.5 w-3.5 dark:text-blue-300 text-blue-500" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Browse code templates</p>
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 px-2 text-xs border text-red-500 dark:text-red-300 gap-1"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        setShowProjectModal(true)
+                      }}
+                    >
+                      <Github className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Manage project files</p>
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      type="button"
+                      variant="outline" 
+                      size="icon" 
+                      className="h-8 px-2 text-xs gap-1" 
+                      onClick={(e) => {
+                        e.preventDefault()
+                        setShowBashShell(true)
+                      }}
+                    >
+                      <Terminal className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Open bash shell</p>
+                  </TooltipContent>
+                </Tooltip>
               </div>
-            )}
-            <div className="flex gap-2 items-end"> 
-               <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    className="h-[44px] w-10 flex-shrink-0 relative"
-                    onClick={handleFileUploadClick}
-                    disabled={isLoading || processingFile || isRecording}
-                  >
-                    <Upload className="h-4 w-4" />
-                    {(fileAttachments.length > 0 || codeAttachments.length > 0) && (
-                      <Badge className="absolute -top-2 -right-2 h-5 w-5 p-0 flex items-center justify-center bg-primary text-primary-foreground text-xs rounded-full"> {/* Made badge round */}
-                        {fileAttachments.length + codeAttachments.length}
-                      </Badge>
+              <div className="flex items-center gap-2">
+                {charCount > 0 && (
+                  <Badge
+                    variant={charCount > 50000 ? "destructive" : charCount > 25000 ? "secondary" : "outline"} 
+                    className={cn(
+                      "h-6 px-2 text-xs transition-colors hidden md:block",
+                      charCount > 25000 && charCount <= 50000 && "bg-amber-500/20  text-amber-700 dark:text-amber-400 hover:bg-amber-500/20",
                     )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="left">
-                  <p>Upload code or text file</p>
-                </TooltipContent>
-              </Tooltip>
-              <Textarea
-                ref={textareaRef}
-                placeholder={`How can I help you to code today`}
-                className="min-h-[22px] max-h-[44px] md:min-h-[44px] md:max-h-[200px] flex-1 resize-none overflow-y-auto" 
-                value={messageInput}
-                onChange={handleInputChange}
-                autoFocus={true}
-                onPaste={handlePaste}
-                onKeyDown={handleKeyDown}
-                aria-label="Message input"
-                disabled={isRecording}
+                  >
+                    {charCount} / 100000
+                  </Badge>
+                )}
+
+                <OutputFormatToggle
+                  value={preferences.outputFormat}
+                  onChange={(value) => {
+                    setPreferences({ ...preferences, outputFormat: value as typeof preferences.outputFormat })
+                  }}
+                />
+              </div>
+            </div>
+            <div
+              ref={dropZoneRef}
+              className={cn(
+                "relative flex flex-col gap-2",
+                isDragging && "ring-2 ring-primary rounded-md",
+              )}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
+              <AnimatePresence>
+                {isDragging && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center rounded-md z-10"
+                  >
+                    <div className="flex flex-col items-center gap-2 p-4 border-2 border-dashed border-primary rounded-md">
+                      <FileUp className="h-8 w-8 text-primary" />
+                      <p className="text-sm font-medium">Drop your file here</p>
+                      <p className="text-xs text-muted-foreground text-center">
+                        Supported file types: code, text, and configuration files
+                      </p>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+              <AnimatePresence>
+                {processingFile && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center rounded-md z-10"
+                  >
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="h-8 w-8 border-2 border-t-transparent border-primary rounded-full animate-spin" />
+                      <p className="text-sm font-medium">Processing file...</p>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                onChange={handleFileInputChange}
+                multiple
+                accept={SUPPORTED_FILE_TYPES.join(",")}
               />
-              <div className="flex gap-1 flex-shrink-0"> 
-                 <Tooltip>
+              {(fileAttachments.length > 0 || codeAttachments.length > 0) && (
+                <div className="flex flex-wrap gap-2 p-2 bg-muted/30 rounded-md border-2 border-dashed ">
+                  {fileAttachments.map((file, index) => (
+                    <FileAttachment
+                      key={`file-${file.fileName}-${index}`}
+                      fileName={file.fileName}
+                      fileSize={file.fileSize}
+                      contentLength={file.contentLength}
+                      content={file.content}
+                      language={file.language}
+                      onRemove={() => removeFileAttachment(index)}
+                      onContentChange={(newContent) => handleFileContentChange(newContent, index)}
+                    />
+                  ))}
+
+                  {codeAttachments.map((code, index) => (
+                    <FileAttachment
+                      key={`code-${code.fileName}-${index}`}
+                      fileName={code.fileName}
+                      fileSize={code.content.length}
+                      contentLength={code.content.length}
+                      content={code.content}
+                      language={code.language}
+                      isLargeText={code.isLargeText}
+                      onRemove={() => removeCodeAttachment(index)}
+                      onContentChange={(newContent) => handleCodeContentChange(newContent, index)}
+                    />
+                  ))}
+                </div>
+              )}
+              <div className="flex gap-2 items-end relative"> 
+                <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
                       type="button"
                       variant="outline"
                       size="icon"
-                      className={cn(
-                        "h-[44px] w-10",
-                        isRecording && "bg-red-500 text-white hover:bg-red-600",
-                      )}
-                      onClick={isRecording ? stopRecording : startRecording}
+                      className="h-[44px] w-10 flex-shrink-0 relative"
+                      onClick={handleFileUploadClick}
                       disabled={isLoading || processingFile}
                     >
-                      {isRecording ? <Square className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                      <Upload className="h-4 w-4" />
+                      {(fileAttachments.length > 0 || codeAttachments.length > 0) && (
+                        <Badge className="absolute -top-2 -right-2 h-5 w-5 p-0 flex items-center justify-center bg-primary text-primary-foreground text-xs rounded-full"> 
+                          {fileAttachments.length + codeAttachments.length}
+                        </Badge>
+                      )}
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent side="top">
-                    <p>{isRecording ? "Stop recording" : "Voice input"}</p>
+                  <TooltipContent side="left">
+                    <p>Upload code or text file</p>
                   </TooltipContent>
                 </Tooltip>
-                 <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      onClick={isLoading ? cancelMessage : submitMessage}
-                      className="px-4 h-[44px]"
-                      disabled={
-                        (!isLoading &&
-                          !messageInput.trim() &&
-                          fileAttachments.length === 0 &&
-                          codeAttachments.length === 0) ||
-                        isRecording
-                      }
-                    >
-                      {isLoading ? <Square className="h-5 w-5 text-white" /> : <Send className="h-4 w-4" />}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Send message ({isMac ? "⌘" : "Ctrl"}+Enter)</p>
-                  </TooltipContent>
-                </Tooltip>
+                <div className="relative flex-1">
+                  <div className="relative">
+                    <div className="relative">
+                      <Textarea
+                        ref={textareaRef}
+                        placeholder={`How can I help you to code today`}
+                        className="min-h-[22px] max-h-[44px] md:min-h-[44px] md:max-h-[200px] flex-1 resize-none overflow-y-auto pr-12 font-mono relative z-10 bg-transparent" 
+                        value={messageInput}
+                        onChange={handleInputChange}
+                        autoFocus={true}
+                        onPaste={handlePaste}
+                        onKeyDown={handleKeyDown}
+                        aria-label="Message input"
+                      />
+                      {suggestion && (
+                        <div className="absolute inset-0 pointer-events-none">
+                          <Textarea
+                            className="flex-1 resize-none overflow-y-auto pr-12 font-mono text-muted-foreground/30 border-transparent bg-transparent"
+                            style={{ 
+                              height: textareaHeight,
+                              minHeight: textareaHeight,
+                              maxHeight: textareaHeight
+                            }}
+                            value={getDisplayValue()}
+                            readOnly
+                            aria-hidden="true"
+                          />
+                          <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                            <span className="text-[10px] text-muted-foreground/20 bg-muted/10 px-1 rounded">
+                              tab
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-1 flex-shrink-0"> 
+                   <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        onClick={isLoading ? cancelMessage : submitMessage}
+                        className="px-4 h-[44px]"
+                        disabled={
+                          (!isLoading && 
+                            !messageInput.trim() &&
+                            fileAttachments.length === 0 &&
+                            codeAttachments.length === 0)
+                        }
+                      >
+                        {isLoading ? <Square className="h-5 w-5 text-white" /> : <Send className="h-4 w-4" />}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Send message ({isMac ? "⌘" : "Ctrl"}+Enter)</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
               </div>
             </div>
+            <AnimatePresence>
+              {showTemplates && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="mt-2 overflow-hidden"
+                >
+                  <CodeTemplates onSelectTemplate={handleTemplateSelect} />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
-          <AnimatePresence>
-            {showTemplates && (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="mt-2 overflow-hidden"
-              >
-                <CodeTemplates onSelectTemplate={handleTemplateSelect} />
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-        <ProjectModal
-          isOpen={showProjectModal}
-          onClose={() => setShowProjectModal(false)}
-          projectStatus={projectStatus}
-        />
+        </form>
       </div>
-    </TooltipProvider>
+      <ProjectModal
+        isOpen={showProjectModal}
+        onClose={() => setShowProjectModal(false)}
+        projectStatus={projectStatus}
+      />
+    </div>
   )
 }

@@ -258,7 +258,7 @@ const ChatMessage = memo(function ChatMessage({
         <div
           ref={messageContentRef}
           className={cn(
-            "p-4 rounded-lg text-sm sm:text-base break-words overflow-auto font-scale-base custom-scrollbar fluid-motion message-container",
+            "p-4 rounded-lg text-sm sm:text-base break-words  overflow-auto font-scale-base  fluid-motion ",
             isUser ? "ml-auto text-rigt border border-blue-500/10" : "bg-card text-left shadow-sm",
             isResizing && "resize-transition",
           )}
@@ -344,7 +344,7 @@ const ChatMessage = memo(function ChatMessage({
           )}
           
           {!isUser && (
-            <div className="flex items-center gap-1 ml-2">
+            <div className="flex items-center gap-2 ">
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>

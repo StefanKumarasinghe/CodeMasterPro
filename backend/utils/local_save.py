@@ -137,7 +137,9 @@ async def save_resource(
 
     except Exception as e:
         gemini.logger.error(f"Error in save_resource: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-            detail=str(e)
-        )
+        name = random.choice(string.ascii_lowercase)
+
+        file_path = resource_folder / f"{name}.md"
+        file_path.write_text(content, encoding="utf-8")
+        
+        return {"message": f"Resource '{name}' saved successfully."}

@@ -117,9 +117,9 @@ export function CodeSast({ code, language, onClose }: CodeSastProps) {
     <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[9999] flex items-center justify-center md:p-4">
       <div className="bg-card border rounded-lg shadow-lg p-6 max-w-4xl w-full h-full md:max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold flex items-center gap-2 hidden md:block">
+          <h2 className="text-xl font-bold flex items-center gap-2">
             <Shield className="h-5 w-5 text-primary" />
-            Security & Quality Analysis
+            <span>Security & Quality Analysis</span>
           </h2>
           <h2 className="text-xl font-bold flex items-center gap-2 block md:hidden">
             SAST
@@ -291,7 +291,7 @@ export function CodeSast({ code, language, onClose }: CodeSastProps) {
               onValueChange={setActiveTab}
               className="flex-1 flex flex-col "
             >
-              <TabsList className="mb-4 overflow-x-auto md:overflow-x-hidden ">
+              <TabsList className="mb-4 overflow-x-auto overflow-y-hidden md:overflow-x-hidden ">
                 <TabsTrigger value="issues" className="text-xs md:text-base">
                   Issues ({results.summary.total})
                 </TabsTrigger>

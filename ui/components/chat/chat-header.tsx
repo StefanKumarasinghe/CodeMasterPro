@@ -3,7 +3,7 @@ import { useState, useEffect } from "react"
 import type React from "react"
 
 import { Button } from "@/components/ui/button"
-import { HelpCircle, PanelLeft, FileText, BookMarked, SquarePen } from "lucide-react"
+import { HelpCircle, PanelLeft, FileText, BookMarked, SquarePen, Sparkles } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { ThemeToggle } from "../ui/theme-toggle"
 import { MemoryControls } from "./memory-controls"
@@ -20,9 +20,11 @@ import { showProgressIndicator, hideProgressIndicator } from "@/components/progr
 import { ProgressIndicator } from "@/components/progress-indicator"
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu"
 import { MoreVertical } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 export function ChatHeader({ style, size }: { style?: React.CSSProperties; size?: number }) {
   const [showTutorial, setShowTutorial] = useState(false)
+  const [isReindexing, setIsReindexing] = useState(false)
   const { state: sidebarState, toggleSidebar } = useSidebar()
   const {
     preferences,
@@ -40,6 +42,7 @@ export function ChatHeader({ style, size }: { style?: React.CSSProperties; size?
 
   const reIndex = async () => {
     try {
+      setIsReindexing(true)
       showProgressIndicator("Reindexing memory...");
       
       const response = await fetch(`${API_ENDPOINT}/reindex/`, {
@@ -54,6 +57,7 @@ export function ChatHeader({ style, size }: { style?: React.CSSProperties; size?
       console.error("Failed to reindex memory:", error)
       toast.error("Failed to reindex memory")
     } finally {
+      setIsReindexing(false)
       hideProgressIndicator();
     }
   }
@@ -104,119 +108,173 @@ export function ChatHeader({ style, size }: { style?: React.CSSProperties; size?
       setMemoryState((prev) => ({ ...prev, forgetMemory: true }))
     } catch (error) {
       console.error("Failed to clear memory:", error)
-      toast.error("Failed to clear memory")
     }
   }
+
+  const ActionButton = ({ children, onClick, tooltip, variant = "ghost", className = "", isActive = false }: {
+    children: React.ReactNode;
+    onClick: () => void;
+    tooltip: string;
+    variant?: "ghost" | "default";
+    className?: string;
+    isActive?: boolean;
+  }) => (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button 
+            variant={variant} 
+            className={cn(
+              "h-9 w-9 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95",
+              "hover:bg-primary/10 hover:text-primary hover:shadow-md",
+              "group relative overflow-hidden",
+              isActive && "bg-primary/15 text-primary shadow-sm",
+              className
+            )} 
+            onClick={onClick}
+          >
+            <div className="absolute inset-0 bg-gradient-to-r from-primary/0 via-primary/5 to-primary/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+            {children}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="bg-popover/95 backdrop-blur-sm border shadow-lg">
+          <p className="text-sm font-medium">{tooltip}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  )
 
   return (
     <>
       <header
-        className="h-14 border-b fixed md:relative top-0 left-0 right-0 md:top-auto md:left-auto md:right-auto overflow-x-auto px-4 flex md:flex items-center justify-between fluid-content relative"
+        className={cn(
+          "h-12 md:relative top-0 left-0 right-0 md:top-auto md:left-auto md:right-auto",
+          "px-4 flex items-center justify-between fluid-content",
+        )}
         style={style}
       >
-        <div className="flex items-center gap-2 md:gap-4">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" className="h-8 w-8" onClick={toggleSidebar}>
-                  <PanelLeft style={{ height: "1.2rem", width: "1.2rem" }} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{sidebarState === "expanded" ? "Hide Sidebar" : "Show Sidebar"}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" className="h-8 w-8" onClick={handleNewChat}>
-                  <SquarePen className="text-red-600 dark:text-red-300" style={{ width: "1.2rem", height: "1.2rem" }} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>New Chat</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+        <div className="flex items-center gap-3">
+          <ActionButton
+            onClick={toggleSidebar}
+            tooltip={sidebarState === "expanded" ? "Hide Sidebar" : "Show Sidebar"}
+            isActive={sidebarState === "expanded"}
+          >
+            <PanelLeft className="h-4 w-4" />
+          </ActionButton>
 
-          <div className="hidden md:flex items-center gap-2 md:gap-4">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    className="h-8 w-8"
-                    onClick={() => window.dispatchEvent(new CustomEvent("open-documentation-modal"))}
-                  >
-                    <FileText className="text-orange-600 dark:text-orange-300" style={{ height: "1.2rem", width: "1.2rem" }} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Add Documentation</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="ghost" className="h-8 w-8 text-green-600 dark:text-green-300" onClick={() => reIndex()}>
-                    <BookMarked style={{ height: "1.2rem", width: "1.2rem" }} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Reindex Resources (When new resources are added)</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="ghost" className="h-8 w-8" onClick={() => setShowTutorial(true)}>
-                    <HelpCircle style={{ height: "1.2rem", width: "1.2rem" }} className="text-blue-600 dark:text-blue-300"/>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Help & Tutorial</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            {messages.length > 0 && <ChatHistoryDownload messages={messages} />}
+          <div className="w-px h-6 bg-border/50" />
+
+          <ActionButton
+            onClick={handleNewChat}
+            tooltip="New Chat"
+            className="hover:bg-green-500/10 hover:text-green-600"
+          >
+            <SquarePen className="h-4 w-4" />
+          </ActionButton>
+
+          <div className="hidden md:flex items-center gap-2">
+            <ActionButton
+              onClick={() => window.dispatchEvent(new CustomEvent("open-documentation-modal"))}
+              tooltip="Add Documentation"
+              className="hover:bg-blue-500/10 hover:text-blue-600"
+            >
+              <FileText className="h-4 w-4" />
+            </ActionButton>
+
+            <ActionButton
+              onClick={reIndex}
+              tooltip="Reindex Resources (When new resources are added)"
+              className={cn(
+                "hover:bg-purple-500/10 hover:text-purple-600",
+                isReindexing && "animate-pulse bg-purple-500/20"
+              )}
+            >
+              <BookMarked className={cn("h-4 w-4", isReindexing && "animate-spin")} />
+            </ActionButton>
+
+            <ActionButton
+              onClick={() => setShowTutorial(true)}
+              tooltip="Help & Tutorial"
+              className="hover:bg-amber-500/10 hover:text-amber-600"
+            >
+              <HelpCircle className="h-4 w-4" />
+            </ActionButton>
+
+            {messages.length > 0 && (
+              <div className="ml-2">
+                <ChatHistoryDownload messages={messages} />
+              </div>
+            )}
           </div>
 
           <div className="md:hidden">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="h-8 w-8">
-                  <MoreVertical style={{ height: "1.2rem", width: "1.2rem" }} className="text-red-600 dark:text-red-300" />
+                <Button 
+                  variant="ghost" 
+                  className={cn(
+                    "h-9 w-9 rounded-xl transition-all duration-200",
+                    "hover:bg-primary/10 hover:text-primary hover:shadow-md"
+                  )}
+                >
+                  <MoreVertical className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="center" className="w-48">
-                <DropdownMenuItem onClick={() => window.dispatchEvent(new CustomEvent("open-documentation-modal"))}>
-                  <FileText className="mr-2 h-4 w-4 text-orange-600 dark:text-orange-300" />
-                  Add Documentation
+              <DropdownMenuContent 
+                align="center" 
+                className="w-56 bg-popover/95 backdrop-blur-xl border shadow-xl rounded-xl"
+              >
+                <DropdownMenuItem 
+                  onClick={() => window.dispatchEvent(new CustomEvent("open-documentation-modal"))}
+                  className="gap-3 py-3 rounded-lg hover:bg-blue-500/10 hover:text-blue-600"
+                >
+                  <FileText className="h-4 w-4" />
+                  <span>Add Documentation</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => reIndex()}>
-                  <BookMarked className="mr-2 h-4 w-4 text-green-600 dark:text-green-300" />
-                  Reindex Resources
+                <DropdownMenuItem 
+                  onClick={reIndex}
+                  className="gap-3 py-3 rounded-lg hover:bg-purple-500/10 hover:text-purple-600"
+                >
+                  <BookMarked className="h-4 w-4" />
+                  <span>Reindex Resources</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setShowTutorial(true)}>
-                  <HelpCircle className="mr-2 h-4 w-4 text-blue-600 dark:text-blue-300" />
-                  Help & Tutorial
+                <DropdownMenuItem 
+                  onClick={() => setShowTutorial(true)}
+                  className="gap-3 py-3 rounded-lg hover:bg-amber-500/10 hover:text-amber-600"
+                >
+                  <HelpCircle className="h-4 w-4" />
+                  <span>Help & Tutorial</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem >
-                <div className="block ml-auto md:hidden">
-                  <ThemeToggle />
-                </div>
+                <DropdownMenuItem className="gap-3 py-3 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <Sparkles className="h-4 w-4" />
+                    <span>Theme</span>
+                    <div className="ml-auto">
+                      <ThemeToggle />
+                    </div>
+                  </div>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            {messages.length > 0 && <ChatHistoryDownload messages={messages} />}
+            {messages.length > 0 && (
+              <div className="ml-2">
+                <ChatHistoryDownload messages={messages} />
+              </div>
+            )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          {messages.length > 0 && <SaveChatButton messages={messages} />}
+
+        <div className="flex items-center gap-3">
+          {messages.length > 0 && (
+            <div className="hidden sm:block">
+              <SaveChatButton messages={messages} />
+            </div>
+          )}
+          
+          <div className="w-px h-6 bg-border/50 hidden sm:block" />
+          
           <MemoryControls />
+          
           <SettingsSheet
             preferences={{
               inputPreference: preferences.inputPreference as "Autotag" | "NoTag",
@@ -245,13 +303,16 @@ export function ChatHeader({ style, size }: { style?: React.CSSProperties; size?
             personalInfo={personalInfo}
             setPersonalInfo={setPersonalInfo}
           />
+          
           <div className="hidden md:block">
-            <ThemeToggle />
+            <div className="p-1 rounded-xl bg-muted/30 backdrop-blur-sm">
+              <ThemeToggle />
+            </div>
           </div>
         </div>
-        
       </header>
-      <div className="w-full border-b relative">
+
+      <div className="w-full relative bg-background/50 backdrop-blur-sm">
         <ProgressIndicator />
       </div>
    

@@ -29,7 +29,6 @@ const SIDEBAR_MIN_WIDTH = 200
 const SIDEBAR_MAX_WIDTH = 500
 const SIDEBAR_DEFAULT_WIDTH = 280
 
-// Font size scaling factors
 const FONT_SIZE_MIN = 0.8
 const FONT_SIZE_MAX = 1.2
 const FONT_SIZE_DEFAULT = 1.0
@@ -74,7 +73,7 @@ const SidebarProvider = React.forwardRef<
 >(
   (
     {
-      defaultOpen = true,
+      defaultOpen = false,
       open: openProp,
       onOpenChange: setOpenProp,
       defaultWidth = SIDEBAR_DEFAULT_WIDTH,
@@ -92,9 +91,7 @@ const SidebarProvider = React.forwardRef<
     const [width, setWidth] = React.useState(defaultWidth)
     const [isResizing, setIsResizing] = React.useState(false)
     const [fontScale, setFontScale] = React.useState(defaultFontScale)
-    
-    // This is the internal state of the sidebar.
-    // We use openProp and setOpenProp for control from outside the component.
+
     const [_open, _setOpen] = React.useState(defaultOpen)
     const open = openProp ?? _open
     const setOpen = React.useCallback(

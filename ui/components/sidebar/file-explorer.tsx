@@ -67,6 +67,7 @@ export function FileExplorer({
   const [showOnlyPinned, setShowOnlyPinned] = useState(false);
   const [showTestRunner, setShowTestRunner] = useState(false);
   const [selectedDirectory, setSelectedDirectory] = useState("");
+  const [hasRootPackageJson, setHasRootPackageJson] = useState(false);
   const {
     mcp,
     pinnedFiles,
@@ -94,6 +95,10 @@ export function FileExplorer({
         }
         const data = await response.json();
         setFiles(data);
+        const hasPackageJson = data.some((item: FileItem) => 
+          item.type === "file" && item.name === "package.json"
+        );
+        setHasRootPackageJson(hasPackageJson);
 
         if (data.length > 0 && data.length <= 3) {
           const rootFolders = data
@@ -290,7 +295,7 @@ export function FileExplorer({
               ) : (
                 <div>
                   {isDirectory && hasPackageJson && !saveMode && (
-                    <div className="absolute right-2 flex items-center gap-1 flex-shrink-0">
+                    <div className=" flex items-center gap-1 flex-shrink-0">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button
@@ -375,30 +380,49 @@ export function FileExplorer({
     <div className="flex flex-col h-full border rounded-md ">
       <div className="flex items-center justify-between px-3 py-1.5 border-b bg-muted/30">
         <h3 className="text-sm py-2 font-medium flex items-center">
-          <Folder className="h-4 w-4 mr-1.5  text-primary" />
+          <Folder className="h-4 w-4 mr-3  text-primary" />
           {saveMode ? "Select File to Save" : "Files"}
         </h3>
         <div className="flex items-center gap-1">
           {!saveMode && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant={showOnlyPinned ? "default" : "ghost"}
-                    size="sm"
-                    className="h-6 w-6 p-0"
-                    onClick={toggleShowPinned}
-                  >
-                    <Filter className="h-3.5 w-3.5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="left">
-                  {showOnlyPinned
-                    ? "Show all files"
-                    : "Show only context files"}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <>
+              {hasRootPackageJson && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0"
+                        onClick={() => runTests("")}
+                      >
+                        <Play className="h-3.5 w-3.5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="left">
+                      Run Node.js project
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant={showOnlyPinned ? "default" : "ghost"}
+                      size="sm"
+                      className="h-6 w-6 p-0"
+                      onClick={toggleShowPinned}
+                    >
+                      <Filter className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="left">
+                    {showOnlyPinned ? "Show all files" : "Show only context files"}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </>
           )}
 
           <TooltipProvider>

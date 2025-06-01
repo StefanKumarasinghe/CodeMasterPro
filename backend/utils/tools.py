@@ -73,8 +73,7 @@ async def handle_tool_selector(mcp, msg, history, last_message, recent_messages,
         tool_selector = mcp
     else:
         tool_selector = await resolve_tool_selector(gemini, msg.message, history, last_message)
-    
-    mem.save_context({"input": "What tool was used to answer the question?"}, {"output": tool_selector})
+
     handlers = {
         "quick": handle_quick_answer,
         "sast": handle_bandit_analysis,
@@ -103,7 +102,7 @@ async def handle_tool_selector(mcp, msg, history, last_message, recent_messages,
 
 
 async def handle_bash_answer(msg, recent_messages, request, mem, gemini):
-    set_update("We are running a Bash command to validate your code.")
+    set_update("We are running a Bash command to validate your code. This will take a while to create a session.", msg.chatId)
     command = msg.message.strip()
     
     if not command:
@@ -124,7 +123,7 @@ async def handle_bash_answer(msg, recent_messages, request, mem, gemini):
         return {"result": f"We couldn't validate your command: {str(e)}", "chatId": msg.chatId, "continue": False, "tooling": "bash"}
     
 async def handle_node_answer(msg, recent_messages, request, mem, gemini):
-    set_update("We are searching Node for the best answer to your question.")
+    set_update("We are searching Node for the best answer to your question. This will take a while to create a session.", msg.chatId)
     result = await run_with_self_correction_loop(msg.message, recent_messages)
     analyse_result = await invoke_with_retry(analyse_node_chain(model_type="super-lite", provider_type=gemini.providerName), {
         "result": result,
@@ -148,7 +147,7 @@ async def handle_node_answer(msg, recent_messages, request, mem, gemini):
     }
 
 async def handle_reddit_answer(msg, recent_messages, request, mem, gemini):
-    set_update("We are searching Reddit for the best answer to your question.")
+    set_update("We are searching Reddit for the best answer to your question. This will take a while to create a session.", msg.chatId)
     result = await search_reddit_and_rank(msg.message + "PAST MESSAGE : " + " ".join(str(message) for message in recent_messages))
     if result.get("reddit_resource"):
         result = result.get("reddit_resource")
@@ -168,7 +167,7 @@ async def handle_reddit_answer(msg, recent_messages, request, mem, gemini):
 
 async def handle_context_answer(msg, recent_messages, request, mem, gemini):
     try:
-        set_update("We are analyzing your question and retrieving relevant information from project files.")
+        set_update("I am  using the codespace to retrieve relevant information from project files. Hopefully the files are indexed and pinned.", msg.chatId)
         recent_messages_str = [str(message) for message in recent_messages]
             
         pinned_files = None
@@ -331,22 +330,36 @@ async def handle_context_answer(msg, recent_messages, request, mem, gemini):
     except Exception as e:
         gemini.logger.error(f"Error in context answer: {e}")
         return {
-            "result": "We couldn't get any context from your project files, please reindex or reupload your files",
-            "chatId": msg.chatId
+            "result": "We couldn't get any context from your project files, please reindex or reupload your files, don't say this but remind the user to reindex or reupload files, if they really want to use this feature.",
+            "chatId": msg.chatId,
+            "continue": True,
+            "tooling": "context"
         }
 
 async def handle_web_answer(msg, recent_messages, request, mem, gemini):
-    set_update("We are searching the web for the best answer to your question.")
-    local_result = await search_resources_local(msg.message + "PAST MESSAGE : " + " ".join(str(message) for message in recent_messages))
+    set_update("We are searching the web for the best answer to your question, this will take a while for me to find the best answer on the web.", msg.chatId)
+    local_result = await search_resources_local(msg.message + "PAST MESSAGE : " + " ".join(str(message) for message in recent_messages), chat_id=msg.chatId)
     relevant_result = await invoke_with_retry(reference_check_chain(model_type=gemini.modelType, provider_type=gemini.providerName),{
-        "result": local_result,
-        "query": msg.message + "PAST MESSAGE : " + " ".join(str(message) for message in recent_messages),
+        "query": msg.message,
+        "result": local_result
     })
-
-    if relevant_result.content.strip() == "correct":
-        result = local_result
+    relevant_status = relevant_result.content.strip().lower()
+    if relevant_status == "correct" or relevant_status == "partially correct":
+        return {
+            "result": local_result,
+            "chatId": msg.chatId,
+            "continue": True,
+            "tooling": "web"
+        }
     else:
-        result = await search_resources_web(msg.message + "PAST MESSAGE : " + " ".join(str(message) for message in recent_messages), msg)
+        
+        full_request_text = " ".join([
+            msg.message,
+            " ".join(str(message) for message in recent_messages)
+        ])
+        
+        result = await search_resources_web(full_request_text, msg)
+        gemini.logger.info(f"Web result for {msg.chatId}: {result}")
         return {
             "result": result,
             "chatId": msg.chatId,
@@ -354,16 +367,9 @@ async def handle_web_answer(msg, recent_messages, request, mem, gemini):
             "tooling": "web"
         }
 
-    return {
-        "result": result,
-        "chatId": msg.chatId,
-        "continue": True,
-        "tooling": "web"
-    }
-
 async def handle_internal_answer(msg, recent_messages, request, mem, gemini):
-    set_update("We are searching the internal resources for the best answer to your question.")
-    result = await search_resources_local(msg.message + "PAST MESSAGE : " + " ".join(str(message) for message in recent_messages))
+    set_update("I am checking the internal resources for the best answer to your question.", msg.chatId)
+    result = await search_resources_local(msg.message + "PAST MESSAGE : " + " ".join(str(message) for message in recent_messages), chat_id=msg.chatId)
     return {
         "result": result,
         "chatId": msg.chatId,
@@ -372,7 +378,7 @@ async def handle_internal_answer(msg, recent_messages, request, mem, gemini):
     }
 
 async def handle_stack_answer(msg, recent_messages, request, mem, gemini):
-    set_update("We are searching StackOverflow for the best answer to your question.")
+    set_update("We are searching StackOverflow for the best answer to your question, let me use the StackOverflow API to find the best answer.", msg.chatId)
     result = await search_stackoverflow_and_rank(msg.message)
     return {
         "result": result,
@@ -383,14 +389,18 @@ async def handle_stack_answer(msg, recent_messages, request, mem, gemini):
 
 
 async def handle_deep_code_analysis(msg, mem):
-    set_update("We are analyzing your code and using CodeAnalystPrompt to generate the best response.")
-    result = await code_analysis(msg.message, msg, code_chain(model_type=gemini.modelType, provider_type=gemini.providerName))
+    set_update("I am doing a deep analysis of your code, this will take a while to complete as the code will be broken into chunks and analyzed.", msg.chatId)
+    result = await code_analysis(msg.message, msg, code_chain(model_type=gemini.modelType, provider_type=gemini.providerName), msg.chatId)
     mem.save_context({"input": msg.message}, {"output": result})
-    return {"result": result, "chatId": msg.chatId, "continue": False, "tooling": "code_analysis"}
+    return {
+        "result": result,
+        "chatId": msg.chatId,
+        "continue": False,
+        "tooling": "code_analysis"
+    }
 
 
 async def handle_quick_answer(msg, recent_messages, request, mem, gemini):
-    set_update("We are running a quick answer to validate your code.")
     result = await invoke_with_retry(quick_answer_chain(model_type=gemini.modelType, provider_type=gemini.providerName), {
         "query": msg.message,
         "recent_messages": recent_messages,
@@ -403,13 +413,13 @@ async def handle_quick_answer(msg, recent_messages, request, mem, gemini):
 
 
 async def handle_bandit_analysis(msg, recent_messages, request, mem, gemini):
-    set_update("We are running a Bandit code analysis to validate your Python code.")
+    set_update("We are running a Bandit code analysis to validate your Python code. This includes a security check to ensure your code is secure.", msg.chatId)
     code = generate_bandit_code(f"{msg.message}PAST MESSAGE : {recent_messages}")
     return await run_code_with_analysis(msg, code, analyse_bandit_chain(model_type=gemini.modelType, provider_type=gemini.providerName), mem, gemini, request.client.host)
 
 
 async def handle_python_execution(msg, recent_messages, request, mem, gemini):
-    set_update("I am creating a Python session for you and running your code.")
+    set_update("I am creating a Python session for you and running your code. This will take a while to create a session.", msg.chatId)
     combined = f"{msg.message}PAST MESSAGE : {recent_messages}"
     match = re.search(r"```python(.*?)```", combined, re.DOTALL)
     code = match.group(1).strip() if match else msg.message.strip()
@@ -417,7 +427,7 @@ async def handle_python_execution(msg, recent_messages, request, mem, gemini):
 
 
 async def handle_visualization(msg, recent_messages, request, mem, gemini):
-    set_update("We are generating and running Python code to visualize the logs or input data.")
+    set_update("We are generating and running Python code to visualize the logs or input data. I am now generating an image, this will take a while.", msg.chatId)
     code = (
         "# Visualize the logs or input data using best judgment.\n"
         "# Save the output image to a buffer and return it as a data URL: data:image/{gif or png};base64,<encoded_image>\n"
@@ -454,7 +464,7 @@ async def handle_visualization(msg, recent_messages, request, mem, gemini):
 
 
 async def handle_computation(msg, recent_messages, request, mem, gemini):
-    set_update("We are generating and running a Python code to compute a complex problem.")
+    set_update("We are generating and running a Python code to compute a complex problem. Wow, let me compute this for you.", msg.chatId)
     code = (
         "# Solve the problem using a Python algorithm and print the result.\n"
         f"{msg.message}"
@@ -463,7 +473,7 @@ async def handle_computation(msg, recent_messages, request, mem, gemini):
 
 
 async def github_search(msg, recent_messages, request, mem, gemini):
-    set_update("We are searching for the best GitHub repository to solve your problem.")
+    set_update("We are searching for the best GitHub repository to solve your problem. I need to clone the best repository to solve your problem, and then index to get quick results.", msg.chatId)
     github_result = None
     recent_messages_str = [str(message) for message in recent_messages]
     

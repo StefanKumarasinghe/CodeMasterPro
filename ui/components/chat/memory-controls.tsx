@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, Trash2, BrainCircuit, Brain, Cpu, Zap } from "lucide-react";
+import { ChevronDown, Trash2, BrainCircuit, Brain, Cpu, Zap, Rocket } from "lucide-react";
 import { API_ENDPOINT } from "@/config/constants";
 import {
   Tooltip,
@@ -51,7 +51,6 @@ export function MemoryControls() {
       toast.success("Memory cleared successfully");
     } catch (error) {
       console.error("Failed to clear memory:", error);
-      toast.error("Failed to clear memory");
     } finally {
       setIsLoading(false);
     }
@@ -83,6 +82,9 @@ export function MemoryControls() {
       case "quick-think":
         return "Quick Reasoner";
       case "pro":
+        return "Gemini Pro";
+      case "auto":
+        return "Auto";
       default:
         return "Gemini Pro";
     }
@@ -97,6 +99,9 @@ export function MemoryControls() {
       case "quick-think":
         return <Cpu className="h-4 text-purple-500 w-4 mr-2" />;
       case "pro":
+        return <BrainCircuit className="h-4 text-blue-500 w-4 mr-2" />;
+      case "auto":
+        return <Rocket className="h-4 text-blue-500 w-4 mr-2" />;
       default:
         return <BrainCircuit className="h-4 text-blue-500 w-4 mr-2" />;
     }
@@ -165,6 +170,12 @@ export function MemoryControls() {
               "Complex tasks, deep analysis with tools (3min+)",
               <Brain className="h-5 w-5 mr-3 text-green-500" />
             )}
+            {renderModelOption(
+              "auto",
+              "Auto",
+              "Auto-selects based on message length",
+              <Rocket className="h-5 w-5 mr-3 text-blue-500" />
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
 
@@ -173,11 +184,10 @@ export function MemoryControls() {
             <Button
               onClick={forgetMemory}
               variant="ghost"
-              size="sm"
-              className="h-10 w-10 rounded-full text-red-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm"
+              className="h-9 w-9 rounded-xl transition-all duration-200 hover:scale-105 active:scale-95 hover:bg-primary/10 hover:text-red-500 hover:shadow-md group relative overflow-hidden"
               disabled={isLoading}
             >
-              <Trash2 className="h-4 w-4 " />
+              <Trash2  className=" h-4 w-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">

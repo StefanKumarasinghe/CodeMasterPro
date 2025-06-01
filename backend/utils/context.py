@@ -7,7 +7,7 @@ import asyncio
 import concurrent.futures
 from pathlib import Path
 from functools import lru_cache
-from typing import Union, List, Dict, Any, Optional, Set, Tuple
+from typing import Union, List, Optional
 from fastapi import Request, UploadFile, File, HTTPException, BackgroundTasks
 from langchain_community.document_loaders import TextLoader, CSVLoader, PyPDFLoader, UnstructuredMarkdownLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -566,8 +566,6 @@ async def get_project_status(request: Request):
 
 
 async def query_index(query: str, k: int = 5, rerank: bool = True):
-    gemini.logger.info(f"Received query: '{query}' with k={k}")
-
     if not query or not query.strip():
         gemini.logger.warning("Empty query string")
         raise HTTPException(status_code=400, detail="Query string cannot be empty")
@@ -777,30 +775,24 @@ def get_project_files_and_folders(path=None, recursive=True):
         base_dir = target_dir
     
     gemini.logger.info(f"Retrieving files from {base_dir} with recursive={recursive}")
-    
-    # Set of directories to exclude
+
     exclude_dirs = {'.git', 'node_modules', '__pycache__', '.venv', 'env', '.next'}
     
-    # Set of file extensions to exclude
     exclude_extensions = {'.pyc', '.pyo', '.pyd', '.class', '.so', '.dll', '.exe', '.o', '.a', '.lib'}
     
     if not recursive:
-        # For non-recursive mode, just return direct children
         folders = []
         files = []
         
         try:
             for file in base_dir.iterdir():
-                # Skip hidden files and excluded directories
                 if file.name.startswith('.') or (file.is_dir() and file.name in exclude_dirs):
                     continue
                     
-                # Skip excluded file extensions
                 if file.is_file() and file.suffix in exclude_extensions:
                     continue
                     
                 if file.is_dir():
-                    # Check if directory has any non-hidden children
                     has_children = False
                     try:
                         for child in file.iterdir():
@@ -826,25 +818,20 @@ def get_project_files_and_folders(path=None, recursive=True):
         except (PermissionError, OSError) as e:
             gemini.logger.error(f"Error accessing directory {base_dir}: {e}")
         
-        # Sort alphabetically within each type (case-insensitive)
         folders.sort(key=lambda x: x["name"].lower())
         files.sort(key=lambda x: x["name"].lower())
         
-        # Combine with folders first, then files
         return folders + files
     
-    # For recursive mode
     def process_directory(dir_path):
         folders = []
         files = []
         
         try:
             for file in dir_path.iterdir():
-                # Skip hidden files and excluded directories
                 if file.name.startswith('.') or (file.is_dir() and file.name in exclude_dirs):
                     continue
                     
-                # Skip excluded file extensions
                 if file.is_file() and file.suffix in exclude_extensions:
                     continue
                     
@@ -870,12 +857,9 @@ def get_project_files_and_folders(path=None, recursive=True):
                     files.append(file_item)
         except (PermissionError, OSError) as e:
             gemini.logger.error(f"Error accessing directory {dir_path}: {e}")
-        
-        # Sort folders and files alphabetically (case-insensitive)
+
         folders.sort(key=lambda x: x["name"].lower())
         files.sort(key=lambda x: x["name"].lower())
-        
-        # Return folders first, then files
         return folders + files
     
     try:
@@ -885,32 +869,20 @@ def get_project_files_and_folders(path=None, recursive=True):
         return []
 
 def get_content_of_file(file_path: str):
-    """
-    Get the content of a file in the project.
-    
-    Args:
-        file_path: Path to the file, relative to CODESPACE_DIR
-    
-    Returns:
-        The content of the file as a string or an error dict
-    """
     try:
         gemini.logger.info(f"Getting content for file: {file_path}")
         
-        # Normalize the path
+
         if isinstance(file_path, Path):
             file_path = str(file_path)
             
-        # Case 1: Direct match with the path as provided
+
         full_path = CODESPACE_DIR / file_path
         if full_path.exists() and full_path.is_file():
             gemini.logger.info(f"Reading file at: {full_path}")
             with open(full_path, "r", encoding="utf-8") as f:
                 return f.read()
-        
-        # Case 2: Path might be from a specific repo directory
         if not file_path.startswith('/'):
-            # Try all top-level directories (which could be repos)
             for root_dir in CODESPACE_DIR.iterdir():
                 if root_dir.is_dir():
                     potential_path = root_dir / file_path
@@ -919,7 +891,6 @@ def get_content_of_file(file_path: str):
                         with open(potential_path, "r", encoding="utf-8") as f:
                             return f.read()
             
-            # Check if path is in format "repo_dir/file_path"
             if "/" in file_path:
                 path_parts = file_path.split("/", 1)
                 if len(path_parts) == 2:
@@ -1016,16 +987,6 @@ async def clone_personal_github_repo(repo_input: str, dest: Path = CODESPACE_DIR
     
 
 async def read_file_content(filename: str):
-    """
-    Asynchronous function to read content of a file in the codespace.
-    Used for API endpoints where async operation is required.
-    
-    Args:
-        filename: Name or path of the file to read
-        
-    Returns:
-        Dict with filename and content
-    """
     filename_str = filename.split("/")[-1]
     
     gemini.logger.info(f"Attempting to read file: {filename}")

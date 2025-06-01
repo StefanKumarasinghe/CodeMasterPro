@@ -218,6 +218,7 @@ export function ProjectModal({ isOpen, onClose, projectStatus }: ProjectModalPro
       hideProgressIndicator();
     } finally {
       setIsUploadingFolder(false);
+      hideProgressIndicator();
       if (event.target) {
         event.target.value = '';
       }
@@ -304,6 +305,7 @@ export function ProjectModal({ isOpen, onClose, projectStatus }: ProjectModalPro
       })
       hideProgressIndicator();
     } finally {
+      hideProgressIndicator();
       setIsReindexing(false)
     }
   }

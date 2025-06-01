@@ -1,6 +1,7 @@
-import type { CodeBlock, Preferences, ValidationResult } from "@/types"
+import type { CodeBlock, Preferences, ValidationResult, Message } from "@/types" // Added Message type
 import { STORAGE_KEYS } from "@/config/constants"
 
+const CHAT_HISTORY_STORAGE_KEY = "tars-chat-history";
 
 export const extractCodeBlocks = (content: string): CodeBlock[] => {
   const codeBlockRegex = /```(\w+)?[\r\n]([\s\S]*?)```/g
@@ -167,11 +168,11 @@ export const saveChatToHistory = (messages: any[], title: string): boolean => {
       })),
     }
 
-    const existingHistory = JSON.parse(localStorage.getItem("tars-chat-history") || "[]")
+    const existingHistory = JSON.parse(localStorage.getItem(CHAT_HISTORY_STORAGE_KEY) || "[]")
 
     const updatedHistory = [chatItem, ...existingHistory]
 
-    localStorage.setItem("tars-chat-history", JSON.stringify(updatedHistory))
+    localStorage.setItem(CHAT_HISTORY_STORAGE_KEY, JSON.stringify(updatedHistory))
 
     return true
   } catch (error) {
@@ -184,7 +185,7 @@ export const loadChatHistory = () => {
   if (typeof window === "undefined") return []
 
   try {
-    const savedHistory = localStorage.getItem("tars-chat-history")
+    const savedHistory = localStorage.getItem(CHAT_HISTORY_STORAGE_KEY)
     if (savedHistory) {
       return JSON.parse(savedHistory)
     }
@@ -199,13 +200,46 @@ export const deleteChatFromHistory = (chatId: string): boolean => {
   if (typeof window === "undefined") return false
 
   try {
-    const existingHistory = JSON.parse(localStorage.getItem("tars-chat-history") || "[]")
+    const existingHistory = JSON.parse(localStorage.getItem(CHAT_HISTORY_STORAGE_KEY) || "[]")
     const updatedHistory = existingHistory.filter((chat: any) => chat.id !== chatId)
-    localStorage.setItem("tars-chat-history", JSON.stringify(updatedHistory))
+    localStorage.setItem(CHAT_HISTORY_STORAGE_KEY, JSON.stringify(updatedHistory))
     return true
   } catch (error) {
     console.error("Failed to delete chat:", error)
     return false
+  }
+}
+
+export interface ChatSession {
+  id: string;
+  messages: Message[];
+  timestamp: string;
+}
+
+export const loadCurrentChat = (): ChatSession | null => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const serializedSession = localStorage.getItem(STORAGE_KEYS.CURRENT_CHAT);
+    if (serializedSession === null) {
+      return null;
+    }
+    const sessionData: ChatSession = JSON.parse(serializedSession);
+    // Basic validation of the loaded data structure
+    if (sessionData && sessionData.id && Array.isArray(sessionData.messages) && sessionData.timestamp) {
+      return sessionData;
+    } else {
+      console.error("Invalid chat session data found in localStorage.");
+      localStorage.removeItem(STORAGE_KEYS.CURRENT_CHAT); // Clear invalid data
+      return null;
+    }
+  } catch (error) {
+    console.error("Failed to load or parse current chat session:", error);
+    // Optionally clear potentially corrupted data
+    // localStorage.removeItem(STORAGE_KEYS.CURRENT_CHAT);
+    return null;
   }
 }
 

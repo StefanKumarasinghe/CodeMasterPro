@@ -28,4 +28,12 @@ class RefineLocalSearchOutput(BaseModel):
     domain: str = Field(..., description="The domain")
 
 class NodeReflectionOutput(BaseModel):
-    code: str = Field(..., description="The javascript code that is fixed and self contained")
+    code: str = Field(..., description="The corrected code")
+    bash_commands:  List[str] = Field(..., description="The bash commands to run")
+    file_changes: List[dict] = Field(..., description="The file changes to make")
+    explanation: str = Field(..., description="The explanation of the changes")
+
+class UserBehaviorOutput(BaseModel):
+    behavior: str = Field(..., description="The behavior of the user either 'negative' or 'positive' or 'neutral'")
+    model_type: str = Field(..., description="The model type to use either 'fast' or 'advanced' or 'quick-think'")
+    temperature: float = Field(..., description="The temperature to use between 0 and 2")

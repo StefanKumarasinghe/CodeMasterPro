@@ -148,7 +148,7 @@ export function showToast({ message, type = "default", duration = 3000 }: ToastO
     stroke-linejoin="round" 
     width="16" 
     height="16"
-    style="color: inherit;"
+    style="color: white;"
   >
     <line x1="18" y1="6" x2="6" y2="18" />
     <line x1="6" y1="6" x2="18" y2="18" />

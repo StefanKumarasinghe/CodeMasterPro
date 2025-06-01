@@ -1,7 +1,6 @@
 "use client";
 
 import type React from "react";
-import { FaDocker } from "react-icons/fa";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
 import { API_ENDPOINT } from "@/config/constants";
@@ -73,13 +72,13 @@ export function ChatWelcome() {
     const setAppropriateDockerCommand = () => {
       const platform = navigator.platform;
       let command =
-        "docker run -e GOOGLE_API_KEY=TOKEN -e BRAVE_API_KEY=TOKEN -p 8000:8000 stefankumarasinghe/codemasterpro";
+        "docker run -e GOOGLE_API_KEY=TOKEN -p 8000:8000 stefankumarasinghe/codemasterpro";
       if (platform.includes("Mac")) {
         command =
-          "docker run -e GOOGLE_API_KEY=TOKEN -e BRAVE_API_KEY=TOKEN -p 8000:8000 stefankumarasinghe/codemasterpro:latest";
+          "docker run -e GOOGLE_API_KEY=TOKEN -p 8000:8000 stefankumarasinghe/codemasterpro:latest";
       } else if (platform.includes("Win") || platform.includes("Linux")) {
         command =
-          "docker run -e GOOGLE_API_KEY=TOKEN -e BRAVE_API_KEY=TOKEN -p 8000:8000 stefankumarasinghe/codemasterpro:amd64";
+          "docker run -e GOOGLE_API_KEY=TOKEN -p 8000:8000 stefankumarasinghe/codemasterpro:amd64";
       }
       setDockerRunCommand(command);
     };
@@ -117,23 +116,15 @@ export function ChatWelcome() {
       </motion.h1>
       <motion.p
         variants={itemVariants}
-        className="text-black dark:text-white text-lg md:text-xl max-w-4xl my-2 mb-10"
+        className="text-black dark:text-white text-lg md:text-xl max-w-4xl my-2 mb-4"
       >
         Your GPT for coding. Contextualize your codebase with a powerfully chained AI
       </motion.p>
-      {serverStatus ? (
+      {!serverStatus && (
         <motion.div
           variants={itemVariants}
-          className="text-base max-w-full text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-blue-500"
+          className="text-base text-muted-foreground max-w-full mt-8 rounded-lg"
         >
-          <p className="text-md"> All rights reserved to Stefan Kumarasinghe. Happy Coding...</p>
-        </motion.div>
-      ) : (
-        <motion.div
-          variants={itemVariants}
-          className="text-base text-muted-foreground max-w-full mt-8 p-6 rounded-lg"
-        >
-          <FaDocker className="h-16 w-16 text-blue-500  font-mono inline-block mr-4 mb-4" />
           <p className="mb-6 text-sm md:text-lg ">
             You will need to download the Docker image to run the backend server
             locally.
@@ -142,11 +133,11 @@ export function ChatWelcome() {
             href="https://hub.docker.com/repository/docker/stefankumarasinghe/codemasterpro"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-blue-400 hover:underline font-mono text-xs md:text-lg transition-colors"
+            className="text-xs"
           >
             docker pull stefankumarasinghe/codemasterpro
           </a>
-          <p className="text-green-800 text-xs md:text-lg my-4 dark:text-green-300 font-mono">{dockerRunCommand}</p>
+          <p className="text-xs">{dockerRunCommand}</p>
         </motion.div>
       )}
     </motion.div>

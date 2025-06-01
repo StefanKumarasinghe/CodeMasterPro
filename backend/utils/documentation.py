@@ -128,3 +128,63 @@ async def delete_document(document_id: str):
     except Exception as e:
         gemini.logger.error(f"Unexpected error: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An unexpected error occurred.")
+
+async def get_document_content(document_id: str):
+    """Get the content of a specific document file"""
+    if not document_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Document ID cannot be empty.")
+
+    # Security check: prevent path traversal attacks
+    if "/" in document_id or "\\" in document_id or ".." in document_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid document ID format.")
+    
+    file_path = RESOURCES_DIR / document_id
+    
+    if not RESOURCES_DIR.is_dir():
+        gemini.logger.error(f"Resources directory '{RESOURCES_DIR}' not found or is not a directory.")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Server configuration error: Resource directory not found.")
+
+    if not file_path.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Document '{document_id}' not found.")
+
+    if not file_path.is_file():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"'{document_id}' is not a file.")
+    
+    try:
+        # Try to read as text with different encodings
+        encodings = ['utf-8', 'utf-16', 'latin-1', 'cp1252']
+        content = None
+        encoding_used = None
+        
+        for encoding in encodings:
+            try:
+                with open(file_path, 'r', encoding=encoding) as f:
+                    content = f.read()
+                    encoding_used = encoding
+                    break
+            except UnicodeDecodeError:
+                continue
+        
+        if content is None:
+            # If all text encodings fail, try reading as binary and decode what we can
+            with open(file_path, 'rb') as f:
+                raw_content = f.read()
+                content = raw_content.decode('utf-8', errors='replace')
+                encoding_used = 'binary'
+        
+        file_size = file_path.stat().st_size
+        
+        return {
+            "id": document_id,
+            "name": document_id,
+            "content": content,
+            "size": file_size,
+            "encoding": encoding_used
+        }
+        
+    except OSError as e:
+        gemini.logger.error(f"Error reading file '{file_path}': {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Could not read document '{document_id}'.")
+    except Exception as e:
+        gemini.logger.error(f"Unexpected error reading document '{document_id}': {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An unexpected error occurred while reading the document.")

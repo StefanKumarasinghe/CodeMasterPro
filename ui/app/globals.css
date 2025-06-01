@@ -4,7 +4,6 @@
 
 @layer base {
   :root {
-    /* Color variables */
     --background: 0 0% 100%;
     --foreground: 222.2 47.4% 11.2%;
     --muted: 210 40% 96.1%;
@@ -27,23 +26,19 @@
     --accent-foreground: 222.2 47.4% 11.2%;
     --radius: 0.5rem;
 
-    /* Sidebar customization */
     --sidebar-width: 280px;
     --sidebar-min-width: 200px;
     --sidebar-max-width: 500px;
     --sidebar-width-icon: 3rem;
 
-    /* Font scaling */
     --font-scale: 1.0;
     --font-scale-min: 0.8;
     --font-scale-max: 1.2;
 
-    /* Animation speeds */
     --transition-fast: 0.15s;
     --transition-normal: 0.3s;
     --transition-slow: 0.5s;
 
-    /* Layout variables */
     --main-content-width: calc(100vw - var(--sidebar-width));
     --right-sidebar-width: 0px;
     --content-transition-speed: 0.3s;
@@ -115,7 +110,6 @@
     font-size: calc(1.5rem * var(--font-scale, 1));
   }
 
-  /* Make font sizing smooth */
   .font-scale-transition {
     transition: font-size 0.3s ease-in-out;
   }
@@ -143,7 +137,6 @@
     transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
-  /* Progress indicator for background operations */
   .progress-indicator {
     position: absolute;
     top: 0px;
@@ -165,7 +158,7 @@
     background: linear-gradient(
       90deg, 
       transparent,
-      hsl(142 76% 36% / 0.8), /* Green glow */
+      hsl(142 76% 36% / 0.8),
       transparent
     );
     animation: progress-bar-animation 2s ease-in-out infinite;
