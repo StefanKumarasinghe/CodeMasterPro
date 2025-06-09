@@ -286,7 +286,7 @@ export function ChatMessageList({
     return () => {
       source.close()
     }
-  }, [scrollToBottom])
+  }, [scrollToBottom, chatId])
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -371,7 +371,7 @@ export function ChatMessageList({
       if (loadingIntervalRef.current) clearInterval(loadingIntervalRef.current)
       if (cleanupStream) cleanupStream()
     }
-  }, [isLoading, handleStreamUpdates])
+  }, [isLoading, handleStreamUpdates, chatId])
 
   const handleClearMemory = useCallback(() => {
     setMemoryState((prev) => ({ ...prev, forgetMemory: true }))

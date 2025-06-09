@@ -148,12 +148,17 @@ export function NodeTestRunner({ isOpen, onClose, directory, codeSnippet }: Node
       window.dispatchEvent(
         new CustomEvent("bash-shell-close", { detail: { forced: true } })
       )
-
       window.dispatchEvent(
-        new CustomEvent("node-test-runner-state", {
-          detail: { isOpen: true, width: 400, instanceId: instanceId.current },
-        }),
+        new CustomEvent("node-test-runner-close", { detail: { forced: true } })
       )
+      
+      setTimeout(() => {
+        window.dispatchEvent(
+          new CustomEvent("node-test-runner-state", {
+            detail: { isOpen: true, width: 400, instanceId: instanceId.current },
+          }),
+        )
+      }, 50)
 
       dispatchStateEvent(true, isMaximized)
     } else {

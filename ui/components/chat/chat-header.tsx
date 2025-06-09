@@ -1,5 +1,5 @@
 "use client"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import type React from "react"
 
 import { Button } from "@/components/ui/button"
@@ -64,6 +64,9 @@ export function ChatHeader({ style, size }: { style?: React.CSSProperties; size?
 
   const handleNewChat = async () => {
     try {
+      // Clear memory for the current chat before switching to new chat
+      await handleClearMemory()
+      
       const newChatId = uuidv4()
       window.dispatchEvent(
         new CustomEvent("code-editor-state", {
@@ -76,7 +79,8 @@ export function ChatHeader({ style, size }: { style?: React.CSSProperties; size?
         }),
       )
       window.dispatchEvent(new CustomEvent("memory-cleared"))
-      handleClearMemory()
+      
+      // Set the new chat ID immediately
       setChatId(newChatId)
       setMessages([])
       setMemoryState((prev) => ({ ...prev, forgetMemory: true }))
@@ -90,7 +94,7 @@ export function ChatHeader({ style, size }: { style?: React.CSSProperties; size?
     handleClearMemory()
   }, [])
 
-  const handleClearMemory = async () => {
+  const handleClearMemory = useCallback(async () => {
     try {
       if (!chatId) {
         toast.error("No active chat session")
@@ -109,7 +113,7 @@ export function ChatHeader({ style, size }: { style?: React.CSSProperties; size?
     } catch (error) {
       console.error("Failed to clear memory:", error)
     }
-  }
+  }, [chatId, setMessages, setMemoryState])
 
   const ActionButton = ({ children, onClick, tooltip, variant = "ghost", className = "", isActive = false }: {
     children: React.ReactNode;

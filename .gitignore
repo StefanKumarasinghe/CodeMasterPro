@@ -18,3 +18,5 @@ env/
 **/embeddings_cache
 **/git_index
 **/git_tmp
+**/containers.json
+**/public-endpoint.json

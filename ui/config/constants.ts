@@ -1,5 +1,6 @@
 import type { OutputFormat } from "@/types";
-export const API_ENDPOINT = process.env.NEXT_PUBLIC_API_ENDPOINT || "http://127.0.0.1:8000";
+export const API_ENDPOINT = "http://127.0.0.1:8000";
+// export const API_ENDPOINT = "https://codemasterpro.3r6nm9wg8vkgj.ap-southeast-2.cs.amazonlightsail.com";
 export const APP_NAME = "CodeMasterPro"
 export const APP_VERSION = "v2.0.1"
 

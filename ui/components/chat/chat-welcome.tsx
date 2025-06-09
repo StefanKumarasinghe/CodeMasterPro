@@ -140,6 +140,13 @@ export function ChatWelcome() {
           <p className="text-xs">{dockerRunCommand}</p>
         </motion.div>
       )}
+      {serverStatus && (
+        <motion.div variants={itemVariants}>
+          <p className="text-xs text-red-500 font-bold dark:text-red-300">
+           Please do not share any sensitive information with the AI, this is a demo version and only used for testing purposes and demonstration of CodeMasterPro, all your files and queries can be viewed by the public, so please do not share any sensitive information or API keys.
+          </p>
+        </motion.div>
+      )}
     </motion.div>
   );
 }
