@@ -24,17 +24,17 @@ while [[ $# -gt 0 ]]; do
       ;;
     --arch)
       shift
-      if [[ "$1" =~ ^(amd64|arm64|latest)$ ]]; then
+      if [[ "$1" =~ ^(amd64|arm64|latest|all)$ ]]; then
         ARCH="$1"
       else
-        echo "❌ Invalid arch: $1 (allowed: amd64, arm64, latest)"
+        echo "❌ Invalid arch: $1 (allowed: amd64, arm64, latest, all)"
         exit 1
       fi
       shift
       ;;
     *)
       echo "❌ Unknown flag: $1"
-      echo "Usage: $0 [--ui] [--backend] [--github] [--arch <amd64|arm64|latest>]"
+      echo "Usage: $0 [--ui] [--backend] [--github] [--arch <amd64|arm64|latest|all>]"
       exit 1
       ;;
   esac
@@ -78,8 +78,6 @@ function deploy_backend() {
     git push origin main
   fi
 }
-
-
 
 $DEPLOY_UI && deploy_ui
 $DEPLOY_BACKEND && deploy_backend
