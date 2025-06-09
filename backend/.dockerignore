@@ -40,3 +40,8 @@ pip-wheel-metadata/
 *.tmp
 *.old
 *.orig
+containers.json
+public-endpoint.json
+**/containers.json
+**/public-endpoint.json
+

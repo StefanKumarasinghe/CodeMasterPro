@@ -111,7 +111,7 @@ async def handle_bash_answer(msg, recent_messages, request, mem, gemini):
     try:
         result = await self_correction_loop_bash(command, recent_messages)
         cleaned = clean_result(result)
-        analyse_result = await invoke_with_retry(analyse_bash_chain(model_type="super-lite", provider_type=gemini.providerName), {
+        analyse_result = await invoke_with_retry(analyse_bash_chain(model_type="lite", provider_type=gemini.providerName), {
             "result": result,
             "query": msg.message
         })
@@ -125,7 +125,7 @@ async def handle_bash_answer(msg, recent_messages, request, mem, gemini):
 async def handle_node_answer(msg, recent_messages, request, mem, gemini):
     set_update("We are searching Node for the best answer to your question. This will take a while to create a session.", msg.chatId)
     result = await run_with_self_correction_loop(msg.message, recent_messages)
-    analyse_result = await invoke_with_retry(analyse_node_chain(model_type="super-lite", provider_type=gemini.providerName), {
+    analyse_result = await invoke_with_retry(analyse_node_chain(model_type="lite", provider_type=gemini.providerName), {
         "result": result,
         "query": msg.message
     })
@@ -338,18 +338,19 @@ async def handle_context_answer(msg, recent_messages, request, mem, gemini):
 
 async def handle_web_answer(msg, recent_messages, request, mem, gemini):
     set_update("We are searching the web for the best answer to your question, this will take a while for me to find the best answer on the web.", msg.chatId)
-    local_result = await search_resources_local(msg.message + "PAST MESSAGE : " + " ".join(str(message) for message in recent_messages), chat_id=msg.chatId)
+    local_result = await search_resources_local(msg.message + "PAST MESSAGE : " + " ".join(str(message) for message in recent_messages), chat_id=msg.chatId, k=1)
     relevant_result = await invoke_with_retry(reference_check_chain(model_type=gemini.modelType, provider_type=gemini.providerName),{
         "query": msg.message,
         "result": local_result
     })
+    
     relevant_status = relevant_result.content.strip().lower()
     if relevant_status == "correct" or relevant_status == "partially correct":
         return {
             "result": local_result,
             "chatId": msg.chatId,
             "continue": True,
-            "tooling": "web"
+            "tooling": "internal"
         }
     else:
         

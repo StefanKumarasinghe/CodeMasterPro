@@ -6,7 +6,6 @@ from langchain_community.cache import SQLiteCache
 from langchain_community.vectorstores import FAISS
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_openai.embeddings import OpenAIEmbeddings
-from langchain.memory import ConversationSummaryMemory
 from ai.RL import RLAgent
 from dotenv import load_dotenv
 load_dotenv()
@@ -47,8 +46,10 @@ logger = logging.getLogger(__name__)
 quick_think = False
 langchain.llm_cache = SQLiteCache(database_path="cache/langchain_cache.db")
 
-chat_memories: dict[str, ConversationSummaryMemory] = {}
-chat_memory_metadata: dict[str, dict] = {}
+# Memory management is now handled by ModernChatMemory in ai/memory.py
+# These will be managed by the ChatMemoryManager class
+chat_memories: dict = {}
+chat_memory_metadata: dict = {}
 
 executor = ThreadPoolExecutor()
 resource_vectorstore: FAISS = None

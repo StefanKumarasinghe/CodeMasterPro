@@ -133,9 +133,9 @@ def process_summary_chain(model_type: str, provider_type: str):
         print(f"[Process Summary Chain Error] Failed to build process summary chain: {e}")
         return None     
     
-def validation_chain(model_type: str, provider_type: str, temperature: float = None):
+def validation_chain(model_type: str, provider_type: str):
     try:
-        return create_dynamic_chain(validation_prompt, provider_type, model_type, True, ValidationChainOutput, temperature=temperature)
+        return create_dynamic_chain(validation_prompt, provider_type, model_type, True, ValidationChainOutput)
     except Exception as e:
         print(f"[Validation Chain Error] Failed to build validation chain: {e}")
         return None
@@ -239,13 +239,7 @@ def reference_check_chain(model_type: str, provider_type: str):
         print(f"[Reference Check Chain Error] Failed to build reference check chain: {e}")
         return None
     
-def autocomplete_chain(model_type: str, provider_type: str):
-    try:
-        return create_dynamic_chain(get_code_completion_prompt, provider_type,  model_type)
-    except Exception as e:
-        print(f"[Autocomplete Chain Error] Failed to build autocomplete chain: {e}")
-        return None
-    
+
 def choose_file_name_chain(model_type: str, provider_type: str):
     try:
         return create_dynamic_chain(context_chain_prompt, provider_type,  model_type)

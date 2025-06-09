@@ -2,9 +2,9 @@ from pydantic import BaseModel, Field
 from typing import List
 
 class ValidationChainOutput(BaseModel):
-    score: int = Field(description="The score of the response")
-    improvements: str = Field(description="The improvements of the response")
-    feedback: str = Field(description="The feedback of the response")
+    score: int = Field(description="The score of the response between 0 and 10 and 10 is the best score")
+    improvements: str = Field(description="The improvements of the response in detail")
+    feedback: str = Field(description="The feedback of the response in detail")
     tool_calls: List[str] = Field(description="The tool calls of the response in a list of strings")
 
 class DocumentationChainOutput(BaseModel):

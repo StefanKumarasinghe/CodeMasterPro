@@ -3,7 +3,7 @@
 from utils.faiss import build_index
 from rich.console import Console
 from ai.process import process_message
-from utils.updates import event_generator
+from utils.updates import event_generator, reset_chat_updates, mark_chat_as_new
 from fastapi import FastAPI, Request, HTTPException, UploadFile, File, Form, Body, Query
 from typing import List, Optional
 from fastapi.responses import JSONResponse
@@ -111,7 +111,17 @@ async def stream_endpoint(chat_id: str = Query(..., description="Chat ID for the
         gemini.logger.error(f"Error in stream_endpoint: {e}")
         raise HTTPException(status_code=500, detail="Failed to stream events.")
 
-@app.post("/process/")
+@app.post("/chat/reset_updates")
+@limiter.limit("30/minute")
+async def reset_chat_updates_endpoint(request: Request, chat_id: str = Query(..., description="Chat ID to reset updates for")):
+    try:
+        reset_chat_updates(chat_id)
+        return {"message": f"Updates reset for chat {chat_id}"}
+    except Exception as e:
+        gemini.logger.error(f"Error in reset_chat_updates: {e}")
+        raise HTTPException(status_code=500, detail="Failed to reset chat updates.")
+
+@app.post("/process")
 @limiter.limit("30/minute")
 async def handle_chat(request: Request):
     try:
@@ -156,10 +166,15 @@ async def clear_memory(request: Request, chat_id: Optional[str] = None):
     try:
         if chat_id:
             memory_manager.reset_chat_memory(chat_id)
-            return {"message": f"Cleared memory for chat {chat_id}"}
+            # Mark the chat as new and trigger initial update
+            mark_chat_as_new(chat_id)
+            return {"message": f"Cleared memory and reset updates for chat {chat_id}"}
         else:
             memory_manager.reset_chat_memory()
-            return {"message": "Cleared all chat memories"}
+            # Clear all chat update states when clearing all memories
+            from utils.updates import chat_update_manager
+            chat_update_manager.clear_all_chat_states()
+            return {"message": "Cleared all chat memories and updates"}
     except Exception as e:
         gemini.logger.error(f"Error in clear_memory: {e}")
         raise HTTPException(status_code=500, detail="Failed to clear chat memories.")

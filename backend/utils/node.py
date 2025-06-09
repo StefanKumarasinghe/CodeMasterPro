@@ -946,7 +946,10 @@ async def test_javascript_code(code: str, test_code: str = None, framework: str 
         }
 
 async def run_with_self_correction_loop(code: str, recent_messages: list):
-    string_messages = str(recent_messages[-1])  
+    if len(recent_messages) > 0:
+        string_messages = str(recent_messages[-1])  
+    else:
+        string_messages = ""
     attempt = 0
     last_result = {}
     current_code = code + string_messages

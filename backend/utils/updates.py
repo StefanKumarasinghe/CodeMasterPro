@@ -22,6 +22,8 @@ class UpdateState:
         self._last_emit_time = 0
         self._last_emitted_summary = None
         self._last_emitted_input_hash = None
+        self._is_new_chat = True  
+        self._first_update_sent = False  
 
     def set(self, value):
         self._update = value
@@ -55,13 +57,27 @@ class UpdateState:
         if self._update is not None:
             self._last_emitted_input_hash = hash(str(self._update))
             self._last_emitted_summary = summary.strip()
+            self._first_update_sent = True
+            self._is_new_chat = False
 
     def should_emit(self):
         current_time = time.time()
+        if self._is_new_chat or not self._first_update_sent:
+            self._last_emit_time = current_time
+            return True
         if current_time - self._last_emit_time >= 1.0:
             self._last_emit_time = current_time
             return True
         return False
+
+    def reset_for_new_chat(self):
+        self._update = None
+        self._last_emit_time = 0
+        self._last_emitted_summary = None
+        self._last_emitted_input_hash = None
+        self._is_new_chat = True
+        self._first_update_sent = False
+        self._event.set()
 
 class ChatUpdateManager:
     def __init__(self):
@@ -72,6 +88,15 @@ class ChatUpdateManager:
         if chat_id not in self._chat_states:
             self._chat_states[chat_id] = UpdateState()
         return self._chat_states[chat_id]
+
+    def reset_chat_state(self, chat_id: str):
+        if chat_id in self._chat_states:
+            self._chat_states[chat_id].reset_for_new_chat()
+        else:
+            self._chat_states[chat_id] = UpdateState()
+
+    def clear_all_chat_states(self):
+        self._chat_states.clear()
 
     async def cleanup_old_states(self, max_age_seconds: int = 3600):
         async with self._cleanup_lock:
@@ -95,6 +120,14 @@ def set_update(update: str, chat_id: str):
     update_state = chat_update_manager.get_update_state(chat_id)
     update_state.set(update)
 
+def reset_chat_updates(chat_id: str):
+    chat_update_manager.reset_chat_state(chat_id)
+
+def mark_chat_as_new(chat_id: str):
+    update_state = chat_update_manager.get_update_state(chat_id)
+    update_state.reset_for_new_chat()
+    update_state.set("Ready to process your request...")
+
 async def get_process_summary(chat_id: str):
     update_state = chat_update_manager.get_update_state(chat_id)
     update = await update_state.get()
@@ -106,7 +139,7 @@ async def get_process_summary(chat_id: str):
         return f"{confidence}% confident with the answer. Checking if it is good enough."
 
     try:
-        chain = _get_or_create_process_summary_chain(model_type="super-lite", provider_type=gemini.providerName)
+        chain = _get_or_create_process_summary_chain(model_type="lite", provider_type=gemini.providerName)
         response = await invoke_with_retry(chain, {"process": update})
         return response.content.strip()
     except Exception as e:
@@ -114,6 +147,11 @@ async def get_process_summary(chat_id: str):
 
 async def event_generator(chat_id: str, timeout: float = 300.0):
     update_state = chat_update_manager.get_update_state(chat_id)
+    
+    if update_state._is_new_chat:
+        yield f"Connected to chat {chat_id}. Ready to process your request...\n\n"
+        if update_state._update is None:
+            update_state.set("Understanding your query...")
 
     while True:
         has_update = await update_state.wait(timeout)
@@ -122,7 +160,7 @@ async def event_generator(chat_id: str, timeout: float = 300.0):
 
         update_state.clear_event()
 
-        if update_state.has_new_update() and update_state.should_emit():
+        if (update_state._is_new_chat and not update_state._first_update_sent) or (update_state.has_new_update() and update_state.should_emit()):
             try:
                 summary = await get_process_summary(chat_id)
                 if update_state.is_summary_different(summary):

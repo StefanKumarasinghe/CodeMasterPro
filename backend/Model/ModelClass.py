@@ -7,15 +7,15 @@ ProviderType = Literal["gemini", "chatgpt", "claude"]
 
 PROVIDER_DEFAULTS = {
     "gemini": {
-        "lite": {"temperature": 0.5, "max_tokens": 100000},
+        "lite": {"temperature": 1.0, "max_tokens": 100000},
         "super-lite": {"temperature": 1.0, "max_tokens": 100000},
-        "fast": {"temperature": 0.6, "max_tokens": 100000},
+        "fast": {"temperature": 1, "max_tokens": 100000},
         "summary": {"temperature": 1.0, "max_tokens": 100000},
-        "code": {"temperature": 0.8, "max_tokens": 100000},
+        "code": {"temperature": 1, "max_tokens": 100000},
         "thinking": {"temperature": 1.0, "max_tokens": 100000},
-        "suggest": {"temperature": 0.6, "max_tokens": 100000},
-        "pro": {"temperature": 0.7, "max_tokens": 100000},
-        "quick-think": {"temperature": 0.9, "max_tokens": 100000},
+        "suggest": {"temperature": 1, "max_tokens": 100000},
+        "pro": {"temperature": 1, "max_tokens": 100000},
+        "quick-think": {"temperature": 1, "max_tokens": 100000},
     },
     "chatgpt": {
         "lite": {"temperature": 0.7, "max_tokens": 4096},

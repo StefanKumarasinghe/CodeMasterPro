@@ -404,10 +404,24 @@ async def memory_analyzer_loop():
                     continue
                 
                 try:
-                    recent_messages = messages[-10:] if len(messages) >= 10 else messages
-                    resources = await search_resources_local(str(messages), k=1)
+                    # Get recent messages properly using the new method
+                    recent_messages = memory.get_recent_messages(10)
+                    
+                    # Only proceed if we have actual message content
+                    if not recent_messages or not any(hasattr(msg, 'content') and msg.content.strip() for msg in recent_messages):
+                        continue
+                    
+                    # Search for relevant resources based on the conversation
+                    search_text = " ".join([
+                        msg.content for msg in recent_messages 
+                        if hasattr(msg, 'content') and msg.content.strip()
+                    ])
+                    resources = await search_resources_local(search_text, k=1)
+                    
                     try:
-                        history = memory.load_memory_variables({}).get("history", [])
+                        # Get full conversation history
+                        memory_data = memory.load_memory_variables({})
+                        history = memory_data.get("history", [])
                     except:
                         history = recent_messages
                     

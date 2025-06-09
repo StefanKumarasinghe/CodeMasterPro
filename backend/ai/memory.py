@@ -2,7 +2,9 @@ import shutil
 from datetime import datetime, timedelta
 from pathlib import Path
 from fastapi import HTTPException
-from langchain.memory import ConversationSummaryBufferMemory
+from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, trim_messages, SystemMessage
+from langchain_core.chat_history import BaseChatMessageHistory, InMemoryChatMessageHistory
+from typing import List, Dict, Any
 import langchain
 from Model.MemoryPayload import MemoryRequest
 from utils.faiss import build_index
@@ -15,6 +17,95 @@ model_factory = ModelFactory()
 model_provider = model_factory.get_provider(gemini.providerName)
 model = model_provider.get_model("lite")
 
+class ModernChatMemory:
+    
+    def __init__(self, llm, max_token_limit: int = 900_000, return_messages: bool = True):
+        self.llm = llm
+        self.max_token_limit = max_token_limit
+        self.return_messages = return_messages
+        self.chat_memory = InMemoryChatMessageHistory()
+        self._summary = ""
+        self._last_summary_length = 0
+    
+    def save_context(self, inputs: Dict[str, Any], outputs: Dict[str, str]) -> None:
+        input_str = inputs.get("input", "")
+        output_str = outputs.get("output", "")
+        
+        if input_str:
+            self.chat_memory.add_message(HumanMessage(content=input_str))
+        if output_str:
+            self.chat_memory.add_message(AIMessage(content=output_str))
+        
+        self._trim_messages_if_needed()
+    
+    def _trim_messages_if_needed(self) -> None:
+        try:
+            messages = self.chat_memory.messages
+            if len(messages) > 50:
+                total_tokens = sum(len(str(msg.content)) for msg in messages)
+                
+                if total_tokens > self.max_token_limit:
+                    messages_to_keep = messages[-20:]
+                    messages_to_summarize = messages[:-20]
+                    
+                    if messages_to_summarize and len(messages_to_summarize) > self._last_summary_length:
+                        self._update_summary(messages_to_summarize)
+                        self._last_summary_length = len(messages_to_summarize)
+                    
+                    self.chat_memory.clear()
+                    if self._summary:
+                        self.chat_memory.add_message(SystemMessage(content=f"Previous conversation summary: {self._summary}"))
+                    for msg in messages_to_keep:
+                        self.chat_memory.add_message(msg)
+                        
+        except Exception as e:
+            messages = self.chat_memory.messages
+            if len(messages) > 30:
+                self.chat_memory.clear()
+                for msg in messages[-30:]:
+                    self.chat_memory.add_message(msg)
+    
+    def _update_summary(self, removed_messages: List[BaseMessage]) -> None:
+        if not removed_messages:
+            return
+            
+        try:
+            conversation_text = "\n".join([
+                f"{'Human' if isinstance(msg, HumanMessage) else 'AI'}: {msg.content[:200]}"
+                for msg in removed_messages
+                if hasattr(msg, 'content') and msg.content
+            ])
+            
+            if self._summary:
+                self._summary += f"\n\nContinuation: {conversation_text[:800]}..."
+            else:
+                self._summary = f"Previous conversation: {conversation_text[:800]}..."
+                
+        except Exception:
+            self._summary = f"Previous conversation with {len(removed_messages)} messages exchanged."
+    
+    def load_memory_variables(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        if self.return_messages:
+            return {"history": self.chat_memory.messages}
+        else:
+            messages_str = "\n".join([
+                f"{'Human' if isinstance(msg, HumanMessage) else 'AI'}: {msg.content}"
+                for msg in self.chat_memory.messages
+                if hasattr(msg, 'content')
+            ])
+            return {"history": messages_str}
+    
+    def get_recent_messages(self, max_count: int = 10) -> List[BaseMessage]:
+        messages = self.chat_memory.messages
+        if len(messages) <= max_count:
+            return messages.copy()
+        return messages[-max_count:].copy()
+    
+    def clear(self) -> None:
+        self.chat_memory.clear()
+        self._summary = ""
+        self._last_summary_length = 0
+
 class ChatMemoryManager:
 
     def __init__(self, gemini_config):
@@ -22,7 +113,7 @@ class ChatMemoryManager:
         self.config.chat_memories = {}
         self.config.chat_memory_metadata = {}
 
-    def get_chat_memory(self, chat_id: str) -> ConversationSummaryBufferMemory:
+    def get_chat_memory(self, chat_id: str) -> ModernChatMemory:
         if not chat_id:
             raise ValueError("Chat ID is required")
             
@@ -30,7 +121,7 @@ class ChatMemoryManager:
         meta = self.config.chat_memory_metadata.get(chat_id)
 
         if chat_id not in self.config.chat_memories or not meta or now - meta["created_at"] > timedelta(minutes=15):
-            self.config.chat_memories[chat_id] = ConversationSummaryBufferMemory(
+            self.config.chat_memories[chat_id] = ModernChatMemory(
                 llm=model,
                 max_token_limit=900_000,
                 return_messages=True
@@ -122,17 +213,24 @@ class ChatMemoryManager:
     def decay_memory(self, mem, max_history=10, decay_factor=0.8):
         if not mem:
             return []
-            
-        messages = mem.chat_memory.messages
-        if len(messages) > max_history:
-            recent_messages = messages[-max_history:]
-        else:
-            recent_messages = messages
-            
+        
+        recent_messages = mem.get_recent_messages(max_history)
+        
+        processed_messages = []
         for i, msg in enumerate(recent_messages):
-            if not hasattr(msg, 'relevance'):
-                msg.relevance = 1.0
-            msg.relevance *= (decay_factor ** i)
+            if hasattr(msg, 'copy'):
+                msg_copy = msg.copy()
+            else:
+                if isinstance(msg, HumanMessage):
+                    msg_copy = HumanMessage(content=msg.content)
+                elif isinstance(msg, AIMessage):
+                    msg_copy = AIMessage(content=msg.content)
+                elif isinstance(msg, SystemMessage):
+                    msg_copy = SystemMessage(content=msg.content)
+                else:
+                    msg_copy = msg
             
-        mem.chat_memory.messages = recent_messages
-        return recent_messages
+            msg_copy.relevance = decay_factor ** i
+            processed_messages.append(msg_copy)
+        
+        return processed_messages

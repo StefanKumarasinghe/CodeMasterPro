@@ -131,7 +131,6 @@ async def validate_request(payload: Dict[str, Any]) -> Tuple[Optional[MessageReq
                 "Gemini models require a maximum message length of 100000 characters for better results.",
             )
 
-        
         if hasattr(msg, "pinnedFiles") and msg.pinnedFiles:
             gemini.logger.info(f"Found pinnedFiles after validation: {msg.pinnedFiles}")
 
@@ -157,16 +156,19 @@ async def validate_request(payload: Dict[str, Any]) -> Tuple[Optional[MessageReq
 
 
 async def setup_model_config(model_type: str) -> Dict[str, Any]:
-    config = {"retry_chain": 1, "quick_think": False}
-
+    config = {"retry_chain": 3, "quick_think": False}
     if model_type == "advanced":
-        config["retry_chain"] = 2
+        config["retry_chain"] = 3
     elif model_type == "quick-think":
-        config["retry_chain"] = 2
+        config["retry_chain"] = 3
         config["quick_think"] = True
+    elif model_type == "pro":
+        config["retry_chain"] = 1
+        config["quick_think"] = True
+    elif model_type == "fast":
+        config["retry_chain"] = 1
 
     return config
-
 
 async def get_memory_data(chatID: str) -> Tuple[Any, list, list, str, bool]:
     mem = memory_manager.get_chat_memory(chatID)
@@ -240,13 +242,14 @@ async def process_iteration(
     msg: MessageRequest,
     mem: Any,
     request: Request,
+    temperature: float
 ) -> Tuple[Optional[str], Optional[str], Optional[int], str, str, str, str, bool]:
     iteration_start_time = asyncio.get_event_loop().time()
     try:
 
         iter_tasks = {}
         iter_tasks["draft"] = invoke_with_retry(
-            get_process_chain(model_type=model_type, provider_type=provider_name),
+            get_process_chain(model_type=model_type, provider_type=provider_name, temperature=temperature),
             {
                 "history": history,
                 "query": message_query,
@@ -503,6 +506,8 @@ async def process_message(request: Request) -> Dict[str, Any]:
         if tool_selector == "node"
         else None,
     }
+
+    temperature = 1
     
     async with _processing_lock:
         try:
@@ -531,9 +536,9 @@ async def process_message(request: Request) -> Dict[str, Any]:
             )
 
             results_map = await execute_chains(tasks)
-
             strategy = results_map.get("strategy")
             strategy_content = strategy.content if strategy else None
+
             if strategy_content:
                 set_update(f"Lets discuss the strategy: {strategy_content[:5000]}", msg.chatId)
             user_behavior = results_map.get("behavior")
@@ -544,6 +549,9 @@ async def process_message(request: Request) -> Dict[str, Any]:
             user_behavior_content = await handle_user_behavior(
                 user_behavior, has_history, last_message, msg
             )
+
+            if user_behavior.temperature:
+                temperature = user_behavior.temperature
 
             if not user_behavior_content:
                 deep_think_world = None
@@ -590,6 +598,7 @@ async def process_message(request: Request) -> Dict[str, Any]:
                     msg,
                     mem,
                     request,
+                    temperature
                 )
 
                 if not current_refined:
@@ -654,12 +663,11 @@ async def process_message(request: Request) -> Dict[str, Any]:
                     "customPrompt": msg.customPrompt,
                     "personalInfo": msg.personalInfo,
                     "history": history,
+                    "recent_messages": recent_messages,
                 }
             )
 
             final_answer = final_answer.content
-
-
             return {"result": final_answer, "chatId": msg.chatId}
 
         except asyncio.CancelledError:
