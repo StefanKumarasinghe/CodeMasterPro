@@ -3,7 +3,7 @@
 [![Docker Pulls](https://img.shields.io/docker/pulls/stefankumarasinghe/codemasterpro)](https://hub.docker.com/r/stefankumarasinghe/codemasterpro)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-CodeMasterPro is an advanced AI-powered coding assistant designed to elevate the software engineering experience.
+CodeMasterPro is an advanced AI-powered coding assistant designed to elevate the software engineering experience!
 
 ## Features
 
